@@ -26,6 +26,10 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Corregido
 
+- Inicio mostraba en «Continuar» cuatro escenas fijas de ejemplo («Hace 5
+  min», «Ayer») que nadie había abierto. Ahora muestra lo último que se
+  trabajó de verdad en cada pantalla de este equipo (lo registra el
+  autoguardado) y, si no hay nada, lo dice.
 - Las marcas del eje vertical de las gráficas se cortaban a la izquierda con
   valores grandes: el margen se ajusta ahora a la marca más ancha.
 - Gravitación: alrededor del Sol, las distancias y áreas de las gráficas se

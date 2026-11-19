@@ -47,14 +47,42 @@ export function abrirEscena(esperado) {
 }
 
 /** Autoguardado por pantalla en el almacenamiento local (si está disponible). */
+/**
+ * Escenas recientes de este equipo, de la más nueva a la más vieja: una por
+ * pantalla (por clave de autoguardado). Inicio las muestra en «Continuar».
+ * @returns {{clave: string, modulo: string, espacio: string | null, titulo: string, t: number}[]}
+ */
+export function recientes() {
+  try {
+    const l = JSON.parse(localStorage.getItem('volta.recientes') || '[]');
+    if (!Array.isArray(l)) return [];
+    return l.filter(r => r && typeof r.clave === 'string' && /^[a-z-]{1,32}$/.test(r.clave) && typeof r.modulo === 'string'
+      && Number.isFinite(r.t)).slice(0, 8);
+  } catch { return []; }
+}
+/** @param {string} clave @param {import('../nucleo/escena.js').Escena} escena */
+function registrarReciente(clave, escena) {
+  try {
+    const l = recientes().filter(r => r.clave !== clave);
+    l.unshift({ clave, modulo: escena.modulo, espacio: escena.espacio ?? null, titulo: String(escena.titulo || ''), t: Date.now() });
+    localStorage.setItem('volta.recientes', JSON.stringify(l.slice(0, 8)));
+  } catch { /* sin almacenamiento */ }
+}
+
 export const autoguardado = {
   /** @param {string} clave @param {import('../nucleo/escena.js').Escena} escena */
-  guardar(clave, escena) { try { localStorage.setItem('volta.escena.' + clave, serializar(escena)); } catch { /* sin almacenamiento */ } },
+  guardar(clave, escena) {
+    try { localStorage.setItem('volta.escena.' + clave, serializar(escena)); } catch { /* sin almacenamiento */ }
+    registrarReciente(clave, escena);
+  },
   /** @param {string} clave @param {{modulo?: string}} esperado */
   leer(clave, esperado) {
     try {
       const t = localStorage.getItem('volta.escena.' + clave);
-      return t ? leerEscena(t, esperado) : null;
+      const e = t ? leerEscena(t, esperado) : null;
+      // Recuperar el trabajo de una pantalla también es «continuarlo»
+      if (e) registrarReciente(clave, e);
+      return e;
     } catch { return null; }
   },
   /** @param {string} clave */

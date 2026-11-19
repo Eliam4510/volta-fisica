@@ -23,6 +23,7 @@
   section > header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e-4); margin-bottom: var(--e-4); }
   section > header h2 { margin: 0; font-size: var(--t-titulo); line-height: var(--t-titulo-alto); font-weight: var(--peso-fuerte); letter-spacing: -0.005em; }
   section > header .nota { color: var(--texto-3); font-size: var(--t-pequeno); }
+  .vacio-recientes { grid-column: 1 / -1; margin: 0; padding: var(--e-4) 0; color: var(--texto-3); font-size: var(--t-pequeno); }
   .rejilla-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--e-4); }
   .rejilla-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-4); }
   .tarjeta-modulo { min-height: 176px; }
@@ -101,7 +102,8 @@
 <script type="module" src="../lienzo/trazo.js"></script>
 <script type="module" src="../componentes/espacio.js"></script>
 <script type="module">
-import { abrirEscena } from '../componentes/archivos.js';
+import { abrirEscena, recientes } from '../componentes/archivos.js';
+import { texto } from '../nucleo/escena.js';
 import { avisar } from '../componentes/exportar.js';
 (function () {
   'use strict';
@@ -119,10 +121,10 @@ import { avisar } from '../componentes/exportar.js';
     ['moderna', 'Física moderna', 'Efecto fotoeléctrico y decaimientos nucleares.', null, null, null],
   ];
   const ESCENAS = [
-    { t: 'Salto hacia una pendiente', m: 'Mecánica', tipo: 'MEXT', ref: '2019 · P3', mini: 'proyectil', href: 'mecanica.html', reciente: 'Hace 5 min' },
-    { t: 'Dos cargas iguales', m: 'Electrostática', tipo: 'MEXT', ref: '2020 · P2', mini: 'cargas', href: 'electrostatica.html', reciente: 'Hace 2 h' },
-    { t: 'Émbolo con pesa', m: 'Termodinámica', tipo: 'MEXT', ref: '2019 · P4', mini: 'embolo', href: 'termodinamica.html', reciente: 'Ayer' },
-    { t: 'Péndulo con clavo', m: 'Mecánica', tipo: 'MEXT', ref: '2014 · P3', mini: 'pendulo', href: 'mecanica-laboratorio.html?escena=mext-2014-p3', reciente: 'Hace 3 días' },
+    { t: 'Salto hacia una pendiente', m: 'Mecánica', tipo: 'MEXT', ref: '2019 · P3', mini: 'proyectil', href: 'mecanica.html' },
+    { t: 'Dos cargas iguales', m: 'Electrostática', tipo: 'MEXT', ref: '2020 · P2', mini: 'cargas', href: 'electrostatica.html' },
+    { t: 'Émbolo con pesa', m: 'Termodinámica', tipo: 'MEXT', ref: '2019 · P4', mini: 'embolo', href: 'termodinamica.html' },
+    { t: 'Péndulo con clavo', m: 'Mecánica', tipo: 'MEXT', ref: '2014 · P3', mini: 'pendulo', href: 'mecanica-laboratorio.html?escena=mext-2014-p3' },
     { t: 'Tiro oblicuo', m: 'Mecánica', tipo: 'Tutorial', ref: 'Paso a paso', mini: 'tiro', href: null },
     { t: 'Resorte y bloque', m: 'Mecánica', tipo: 'Ejemplo', ref: 'Oscilaciones', mini: 'resorte', href: 'mecanica-laboratorio.html?escena=resorte' },
     { t: 'Dipolo eléctrico', m: 'Electrostática', tipo: 'Tutorial', ref: 'Líneas de campo', mini: 'dipolo', href: null },
@@ -231,11 +233,29 @@ import { avisar } from '../componentes/exportar.js';
   const tarjeta = (e, meta) => `
     <${e.href ? 'a' : 'div'} class="tarjeta-escena" ${e.href ? `href="${e.href}"` : ''}>
       <div class="mini"><canvas data-mini="${e.mini}"></canvas></div>
-      <div class="cuerpo"><span class="titulo">${e.t}</span><span class="meta"><span class="chip${e.tipo === 'MEXT' ? ' lleno' : ''}">${e.tipo}</span>${meta}</span></div>
+      <div class="cuerpo"><span class="titulo">${e.t}</span><span class="meta">${e.tipo ? `<span class="chip${e.tipo === 'MEXT' ? ' lleno' : ''}">${e.tipo}</span>` : ''}${meta}</span></div>
     </${e.href ? 'a' : 'div'}>`;
-  document.getElementById('recientes').innerHTML = ESCENAS.filter(e => e.reciente).map(e => tarjeta(e, `<span>${e.m}</span><span>·</span><span>${e.reciente}</span>`)).join('');
-  // La biblioteca muestra primero lo que no está en "Continuar"
-  ESCENAS.push(...ESCENAS.splice(0, 4));
+  // «Continuar»: lo que de verdad se abrió en este equipo (el autoguardado de
+  // cada pantalla lo registra). Al abrirla, la pantalla recupera su autoguardado.
+  const NOMBRES = Object.fromEntries(MODULOS.map(([id, nombre]) => [id, nombre]));
+  const MINI = { mecanica: 'proyectil', gravitacion: 'tiro', termodinamica: 'embolo', electrostatica: 'cargas', circuitos: 'rc', ondas: 'doppler', optica: 'young' };
+  const PAGINA_DE_CLAVE = clave => /^[a-z-]+$/.test(clave) && clave !== 'inicio' ? `${clave === 'mecanica-laboratorio' || clave === 'laboratorio' ? 'mecanica-laboratorio' : clave}.html` : null;
+  const hace = ms => {
+    const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
+    if (min < 1) return 'Ahora';
+    if (min < 60) return `Hace ${min} min`;
+    const h = Math.round(min / 60);
+    if (h < 24) return `Hace ${h} h`;
+    const d = Math.round(h / 24);
+    return d === 1 ? 'Ayer' : `Hace ${d} días`;
+  };
+  const REC = recientes().map(r => ({
+    t: texto(r.titulo, 'Escena sin título', 60), m: NOMBRES[r.modulo] || 'Volta', tipo: '', mini: MINI[r.modulo] || 'proyectil',
+    href: PAGINA_DE_CLAVE(r.clave), cuando: hace(r.t),
+  })).filter(r => r.href).slice(0, 4);
+  document.getElementById('recientes').innerHTML = REC.length
+    ? REC.map(e => tarjeta(e, `<span>${e.m}</span><span>·</span><span>${e.cuando}</span>`)).join('')
+    : '<p class="vacio-recientes">Todavía no has trabajado en ninguna escena en este equipo. Abre un módulo o una escena de la biblioteca: lo último de cada pantalla aparecerá aquí.</p>';
 
   function pintarBiblioteca(f) {
     document.getElementById('biblioteca').innerHTML = ESCENAS.filter(e => !f || e.tipo === f).map(e => tarjeta(e, `<span>${e.m}</span><span>·</span><span>${e.ref}</span>`)).join('');
