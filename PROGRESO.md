@@ -150,6 +150,23 @@ contenido, PhET y el temario MEXT:
 | Rendimiento | Un montón de 12 discos con un golpe tarda ≈ 0.3 s; 100 discos no son viables con eventos | Modo multitud de paso fijo (Soft Step) aparte, sin tocar el motor de eventos |
 | Hecho | Las marcas de los ejes de las gráficas se cortaban a la izquierda con valores grandes (r en Mm alrededor del Sol); v_c y v_e se confundían a 10 px | Margen según la marca más ancha (`grafica.js`), Gm alrededor del Sol, subíndices de las lecturas a 0.76 em |
 
+## Autocrítica 5 (2026-11-19, tras superficies móviles, perfiles y prensa)
+
+Comparado con Box2D v3 y PhysX (cuerpos rígidos con rotación, rodadura,
+fricción en el contacto entre cuerpos), MuJoCo (energía y trabajo de las
+restricciones contabilizados, actuadores con trayectoria impuesta) y PhET
+(«Forces and Motion», «Under Pressure», instrumentos en pantalla):
+
+| Prioridad | Hallazgo | Tarea |
+|---|---|---|
+| Hecho | Energía: solo se contaban los choques | Qc, Qi y W en el estado; E + Qc + Qi = E0 + W a 10⁻¹⁰ (como el registro de energía de MuJoCo) |
+| Hecho | No había actuadores ni cuerpos que llevaran a otros | Superficies `sobre` un cuerpo, cinemáticos con perfil de aceleración por tramos (los «position actuators» de MuJoCo, en versión cinemática) |
+| Función | Sigue sin haber rotación: los discos no ruedan, la fricción disco-disco no existe y los cuerpos rígidos se arman con triángulos de varillas (sin momento de inercia propio) | Cuerpo rígido 2D con orientación y velocidad angular; rodadura sin deslizar; fricción en el contacto par |
+| Función | El perfil de aceleración y la superficie llevada por un cuerpo solo se definen bien en las escenas: el inspector muestra el perfil pero no lo edita | Editor de tramos (tabla t / ax / ay) en el inspector |
+| Función | El Laboratorio no tiene panel de variables (los demás módulos sí) ni instrumentos (regla, cronómetro, fotopuerta; PhET los tiene) | Panel de variables ligado a magnitudes; regla y fotopuerta con su lectura |
+| Exactitud | La prensa hidráulica no tiene peso del líquido (sin ρgh): vale para Pascal, no para vasos comunicantes con desnivel | Columna de líquido con peso cuando haga falta (Fluidos M10) |
+| Contenido | Mecánica 38 de 44 MEXT; las 6 restantes no tienen enunciado o necesitan sistemas de referencia que se mueven | — |
+
 ## Problemas conocidos
 
 - Los instrumentos (regla, transportador, cronómetro, fotopuerta) de las
