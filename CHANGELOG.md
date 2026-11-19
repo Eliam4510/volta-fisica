@@ -13,7 +13,8 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   es un deslizador que fija a la vez varias propiedades (la rapidez de dos
   pelotas, el μs de un plano); los campos ligados se ven como la variable.
   El plano inclinado y las escenas MEXT 2008 1-(1), 2015 1-(1), 2016 P3 y
-  2018 1-(1) traen las suyas.
+  2018 1-(1) traen las suyas. Clic derecho en un campo numérico del
+  inspector lo convierte en variable; en un campo ligado, lo desliga.
 
 ## [0.8.0] - 2026-11-19
 

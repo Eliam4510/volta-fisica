@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.7.0 (publicada el 2026-11-19 con sus dos ejecutables; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.8.0 (publicada el 2026-11-19 con sus dos ejecutables; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -163,7 +163,7 @@ restricciones contabilizados, actuadores con trayectoria impuesta) y PhET
 | Hecho | No había actuadores ni cuerpos que llevaran a otros | Superficies `sobre` un cuerpo, cinemáticos con perfil de aceleración por tramos (los «position actuators» de MuJoCo, en versión cinemática) |
 | Función | Sigue sin haber rotación: los discos no ruedan, la fricción disco-disco no existe y los cuerpos rígidos se arman con triángulos de varillas (sin momento de inercia propio) | Cuerpo rígido 2D con orientación y velocidad angular; rodadura sin deslizar; fricción en el contacto par |
 | Hecho | El perfil de aceleración solo se definía en las escenas | Editor de tramos en el inspector, con validación del orden |
-| Hecho | El Laboratorio no tenía instrumentos ni panel de variables | Regla, fotopuerta y variables ligadas a propiedades (definidas por la escena; falta crearlas desde la interfaz) |
+| Hecho | El Laboratorio no tenía instrumentos ni panel de variables | Regla, fotopuerta y variables ligadas a propiedades (también se crean con clic derecho en un campo) |
 | Exactitud | La prensa hidráulica no tiene peso del líquido (sin ρgh): vale para Pascal, no para vasos comunicantes con desnivel | Columna de líquido con peso cuando haga falta (Fluidos M10) |
 | Contenido | Mecánica 38 de 44 MEXT; las 6 restantes no tienen enunciado o necesitan sistemas de referencia que se mueven | — |
 
@@ -215,3 +215,4 @@ restricciones contabilizados, actuadores con trayectoria impuesta) y PhET
   - Mecánica MEXT sin escena y por qué: 2025 T5 y 2025 T1 (solo el tema en el banco); 2013 1-(1) (movimiento relativo: falta un sistema de referencia que se mueve); 2013 P3 y 2007 P3 (estática; no están en el banco con esa referencia). 2010 1-B se hizo con un triángulo rígido de varillas; 2025 T2 (sin enunciado).
 - 2026-11-19 — Movimiento impuesto por tramos (perfil) en el motor y el Laboratorio; ejemplo del ascensor y MEXT 2017, 2019 y 2023 1-(1) (Mecánica: 36 MEXT).
 - 2026-11-19 — Prensa hidráulica en el motor y el Laboratorio (MEXT 2010 1-A); escena de estática 2010 1-B con un triángulo rígido; recientes reales en Inicio (Mecánica: 38 MEXT).
+- 2026-11-19 — v0.8.0 publicada (instalador 2 370 753 B, portátil 4 777 472 B). Después: regla y fotopuerta, editor de perfiles y panel de variables en el Laboratorio.

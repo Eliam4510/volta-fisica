@@ -1878,7 +1878,7 @@ function iniciar() {
   }
   const campo = (clave, valor, tipoU, eje, ayuda) => {
     const [cid, cprop] = clave.split('.'), lv = ligada(cid, cprop);
-    if (lv) return `<div class="campo es-variable" data-ayuda="Ligado a la variable ${lv.sim}: cámbialo en el panel de variables|Bound to a variable"><span class="chip-var"><span class="sim">${lv.sim}</span></span><span class="valor-var">${limpio(valor)}</span><span class="u">${UNI[tipoU].u}</span></div>`;
+    if (lv) return `<div class="campo es-variable" data-clave-ligada="${clave}" data-ayuda="Ligado a la variable ${lv.sim}: cámbialo en el panel de variables; clic derecho para desligarlo|Bound to a variable"><span class="chip-var"><span class="sim">${lv.sim}</span></span><span class="valor-var">${limpio(valor)}</span><span class="u">${UNI[tipoU].u}</span></div>`;
     return `<div class="campo"${ayuda ? ` data-ayuda="${ayuda}"` : ''}>${eje ? `<span class="eje">${eje}</span>` : ''}<input data-clave="${clave}" data-u="${tipoU}" value="${limpio(valor)}" spellcheck="false"><span class="u">${UNI[tipoU].u}</span></div>`;
   };
   const fila = (etq, html) => `<div class="fila"><span class="etq">${etq}</span>${html}</div>`;
@@ -2498,8 +2498,37 @@ function iniciar() {
       ent.addEventListener('change', () => { registrar(); recalcular(); construirArbol(); construirInspector(); });
       pintar(); cont.appendChild(f);
     }
-    if (!(esc.variables || []).length) cont.innerHTML = '<span class="ayuda-fila" style="margin:0">Esta escena no tiene variables: edita los valores en el inspector.</span>';
+    if (!(esc.variables || []).length) cont.innerHTML = '<span class="ayuda-fila" style="margin:0">Sin variables. Clic derecho en un campo numérico del inspector para convertirlo en una variable con deslizador.</span>';
   }
+
+  // Clic derecho en un campo numérico: lo convierte en una variable nueva con
+  // un rango razonable alrededor de su valor; en un campo ligado, lo desliga
+  $('#inspector').addEventListener('contextmenu', ev => {
+    const ligado = ev.target.closest('[data-clave-ligada]');
+    if (ligado) {
+      ev.preventDefault();
+      const [id, prop] = ligado.dataset.claveLigada.split('.');
+      for (const v of esc.variables) v.liga = v.liga.filter(([i, p]) => !(i === id && p === prop));
+      esc.variables = esc.variables.filter(v => v.liga.length);
+      registrar(); construirVariables(); construirInspector(); avisar(area, 'Campo desligado de su variable');
+      return;
+    }
+    const inp = ev.target.closest('input[data-clave]');
+    if (!inp) return;
+    const [id, prop] = inp.dataset.clave.split('.'), tipoU = inp.dataset.u;
+    if (id === 'escena' || !PROPIEDADES_VARIABLE.includes(prop) || !UNIDADES_VARIABLE.includes(tipoU)) return;
+    ev.preventDefault();
+    if ((esc.variables || []).length >= 6) { avisar(area, 'Como mucho 6 variables por escena'); return; }
+    let val;
+    try { val = leerCampo(inp.value, tipoU); } catch { return; }
+    const ang = tipoU === 'angulo';
+    const [min, max] = ang ? (val >= 0 ? [0, 90] : [-90, 0]) : val > 0 ? [0, 2 * val] : val < 0 ? [2 * val, 0] : [-1, 1];
+    const eje = inp.closest('.campo')?.querySelector('.eje')?.textContent?.trim() || prop;
+    let sim = texto(eje, prop, 4) || prop, k = 2;
+    while (esc.variables.some(v => v.sim === sim)) sim = texto(eje, prop, 3) + k++;
+    esc.variables.push({ sim, tipo: tipoU, min, max, paso: Number(((max - min) / 100).toPrecision(2)), val, liga: [[id, prop]] });
+    registrar(); construirVariables(); construirInspector(); avisar(area, `Variable ${sim} creada: muévela en el panel de variables`);
+  });
 
   function recalcular(rapido = false) {
     simular(rapido);
