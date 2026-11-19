@@ -22,6 +22,17 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   resortes, clavos, fricción de Coulomb con adherencia, arrastre lineal y
   cuadrático, y choques entre partículas con restitución. Validado contra el
   péndulo exacto (integral elíptica), la máquina de Atwood y problemas MEXT.
+- Choques robustos en el motor de Mecánica: el paso se acota según la
+  rapidez (sin efecto túnel), los choques simultáneos se resuelven por
+  impulsos secuenciales (péndulo de Newton exacto), los discos se apoyan
+  unos en otros (pilas que se asientan), el radio cuenta contra las
+  superficies y una partícula puede apoyarse en varias a la vez. Al llegar
+  al límite de eventos se devuelve lo simulado con un aviso.
+- Módulo Gravitación con la pantalla «Órbitas»: N cuerpos con Verlet y
+  Yoshida de 4.º orden, solución de Kepler analítica, elementos orbitales,
+  áreas barridas, sistema que gira con la Tierra y cinco escenas (cañón de
+  Newton, órbita circular, elíptica, geoestacionaria MEXT 2023 y velocidad
+  de escape MEXT 2018).
 - Motor de Electrostática (`motores/electrostatica.js`): superposición de
   Coulomb, potencial, flujo de Gauss y partículas libres con eventos.
 - Motor de gas de Termodinámica (`motores/gas.js`) con 27 pruebas analíticas
