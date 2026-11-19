@@ -4,36 +4,22 @@
    sección A bajo la atmósfera P0, un mol de gas ideal monoatómico dentro, una
    pesa M que se pone y se quita, un calentador y paredes conductoras (en
    contacto con un baño a T0) o adiabáticas.
-   Motor macroscópico de parámetros concentrados (docs/modulos/03): estado del
-   gas (n, U, V → P, T); émbolo con masa movido por la diferencia de
-   presiones, el peso y la atmósfera, con amortiguamiento; flujo de calor por
-   las paredes proporcional a ΔT; calentador de potencia fija. Opción
-   cuasiestática: el émbolo pasa por estados de equilibrio.
-   Misma estructura que mecanica.js: física → estado(t) → lienzo → paneles.
+   La física está en el motor puro sistema/motores/gas.js (probado aparte en
+   pruebas/gas.test.js): estado del gas, émbolo con masa y amortiguamiento,
+   calor por las paredes, calentador, acciones programadas, modo
+   cuasiestático y registro de energía.
+   Misma estructura que mecanica.js: motor → estado(t) → lienzo → paneles.
    ========================================================================== */
+import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, residuoGas, residuoEmbolo } from '../motores/gas.js';
+
 (function () {
   'use strict';
   const { Trazo, fmt, cantidad, grafica, LineaTiempo, Termo } = Volta;
   const $ = s => document.querySelector(s);
 
-  // <física> ==============================================================
-  // Bloque autónomo: no toca el DOM (se puede ejecutar fuera del navegador).
-  //
-  // Contabilidad exacta de energía. En cada paso se usa la MISMA presión P*
-  // (la del punto medio, por iteración) para la fuerza del gas sobre el
-  // émbolo y para el trabajo del gas, y la velocidad se integra con la regla
-  // del punto medio (amortiguamiento implícito). Así, paso a paso y sin
-  // error de truncamiento en el balance:
-  //   gas:    ΔU = Q_cal + Q_baño + E_dis − W                (primera ley)
-  //   émbolo: W + E_mano = ΔE_k + ΔE_p + P0·ΔV + E_dis
-  // La energía disipada por el amortiguamiento (viscosidad del gas al mover
-  // el émbolo) y la de los choques con los topes vuelve al gas como calor:
-  // por eso una compresión brusca con paredes adiabáticas termina donde dice
-  // la termodinámica irreversible, y no en la adiabática reversible.
-  // E_mano: energía cinética que la mano da a la pesa (o se lleva con ella)
-  // al ponerla o quitarla con el émbolo en movimiento.
-  // =======================================================================
-  const R_GAS = 8.314462618;             // J/(mol·K)
+  // ---------------------------------------------------------------------
+  // Física: motor puro en sistema/motores/gas.js
+  // ---------------------------------------------------------------------
   const DUR = 42;                        // duración simulada (s)
   const DT = 2e-4;                       // paso de integración (s)
   const MUESTRA = 0.01;                  // cada cuánto se guarda el estado (s)
@@ -42,134 +28,24 @@
   const GEO = { Hc: 0.70, yTope: 0.66, ep: 0.04, hPesa: 0.08, colchon: 0.17, nivel: 0.56, borde: 0.62, hCal: 0.035 };
   const H_MAX = GEO.yTope - GEO.ep;      // el émbolo toca los topes con el gas a esta altura
 
-  const NOMBRES = {
-    pesa: v => (v ? 'Se añade la pesa' : 'Se quita la pesa'),
-    calentador: v => (v ? 'Se enciende el calentador' : 'Se apaga el calentador'),
-    paredes: v => (v === 'adiabaticas' ? 'Paredes adiabáticas' : 'Paredes conductoras'),
-  };
-
-  // Configuración en el instante t según las acciones programadas (ordenadas)
-  function banderas(guion, t) {
-    const b = { pesa: false, cal: false, adiab: false };
-    for (const a of guion) {
-      if (a.t > t + 1e-9) break;
-      if (a.tipo === 'pesa') b.pesa = a.valor;
-      else if (a.tipo === 'calentador') b.cal = a.valor;
-      else if (a.tipo === 'paredes') b.adiab = a.valor === 'adiabaticas';
-    }
-    return b;
-  }
-
-  // p: {n, A (m²), P0 (Pa), T0 (K), g, m, M (kg), Fc (W), G (W/K), b (kg/s)}
   function simularEscena(p, guion, motor, especie) {
-    const { n, A, P0, T0, g, m, M: Mp, Fc, G: Gc, b } = p;
-    const f = especie === 'di' ? 5 : 3, cv = f / 2 * R_GAS, k = 2 / f;   // U = (f/2)·nRT = PV/k
-    const cuasi = motor === 'cuasiestatico';
-    const acciones = guion.filter(a => a.t <= DUR).sort((x, y) => x.t - y.t);
-    const Rcil = Math.sqrt(A / Math.PI);
-
-    // Estado inicial: equilibrio con el baño, émbolo en reposo, sin pesa
-    let pesa = false, cal = false, adiab = false, carga = 0, me = m;
-    let h = Math.min(H_MAX, n * R_GAS * T0 / (P0 + me * g / A) / A), v = 0;
-    let Vg = A * h, U = n * cv * T0, Pg = k * U / Vg;
-    let enTope = h >= H_MAX - 1e-12;
-    const U0 = U;
-    const r = { Qcal: 0, Qbano: 0, Edis: 0, W: 0, Watm: 0, Ep: 0, Emano: 0 };
-    let Fb = 0, Fcal = 0, fx = 0, fy = 0;
-    const muestras = [], eventos = [];
-    const T = () => U / (n * cv);
-    const instante = () => ({ P: Pg, V: Vg, T: T(), h, Q: r.Qcal + r.Qbano + r.Edis, W: r.W });
-
-    function registrar(t) {
-      muestras.push({ t, h, v, P: Pg, V: Vg, T: T(), U, dU: U - U0, Ek: cuasi ? 0 : 0.5 * me * v * v, me,
-        carga: cuasi ? carga : (pesa ? 1 : 0), Fb, Fcal, fx, fy, ...r });
-    }
-    function evento(t, nombre, tipo, valor) { eventos.push({ t, nombre, tipo, valor, ...instante() }); }
-
-    function aplicar(a) {
-      if (a.tipo === 'pesa') {
-        if (a.valor === pesa) return;
-        pesa = a.valor;
-        if (!cuasi) {
-          r.Emano += (pesa ? 1 : -1) * 0.5 * Mp * v * v;
-          me = m + (pesa ? Mp : 0);
-        }
-      } else if (a.tipo === 'calentador') { if (a.valor === cal) return; cal = a.valor; }
-      else if (a.tipo === 'paredes') { const ad = a.valor === 'adiabaticas'; if (ad === adiab) return; adiab = ad; }
-      evento(a.t, NOMBRES[a.tipo](a.valor), a.tipo, a.valor);
-    }
-
-    // Calor del paso (explícito en T: el tiempo térmico es de segundos y el paso de 0.2 ms)
-    function calor() {
-      Fcal = cal ? Fc : 0;
-      Fb = adiab ? 0 : Gc * (T0 - T());
-      r.Qcal += Fcal * DT; r.Qbano += Fb * DT;
-      return (Fcal + Fb) * DT;
-    }
-
-    function pasoDinamico(t) {
-      const dQ = calor();
-      const F0 = -P0 * A - me * g;                       // atmósfera y peso, hacia abajo
-      if (enTope) {
-        if (Pg * A + F0 >= 0) { U += dQ; Pg = k * U / Vg; v = 0; return; }   // apoyado en los topes
-        enTope = false; evento(t, 'El émbolo deja los topes', 'topes', false);
-      }
-      let Ps = Pg, s = null;
-      for (let it = 0; it < 3; it++) {
-        const c1 = b * DT / (2 * me);
-        let v1 = (v * (1 - c1) + DT / me * (Ps * A + F0)) / (1 + c1);
-        const vm = 0.5 * (v + v1);
-        let dh = vm * DT, eDis = b * vm * vm * DT, choque = false;
-        if (h + dh > H_MAX) {
-          // Choque inelástico con los topes: lo que pierde la energía cinética se disipa
-          dh = H_MAX - h; v1 = 0; choque = true;
-          eDis = (Ps * A + F0) * dh + 0.5 * me * v * v;
-        }
-        const W = Ps * A * dh, V1 = A * (h + dh), U1 = U + dQ + eDis - W;
-        s = { v1, dh, eDis, W, V1, U1, P1: k * U1 / V1, choque };
-        Ps = 0.5 * (Pg + s.P1);                          // presión del punto medio para la siguiente iteración
-      }
-      h += s.dh; v = s.v1; Vg = s.V1; U = s.U1; Pg = s.P1;
-      r.W += s.W; r.Watm += P0 * A * s.dh; r.Ep += me * g * s.dh; r.Edis += s.eDis;
-      if (s.choque) { enTope = true; evento(t + DT, 'El émbolo llega a los topes', 'topes', true); }
-    }
-
-    function pasoCuasi(t) {
-      const dQ = calor();
-      const objetivo = pesa ? 1 : 0;
-      carga = objetivo > carga ? Math.min(objetivo, carga + DT / TAU_Q) : Math.max(objetivo, carga - DT / TAU_Q);
-      me = m + carga * Mp;
-      const Pe = P0 + me * g / A;                        // presión que equilibra el émbolo
-      if (enTope) {
-        if (Pg >= Pe) { U += dQ; Pg = k * U / Vg; v = 0; return; }
-        enTope = false; evento(t, 'El émbolo deja los topes', 'topes', false);
-      }
-      // Siguiente estado de equilibrio: U1 = Pe·V1/k = U + dQ − ½(Pg + Pe)(V1 − V)
-      let V1 = (U + dQ + 0.5 * (Pg + Pe) * Vg) / (Pe / k + 0.5 * (Pg + Pe)), llega = false;
-      if (V1 > A * H_MAX) { V1 = A * H_MAX; llega = true; }
-      const W = 0.5 * (Pg + Pe) * (V1 - Vg), dh = V1 / A - h;
-      U += dQ - W;
-      r.W += W; r.Watm += P0 * A * dh; r.Ep += W - P0 * A * dh;
-      v = dh / DT; h = V1 / A; Vg = V1; Pg = k * U / Vg;
-      if (llega) { enTope = true; v = 0; evento(t + DT, 'El émbolo llega a los topes', 'topes', true); }
-    }
-
-    const pasos = Math.round(DUR / DT), cada = Math.round(MUESTRA / DT);
-    let ia = 0;
-    for (let i = 0; i <= pasos; i++) {
-      const t = i * DT;
-      while (ia < acciones.length && acciones[ia].t <= t + DT / 2) aplicar(acciones[ia++]);
-      if (i % cada === 0) registrar(t);
-      if (i === pasos) break;
-      if (cuasi) pasoCuasi(t); else pasoDinamico(t);
-      // Fases de las moléculas cosméticas: avanzan con √T (y con 1/h en vertical)
-      const s = 0.6 * Math.sqrt(Math.max(T(), 1) / 300);
-      fx += s * DT; fy += s * DT * (2 * Rcil) / Math.max(h, 0.02);
-    }
-    eventos.sort((x, y) => x.t - y.t);
-    return { muestras, eventos, A, Rcil, n, cv, f, gam: (f + 2) / f, U0, P0, T0, m, M: Mp, cuasi };
+    const sim = simularGas({ ...p, especie, hMax: H_MAX }, guion, { modelo: motor, duracion: DUR, dt: DT, muestra: MUESTRA, tauCarga: TAU_Q });
+    const Rcil = Math.sqrt(sim.A / Math.PI);       // radio del cilindro (dibujo)
+    fasesMoleculas(sim, Rcil);
+    return { ...sim, Rcil };
   }
-  // </física> =============================================================
+
+  // Fases de las moléculas (cosméticas, no son física): avanzan con √T y, en
+  // vertical, con 1/h. Se integran sobre las muestras con la regla del trapecio.
+  function fasesMoleculas(sim, Rcil) {
+    const ms = sim.muestras, ritmo = q => 0.6 * Math.sqrt(Math.max(q.T, 1) / 300);
+    const vertical = q => ritmo(q) * (2 * Rcil) / Math.max(q.h, 0.02);
+    let fx = 0, fy = 0;
+    ms.forEach((q, i) => {
+      if (i) { const p = ms[i - 1], d = q.t - p.t; fx += 0.5 * (ritmo(p) + ritmo(q)) * d; fy += 0.5 * (vertical(p) + vertical(q)) * d; }
+      q.fx = fx; q.fy = fy;
+    });
+  }
 
   // ---------------------------------------------------------------------
   // Parámetros (variables de la escena)
@@ -212,7 +88,7 @@
     const ms = SIM.muestras, ext = (f) => { let lo = Infinity, hi = -Infinity; for (const q of ms) { const x = f(q); if (x < lo) lo = x; if (x > hi) hi = x; } return [lo, hi]; };
     const marg = ([lo, hi], fr = 0.08) => { const d = Math.max(hi - lo, Math.abs(hi) * 0.02, 1e-9); return [lo - d * fr, hi + d * fr]; };
     const absMax = (...fs) => Math.max(1e-9, ...ms.map(q => Math.max(...fs.map(f => Math.abs(f(q))))));
-    const Q = q => q.Qcal + q.Qbano + q.Edis;
+    const Q = calorTotal;
     ESC = {
       V: marg(ext(q => q.V * 1e3), 0.12), P: marg(ext(q => q.P / 1e3), 0.12),
       T: marg(ext(q => q.T)), h: marg(ext(q => q.h)),
@@ -224,13 +100,8 @@
     };
   }
   // Estado interpolado en t (las banderas salen del guion, no de la muestra)
-  function estado(t) {
-    const ms = SIM.muestras, x = Math.max(0, Math.min(ms.length - 1, t / MUESTRA));
-    const i = Math.min(ms.length - 2, Math.floor(x)), a = x - i, p = ms[i], q = ms[i + 1], s = {};
-    for (const k in p) s[k] = p[k] + (q[k] - p[k]) * a;
-    return s;
-  }
-  const Qtot = s => s.Qcal + s.Qbano + s.Edis;
+  const estado = t => estadoEn(SIM, t);
+  const Qtot = calorTotal;
 
   // ---------------------------------------------------------------------
   // Estado de la interfaz
@@ -599,7 +470,7 @@
   }
 
   function energiaPanel() {
-    const s = estado(t), Q = Qtot(s);
+    const s = estado(t);
     const color = f => (f === 'tinta' ? 'var(--tinta)' : `var(--f-${f})`);
     const barras = (cont, titulo, filas, escala, pie) => {
       cont.innerHTML = `<div class="barras-tit">${titulo}</div>` + filas.map(([n, fam, val, ayuda]) => {
@@ -607,7 +478,7 @@
         return `<div class="barra-e" data-ayuda="${ayuda}"><span>${n}</span><span class="riel"><i style="${pos};background:${color(fam)}"></i></span><span class="v">${cantidad(val, 'J', 4)}</span></div>`;
       }).join('') + `<div class="barras-pie">${pie}</div>`;
     };
-    const resGas = Q - s.W - s.dU, resEmb = s.W + s.Emano - (s.Watm + s.Ep + s.Ek + s.Edis);
+    const resGas = residuoGas(s), resEmb = residuoEmbolo(s);
     barras($('#e-gas'), 'Gas · primera ley', [
       ['Calentador', 'termico', s.Qcal, 'Calor que da el calentador|Heater'],
       ['Baño', 'termico', s.Qbano, 'Calor que entra por las paredes desde el baño|Heat from the bath'],
