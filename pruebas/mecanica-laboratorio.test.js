@@ -216,3 +216,33 @@ describe('apoyos', () => {
     expect(deslizarSobre({ forma: 'pared', a: [0, 0], b: [0, 2] }, [0, 1], 0, 0.5, 0)).toBeNull();
   });
 });
+
+describe('fuerza aplicada', () => {
+  it('llega al motor con su dirección y se sanea al abrir', () => {
+    const esc = escenaDeEscenario('caida');
+    const p = esc.objetos.find(o => o.tipo === 'particula');
+    p.F = 5; p.angF = 90;
+    const M = aMotor(esc), F = M.motor.particulas[0].F;
+    expect(F[0]).toBeCloseTo(0, 12);
+    expect(F[1]).toBeCloseTo(5, 12);
+    // Sin fuerza, el motor no recibe F
+    p.F = 0;
+    expect(aMotor(esc).motor.particulas[0].F).toBeUndefined();
+    // Un archivo con una fuerza inválida se acota
+    const raro = normalizarEscena({ ...esc, objetos: esc.objetos.map(o => (o.tipo === 'particula' ? { ...o, F: -3, angF: 'x' } : o)) });
+    const q = raro.objetos.find(o => o.tipo === 'particula');
+    expect(q.F).toBe(0);
+    expect(q.angF).toBe(0);
+  });
+  it('fuerzasEn la cuenta como fuerza conocida: la normal no la absorbe', () => {
+    // Bloque sobre el suelo empujado hacia abajo con 10 N: N = m·g + 10
+    const esc = escenaDeEscenario('resorte');
+    const p = esc.objetos.find(o => o.tipo === 'particula');
+    p.F = 10; p.angF = -90;
+    const M = aMotor(esc), sim = simularMecanica(M.motor);
+    const f = fuerzasEn(sim, M, 0.3).porParticula[0];
+    const N = f.find(x => x.tipo === 'normal');
+    expect(N.valor).toBeCloseTo(p.m * 9.8 + 10, 6);
+    expect(f.find(x => x.tipo === 'aplicada').valor).toBeCloseTo(10, 12);
+  });
+});
