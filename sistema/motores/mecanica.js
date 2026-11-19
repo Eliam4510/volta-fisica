@@ -154,6 +154,9 @@ function preparar(e) {
 function estadoInicial(P) {
   const y = [];
   for (const p of P) y.push(p.p[0], p.p[1], p.v[0], p.v[1]);
+  // Última componente: energía disipada de forma continua (fricción,
+  // arrastre, amortiguadores y la estabilización de las restricciones)
+  y.push(0);
   return y;
 }
 
@@ -567,7 +570,9 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
       // Enganche: el clavo cruza la recta pivote → partícula (dentro del largo)
       const piv = () => pivoteCuerda(c, modo);
       est.clavos.length && ev.push({
-        nombre: `desengancha:${c.id}`, direccion: 0, terminal: true,
+        // Con el sentido elegido al enganchar, g crece mientras la cuerda
+        // envuelve el clavo y baja a cero al realinearse: solo el paso de + a −
+        nombre: `desengancha:${c.id}`, direccion: -1, terminal: true,
         g: (t, y) => {
           // Se suelta del último clavo cuando la cuerda vuelve a alinearse con el tramo anterior
           const k = est.clavos[est.clavos.length - 1], prev = est.clavos.length > 1 ? c.clavos[est.clavos[est.clavos.length - 2]] : c.ancla;
@@ -643,6 +648,54 @@ function copiarModo(m) {
     pares: { ...m.pares },
     cuerdas: Object.fromEntries(Object.entries(m.cuerdas).map(([k, v]) => [k, { ...v, clavos: [...v.clavos], sentido: [...v.sentido] }])),
   };
+}
+
+/**
+ * Energía mecánica del estado y: cinética, gravitatoria, elástica y la de las
+ * fuerzas constantes (la misma que `energiaMecanica`, sin pasar por la escena).
+ * @param {any} S @param {number[]} y
+ */
+function energiaEstado(S, y) {
+  let E = 0;
+  for (let i = 0; i < S.n; i++) {
+    const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3], x = y[4 * i], yy = y[4 * i + 1];
+    E += 0.5 * p.m * (vx * vx + vy * vy) - p.m * (S.g[0] * x + S.g[1] * yy);
+    if (p.F) E -= p.F[0] * x + p.F[1] * yy;
+  }
+  for (const c of S.con) {
+    if (c.tipo !== 'resorte') continue;
+    const D = largoResorte(c, y);
+    if (c.soloTira && D <= c.L0) continue;
+    E += 0.5 * c.k * (D - c.L0) ** 2;
+  }
+  return E;
+}
+
+/**
+ * Potencia que pierde la energía mecánica: −dE/dt con las aceleraciones acc.
+ * dE/dt = Σ vᵢ·(mᵢaᵢ − mᵢg − Fᵢ) + Σ k(D − L0)·Ḋ deja solo el trabajo de las
+ * fuerzas no conservativas (fricción, arrastre, amortiguadores) y el de las
+ * restricciones (cero si se cumplen exactamente; la estabilización hace un
+ * poco). Integrada como una componente más del estado, E + disipada se
+ * conserva a la tolerancia del integrador.
+ * @param {any} S @param {number[]} y @param {number[]} acc
+ */
+function potenciaDisipada(S, y, acc) {
+  let dE = 0;
+  for (let i = 0; i < S.n; i++) {
+    const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3];
+    dE += vx * (p.m * acc[2 * i] - p.m * S.g[0] - (p.F ? p.F[0] : 0)) + vy * (p.m * acc[2 * i + 1] - p.m * S.g[1] - (p.F ? p.F[1] : 0));
+  }
+  for (const c of S.con) {
+    if (c.tipo !== 'resorte') continue;
+    const ia = c.ia, ib = c.ib;
+    const pa = [y[4 * ia], y[4 * ia + 1]], pb = ib < 0 ? c.ancla : [y[4 * ib], y[4 * ib + 1]];
+    const va = [y[4 * ia + 2], y[4 * ia + 3]], vb = ib < 0 ? [0, 0] : [y[4 * ib + 2], y[4 * ib + 3]];
+    const d = sub(pa, pb), D = norm(d);
+    if (c.soloTira && D <= c.L0) continue;
+    dE += c.k * (D - c.L0) * dot(d, sub(va, vb)) / D;
+  }
+  return -dE;
 }
 
 function energiaCinetica(S, y) {
@@ -949,6 +1002,7 @@ export function simularMecanica(escena) {
       const { acc } = din(yy);
       const d = new Array(yy.length);
       for (let i = 0; i < S.n; i++) { d[4 * i] = yy[4 * i + 2]; d[4 * i + 1] = yy[4 * i + 3]; d[4 * i + 2] = acc[2 * i]; d[4 * i + 3] = acc[2 * i + 1]; }
+      d[4 * S.n] = potenciaDisipada(S, yy, acc);
       return d;
     };
     // Paso máximo acotado: un evento cuya función baja y vuelve a subir dentro de un
@@ -981,7 +1035,9 @@ export function simularMecanica(escena) {
     }
     const ev = sol.eventos[sol.eventos.length - 1];
     const nombre = ev.nombre || '';
-    const K0 = energiaCinetica(S, y);
+    // Energía mecánica entera (no solo la cinética): la proyección de las
+    // posiciones del instante cambia también la potencial
+    const K0 = energiaEstado(S, y);
     const zeno = k > LIMITE - 10;
     modo = copiarModo(modo);
     const activasAntes = activas(modo);
@@ -1038,10 +1094,16 @@ export function simularMecanica(escena) {
       const dn = sub(nail, punto), p = [y[4 * c.ia], y[4 * c.ia + 1]], v = [y[4 * c.ia + 2], y[4 * c.ia + 3]];
       if (dot(dn, sub(p, punto)) > 0) {
         est.Lrest = L - norm(dn); est.clavos.push(kk);
-        // Sentido de giro alrededor del clavo (para detectar el desenganche)
-        const dp = sub(p, nail);
-        est.sentido.push(Math.sign(dp[0] * v[1] - dp[1] * v[0]) * Math.sign(dn[0] * dp[1] - dn[1] * dp[0]) || 1);
+        // Sentido de giro alrededor del clavo (para detectar el desenganche):
+        // tras enganchar, (clavo − pivote) × (p − clavo) crece como t·(dn × v).
+        // Antes se multiplicaba por el signo de dn × dp, que en este instante
+        // es cero por definición: un signo de redondeo que a veces lo invertía
+        // y la cuerda se enganchaba y soltaba sin fin.
+        est.sentido.push(Math.sign(dn[0] * v[1] - dn[1] * v[0]) || 1);
         descripcion = `La cuerda ${c.id} toca el clavo`;
+        // En este instante la función del desenganche vale cero: su ruido de
+        // signo no debe soltarla enseguida
+        silenciar(`desengancha:${c.id}`);
       } else {
         // La partícula cruzó la recta del clavo del otro lado del pivote: la cuerda no lo toca
         silenciar(nombre);
@@ -1052,6 +1114,7 @@ export function simularMecanica(escena) {
       const prev = est.clavos.length ? c.clavos[est.clavos[est.clavos.length - 1]] : c.ancla;
       est.Lrest += norm(sub(c.clavos[kk], prev));
       descripcion = `La cuerda ${c.id} se suelta del clavo`;
+      silenciar(`engancha:${c.id}:${kk}`);
     } else if (partes[0] === 'choque') {
       descripcion = choque(Number(partes[1]), Number(partes[2]), zeno);
       if (!descripcion) silenciar(nombre);
@@ -1076,7 +1139,7 @@ export function simularMecanica(escena) {
     proyectarPosiciones();
     // Energía del instante que no registró ningún choque simultáneo: la del
     // evento principal más la de las proyecciones sin evento
-    const resto = K0 - energiaCinetica(S, y) - perdidaAnotada;
+    const resto = K0 - energiaEstado(S, y) - perdidaAnotada;
     if (resto > 0) {
       const destino = eventos[iEvento] ?? eventos[eventos.length - 1];
       if (destino) destino.perdida += resto;
@@ -1126,14 +1189,18 @@ function aplicarTiron(S, c, modo, y) {
  * @returns {Array<{id: string, x: number, y: number, vx: number, vy: number}>}
  */
 export function estadoMecanica(sim, t) {
+  const y = vectorEn(sim, t);
+  return sim.S.ids.map((id, i) => ({ id, x: y[4 * i], y: y[4 * i + 1], vx: y[4 * i + 2], vy: y[4 * i + 3] }));
+}
+
+/** Vector de estado completo en t (con la disipada continua al final). */
+function vectorEn(sim, t) {
   // Último tramo que empieza en t o antes (búsqueda binaria: puede haber miles)
   const T = sim.tramos;
   let lo = 0, hi = T.length - 1;
   while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (T[mid].t0 <= t + 1e-15) lo = mid; else hi = mid - 1; }
   const tr = T[lo];
-  const tt = Math.max(tr.t0, Math.min(t, tr.t1));
-  const y = interpolar(tr.sol, tt);
-  return sim.S.ids.map((id, i) => ({ id, x: y[4 * i], y: y[4 * i + 1], vx: y[4 * i + 2], vy: y[4 * i + 3] }));
+  return interpolar(tr.sol, Math.max(tr.t0, Math.min(t, tr.t1)));
 }
 
 /**
@@ -1158,5 +1225,10 @@ export function energiaMecanica(sim, t) {
     if (c.soloTira && D <= c.L0) continue;
     Ue += 0.5 * c.k * (D - c.L0) ** 2;
   }
-  return { K, Ug, Ue, UF, E: K + Ug + Ue + UF };
+  // Disipada hasta t: la continua (fricción, arrastre, amortiguadores,
+  // estabilización) y la de los choques y demás cambios instantáneos
+  const Qc = vectorEn(sim, t)[4 * sim.S.n] ?? 0;
+  let Qi = 0;
+  for (const ev of sim.eventos) if (ev.t <= t + 1e-12) Qi += ev.perdida;
+  return { K, Ug, Ue, UF, E: K + Ug + Ue + UF, Qc, Qi };
 }

@@ -30,9 +30,23 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   velocidad normal, diminuta en una geometría casi tangente).
 - Con un umbral de contacto alto (0.03 o 0.1 m/s), un montón de diez discos
   ya no agota el presupuesto de cálculo.
+- Péndulo con clavo: el sentido de giro al enganchar dependía del signo de un
+  producto que en ese instante es cero, y a veces la cuerda se enganchaba y
+  soltaba sin fin. Ahora sale de la velocidad, y el evento opuesto se
+  silencia una pausa breve.
+- Las notas de los escenarios del Laboratorio perdían «>», comillas y «&» al
+  normalizarse («tan θ > μs» quedaba «tan θ μs»); ahora se conservan y se
+  muestran escapadas.
 
 ### Cambiado
 
+- Mecánica: la energía disipada se contabiliza entera. La continua
+  (fricción, arrastre, amortiguadores y el resto de la estabilización) se
+  integra con el movimiento como una componente más del estado, y la de los
+  instantes incluye ahora la potencial que cambia la proyección de
+  posiciones: E + disipada se conserva a 10⁻¹⁰. `energiaMecanica` devuelve
+  `Qc` y `Qi`, y el Laboratorio separa «Disipada en choques» y «Disipada por
+  rozamiento» (también en el CSV).
 - Motor de Mecánica: el conjunto de contactos activos se elige como un
   problema de complementariedad (λ ≥ 0, aceleración ≥ 0) y los restos de
   acercamiento de un instante se quitan con impulsos inelásticos

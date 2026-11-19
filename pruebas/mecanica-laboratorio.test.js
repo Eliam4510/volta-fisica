@@ -46,6 +46,14 @@ describe('escena del laboratorio', () => {
     expect(e.objetos[3].sobre).toBeNull();          // el suelo degenerado no existe
   });
 
+  it('las notas de los escenarios no pierden caracteres al normalizarse (tan θ > μs)', () => {
+    for (const s of ESCENARIOS) if (s.nota) expect(escenaDeEscenario(s.id).nota, s.id).toEqual(s.nota);
+    expect(escenaDeEscenario('plano').nota[0]).toContain('tan θ > μs');
+    // Una nota hostil se conserva como texto (se muestra escapada), sin caracteres de control
+    const n = normalizarEscena({ ...escenaVacia(), nota: ['<img src=x onerror=alert(1)>\u0007 fin', 7] }).nota;
+    expect(n).toEqual(['<img src=x onerror=alert(1)> fin']);
+  });
+
   it('cada escenario sobrevive a guardar y abrir sin cambios', () => {
     for (const s of ESCENARIOS) {
       const e = escenaDeEscenario(s.id);

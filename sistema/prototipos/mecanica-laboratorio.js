@@ -160,7 +160,11 @@ export function normalizarEscena(d) {
   e.tipo = ['tutorial', 'ejemplo', 'mext', 'propio'].includes(d.tipo) ? d.tipo : 'propio';
   e.ref = texto(d.ref, '', 40);
   e.escenario = typeof d.escenario === 'string' ? d.escenario : null;
-  e.nota = Array.isArray(d.nota) ? d.nota.map(x => texto(x, '', 200)).filter(Boolean).slice(0, 8) : null;
+  // Las notas se muestran escapadas (no se insertan como marcado): basta quitar
+  // los caracteres de control. texto() quitaba también «>», y «tan θ > μs»
+  // quedaba «tan θ μs»
+  // eslint-disable-next-line no-control-regex
+  e.nota = Array.isArray(d.nota) ? d.nota.map(x => (typeof x === 'string' ? x.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200) : '')).filter(Boolean).slice(0, 8) : null;
   e.g = numero(d.g, 9.8, 0, 1000);
   e.gAng = numero(d.gAng, -90, -360, 360);
   e.b = numero(d.b, 0, 0, 1e4);
@@ -1452,7 +1456,7 @@ function iniciar() {
     // La nota de un tutorial son sus pasos; la de un ejemplo o una escena MEXT, los datos elegidos
     $('#nota-tipo').textContent = esc.tipo === 'tutorial' ? 'Tutorial' : 'Nota';
     $('#nota-ico').setAttribute('href', esc.tipo === 'tutorial' ? '#i-tutorial' : esc.tipo === 'mext' ? '#i-mext' : '#i-info');
-    $('#nota-pasos').innerHTML = esc.nota.map(p => `<li>${p.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</li>`).join('');
+    $('#nota-pasos').innerHTML = esc.nota.map(p => `<li>${p.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</li>`).join('');
   }
   $('#nota-cerrar').addEventListener('click', () => { notaCerrada = true; pintarNota(); });
 
@@ -1832,10 +1836,10 @@ function iniciar() {
     let h = '';
     if (!o) {
       if (SIM) {
-        const e = energiaMecanica(SIM, Math.min(t, tFinal())), e0 = energiaMecanica(SIM, 0);
+        const e = energiaMecanica(SIM, Math.min(t, tFinal()));
         if (tit) tit.textContent = `Energía en t = ${fmt(t, 4)} s`;
         const r = x => sinRuido(x, escalaEnergia());
-        h += filaL('E', 'k', r(e.K), 'J') + filaL('U', 'g', r(e.Ug), 'J') + filaL('U', 'e', r(e.Ue), 'J') + (hayFuerzaAplicada() ? filaL('U', 'F', r(e.UF), 'J') : '') + filaL('E', '', r(e.E), 'J') + filaL('Q', '', r(e0.E - e.E), 'J');
+        h += filaL('E', 'k', r(e.K), 'J') + filaL('U', 'g', r(e.Ug), 'J') + filaL('U', 'e', r(e.Ue), 'J') + (hayFuerzaAplicada() ? filaL('U', 'F', r(e.UF), 'J') : '') + filaL('E', '', r(e.E), 'J') + filaL('Q', '', r(e.Qc + e.Qi), 'J');
       }
     } else if (o.tipo === 'particula') {
       const i = M.indice[o.id], s = estadoEn(t)[i];
@@ -1983,10 +1987,14 @@ function iniciar() {
   const sinRuido = (x, escala) => (Math.abs(x) < 1e-9 * Math.max(escala, 1e-300) ? 0 : x);
   const escalaEnergia = () => (SIM ? Math.max(1e-12, ...energias().flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF)])) : 1);
   const hayFuerzaAplicada = () => !!(M && M.motor.particulas.some(p => p.F));
+  // ¿Hay algo que disipe de forma continua? (fricción, arrastre, amortiguadores)
+  const hayRozamiento = () => !!(M && ((M.motor.b || 0) > 0 || (M.motor.cAire || 0) > 0
+    || (M.motor.superficies || []).some(s => s.mu > 0) || (M.motor.conectores || []).some(c => c.tipo === 'resorte' && c.c > 0)));
   function energias() {
     if (cacheE && cacheE.sim === SIM) return cacheE.datos;
-    const E0 = energiaMecanica(SIM, 0).E;
-    const datos = MUESTRAS.map(m => { const e = energiaMecanica(SIM, m.t); return { t: m.t, K: e.K, Ug: e.Ug, Ue: e.Ue, UF: e.UF, E: e.E, Q: E0 - e.E }; });
+    // La disipada la lleva el motor: la de los choques (Qi) y la continua (Qc);
+    // su suma es E0 − E a la tolerancia del integrador
+    const datos = MUESTRAS.map(m => { const e = energiaMecanica(SIM, m.t); return { t: m.t, K: e.K, Ug: e.Ug, Ue: e.Ue, UF: e.UF, E: e.E, Q: e.Qc + e.Qi, Qc: e.Qc, Qi: e.Qi }; });
     cacheE = { sim: SIM, datos };
     return datos;
   }
@@ -2002,9 +2010,15 @@ function iniciar() {
     return s;
   }
   function energiaPanel() {
-    const tf = tFinal(), e = energiaMecanica(SIM, Math.min(t, tf)), e0 = energiaMecanica(SIM, 0), Q = e0.E - e.E;
+    const tf = tFinal(), e = energiaMecanica(SIM, Math.min(t, tf)), e0 = energiaMecanica(SIM, 0), Q = e.Qc + e.Qi;
+    // Con fricción, arrastre o amortiguadores se separa lo que disipan de lo
+    // que se pierde en los choques; si no, la continua es solo el resto de la
+    // estabilización (≈ 10⁻⁵ de la total) y se muestra una sola fila
+    const disipadas = hayRozamiento() && SIM.eventos.some(x => x.perdida > 0)
+      ? [['Disipada en choques', 'f-termico', e.Qi], ['Disipada por rozamiento', 'f-termico', e.Qc]]
+      : [[hayRozamiento() ? 'Disipada por rozamiento' : 'Disipada', 'f-termico', Q]];
     const filas = [['Cinética', 'f-movimiento', e.K], ['Potencial gravitatoria', 'f-cambio', e.Ug], ['Elástica', 'f-electrico', e.Ue],
-      ...(hayFuerzaAplicada() ? [['Potencial de la fuerza aplicada', 'f-interaccion', e.UF]] : []), ['Disipada', 'f-termico', Q], ['Total inicial', 'tinta', e0.E]];
+      ...(hayFuerzaAplicada() ? [['Potencial de la fuerza aplicada', 'f-interaccion', e.UF]] : []), ...disipadas, ['Total inicial', 'tinta', e0.E]];
     const d = energias(), maxAbs = Math.max(1e-12, ...d.flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF), Math.abs(x.Q), Math.abs(x.E + x.Q)]));
     const conSigno = d.some(x => x.Ug < -1e-12 || x.UF < -1e-12 || x.E + x.Q < -1e-12);
     $('#barras').className = 'barras' + (conSigno ? ' con-signo' : '');
@@ -2542,12 +2556,11 @@ function iniciar() {
     const tf = tFinal(), dt = Math.max(0.001, pasoAgradable(tf / 1000)), nom = M.particulas.map(p => p.nombre.replace(/\s+/g, '_'));
     const cols = ['t (s)'];
     nom.forEach(n => cols.push(`x_${n} (m)`, `y_${n} (m)`, `vx_${n} (m/s)`, `vy_${n} (m/s)`, `|v|_${n} (m/s)`));
-    cols.push('Ek (J)', 'Ug (J)', 'Ue (J)', 'UF (J)', 'E (J)', 'Disipada (J)');
-    const E0 = energiaMecanica(SIM, 0).E;
+    cols.push('Ek (J)', 'Ug (J)', 'Ue (J)', 'UF (J)', 'E (J)', 'Disipada (J)', 'Disipada en choques (J)', 'Disipada continua (J)');
     const filas = muestrear(0, tf, dt, tt => {
       const s = estadoMecanica(SIM, tt), e = energiaMecanica(SIM, tt), f = [tt];
       s.forEach(q => f.push(q.x, q.y, q.vx, q.vy, Math.hypot(q.vx, q.vy)));
-      f.push(e.K, e.Ug, e.Ue, e.UF, e.E, E0 - e.E);
+      f.push(e.K, e.Ug, e.Ue, e.UF, e.E, e.Qc + e.Qi, e.Qi, e.Qc);
       return f;
     });
     descargarTexto(`${nombreArchivo(esc.titulo)}-datos.csv`, aCSV(cols, filas))

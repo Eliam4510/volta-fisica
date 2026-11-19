@@ -531,3 +531,53 @@ describe('apoyos redundantes y complementariedad (LCP)', () => {
     }
   });
 });
+
+describe('energía disipada: continua (fricción, arrastre, amortiguadores) y en choques', () => {
+  const pared = (id, a, b, e = 0.3, extra = {}) => ({ id, tipo: 'segmento', a, b, e, ...extra });
+  /** max |E + Qc + Qi − E0| / E0 en 200 instantes */
+  const balance = (sim, D) => {
+    const E0 = energiaMecanica(sim, 0).E;
+    let peor = 0;
+    for (let k = 0; k <= 200; k++) { const e = energiaMecanica(sim, D * k / 200); peor = Math.max(peor, Math.abs(e.E + e.Qc + e.Qi - E0)); }
+    return peor / Math.abs(E0);
+  };
+
+  it('fricción cinética: el bloque se detiene y toda su cinética queda como disipada continua', () => {
+    const sim = simularMecanica({ duracion: 3, particulas: [{ id: 'B', m: 2, p: [0, 0], v: [3, 0] }], superficies: [pared('s', [-1, 0], [10, 0], 0, { mu: 0.2 })] });
+    const e = energiaMecanica(sim, 3);
+    cerca(e.Qc, 0.5 * 2 * 9, 1e-9);
+    expect(e.Qi).toBe(0);
+    // A mitad de camino: Qc = μ·m·g·d
+    const t = 0.5, x = 3 * t - 0.5 * 0.2 * g * t * t;
+    cerca(energiaMecanica(sim, t).Qc, 0.2 * 2 * g * x, 1e-9);
+    expect(balance(sim, 3)).toBeLessThan(1e-12);
+  });
+
+  it('arrastre lineal: Qc = ½·m·v0²·(1 − e^(−2bt/m))', () => {
+    const m = 1.5, b = 0.7, v02 = 17;
+    const sim = simularMecanica({ duracion: 3, g: [0, 0], b, particulas: [{ id: 'P', m, p: [0, 0], v: [4, 1] }] });
+    for (const t of [0.5, 1.7, 3]) cerca(energiaMecanica(sim, t).Qc, 0.5 * m * v02 * (1 - Math.exp(-2 * b * t / m)), 1e-9);
+    expect(balance(sim, 3)).toBeLessThan(1e-9);
+  });
+
+  it('resorte con amortiguador: E + Qc se conserva', () => {
+    const sim = simularMecanica({ duracion: 4, g: [0, 0], particulas: [{ id: 'P', m: 1, p: [1.5, 0], v: [0, 0] }], conectores: [{ id: 'r', tipo: 'resorte', a: 'P', ancla: [0, 0], k: 20, L0: 1, c: 0.8 }] });
+    expect(energiaMecanica(sim, 4).Qc).toBeGreaterThan(2);
+    expect(balance(sim, 4)).toBeLessThan(1e-9);
+  });
+
+  it('montón inelástico y bloque que baja por un plano con fricción y choca: el balance cierra exacto', () => {
+    const monton = simularMecanica({
+      duracion: 5, eParticulas: 0.3, superficies: [pared('s', [-1, 0], [1, 0]), pared('o', [-1, 2], [-1, 0]), pared('e', [1, 0], [1, 2])],
+      particulas: Array.from({ length: 10 }, (_, i) => ({ id: 'b' + i, m: 1, p: [-0.7 + (i % 5) * 0.35, 0.5 + Math.floor(i / 5) * 0.4], v: [Math.cos(i), 0], radio: 0.1 })),
+    });
+    expect(balance(monton, 5)).toBeLessThan(1e-9);
+    const plano = simularMecanica({
+      duracion: 2, particulas: [{ id: 'B', m: 1, p: [0.1, 1.5 - 0.1 / Math.sqrt(3)], v: [0, 0] }],
+      superficies: [pared('pl', [0, 1.5], [1.5 * Math.sqrt(3), 0], 0, { mu: 0.2 }), pared('s', [-1, 0], [8, 0], 0.5, { mu: 0.2 })],
+    });
+    const e = energiaMecanica(plano, 2);
+    expect(e.Qc).toBeGreaterThan(0); expect(e.Qi).toBeGreaterThan(0);
+    expect(balance(plano, 2)).toBeLessThan(1e-9);
+  });
+});
