@@ -281,6 +281,9 @@ function pasoInicial(f, t0, y0, f0, rtol, atol, hMax) {
  * @param {number} [o.maxPasos=100000] Intentos de paso (aceptados y rechazados)
  * @param {number} [o.h0]          Paso inicial (si no, se estima)
  * @param {number} [o.hMax]        Paso máximo (por defecto tFin − t0)
+ * @param {(t: number, y: number[]) => number} [o.hMaxDe] Paso máximo según el
+ *   estado al empezar cada paso (por ejemplo, para que dos cuerpos rápidos no
+ *   se crucen dentro de un paso sin que el evento cambie de signo)
  * @param {number} [o.hMin]        Paso mínimo; por debajo se detiene con estado 'pasoMinimo'
  * @param {number} [o.pasoFijo]    Paso constante, sin control de error
  * @param {number} [o.tolT=1e-12]  Tolerancia en t de la localización de eventos
@@ -300,7 +303,9 @@ export function integrar(f, t0, y0, tFin, o = {}) {
 
   const fijo = o.pasoFijo > 0;
   const nFijo = fijo ? Math.max(1, Math.ceil(largo / o.pasoFijo - 1e-9)) : 0;
-  let h = fijo ? largo / nFijo : (o.h0 ?? pasoInicial(f, t0, y, k1, rtol, atol, hMax));
+  const hMaxDe = !fijo && typeof o.hMaxDe === 'function' ? o.hMaxDe : null;
+  const tope = (tt, yy) => (hMaxDe ? Math.min(hMax, Math.max(hMaxDe(tt, yy) || hMax, 0)) : hMax);
+  let h = fijo ? largo / nFijo : Math.min(o.h0 ?? pasoInicial(f, t0, y, k1, rtol, atol, hMax), tope(t0, y));
   if (!fijo && o.h0 == null) nf++;
   let errViejo = 1e-4, rechazado = false;
   const BETA = 0.04, EXPO = 0.2 - 0.75 * BETA, SEG = 0.9;
@@ -359,7 +364,7 @@ export function integrar(f, t0, y0, tFin, o = {}) {
       let hNuevo = h / fac;
       if (rechazado) hNuevo = Math.min(hNuevo, h);
       errViejo = Math.max(err, 1e-4); rechazado = false;
-      h = Math.min(hNuevo, hMax);
+      h = Math.min(hNuevo, tope(t, y));
     }
   }
   sol.evaluaciones = nf;

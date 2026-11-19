@@ -186,3 +186,120 @@ describe('determinismo', () => {
     expect(a.eventos.map(e => e.t)).toEqual(b.eventos.map(e => e.t));
   });
 });
+
+describe('choques robustos y contactos entre discos', () => {
+  const pared = (id, a, b, e = 1) => ({ id, tipo: 'segmento', a, b, e });
+  // Caja de 6 m × 4 m; los segmentos dejan el sólido por fuera
+  const caja = e => [pared('s', [-3, -2], [3, -2], e), pared('n', [3, 2], [-3, 2], e), pared('o', [-3, 2], [-3, -2], e), pared('e', [3, -2], [3, 2], e)];
+  const gas = (n, v, g = [0, 0]) => ({
+    duracion: 5, g, particulas: Array.from({ length: n }, (_, i) => ({
+      id: 'p' + i, m: 1 + (i % 3), radio: 0.1,
+      p: [-2.5 + (i % 6), -1.5 + Math.floor(i / 6) * 0.75], v: [v * Math.cos(i * 1.7), v * Math.sin(i * 2.3)],
+    })),
+    superficies: caja(1),
+  });
+
+  it('sin efecto túnel: 24 discos a 20 m/s no salen de la caja ni se atraviesan', () => {
+    const sim = simularMecanica(gas(24, 20));
+    expect(sim.incompleta).toBeNull();
+    const E0 = energiaMecanica(sim, 0).E;
+    for (let k = 0; k <= 400; k++) {
+      const t = 5 * k / 400, S = estadoMecanica(sim, t);
+      for (const s of S) {
+        expect(Math.abs(s.x)).toBeLessThanOrEqual(3 - 0.1 + 1e-6);
+        expect(Math.abs(s.y)).toBeLessThanOrEqual(2 - 0.1 + 1e-6);
+      }
+      for (let a = 0; a < S.length; a++) for (let b = a + 1; b < S.length; b++) {
+        expect(Math.hypot(S[a].x - S[b].x, S[a].y - S[b].y)).toBeGreaterThanOrEqual(0.2 - 1e-6);
+      }
+      cerca(energiaMecanica(sim, t).E, E0, 1e-12);
+    }
+  });
+
+  it('el radio cuenta contra las superficies: disco apoyado y bola en un cuenco', () => {
+    const apoyado = simularMecanica({ duracion: 1, particulas: [{ id: 'D', m: 1, p: [0, 0.1], v: [1, 0], radio: 0.1 }], superficies: [pared('suelo', [-5, 0], [5, 0], 0.5)] });
+    expect(apoyado.eventos).toEqual([]);
+    cerca(estadoMecanica(apoyado, 1)[0].y, 0.1, 1e-9);
+    // En un cuenco de radio R, el centro de una bola de radio r va por R − r
+    const R = 1, r = 0.2, a0 = 0.05;
+    const cuenco = simularMecanica({ duracion: 3, particulas: [{ id: 'B', m: 1, p: [(R - r) * Math.sin(a0), -(R - r) * Math.cos(a0)], v: [0, 0], radio: r }], superficies: [{ id: 'cuenco', tipo: 'arco', c: [0, 0], r: R, cara: 'interior' }] });
+    for (const t of [0.7, 1.9, 3]) { const s = estadoMecanica(cuenco, t)[0]; cerca(Math.hypot(s.x, s.y), R - r, 1e-9); }
+  });
+
+  it('péndulo de Newton: la velocidad pasa entera a la última bola', () => {
+    const sim = simularMecanica({
+      duracion: 2, g: [0, 0],
+      particulas: [{ id: 'A', m: 1, p: [-1, 0], v: [2, 0], radio: 0.1 }, ...[0, 1, 2, 3].map(k => ({ id: 'B' + k, m: 1, p: [k * 0.2, 0], v: [0, 0], radio: 0.1 }))],
+    });
+    const v = estadoMecanica(sim, 2).map(s => s.vx);
+    [0, 0, 0, 0].forEach((x, i) => cerca(v[i], x, 1e-12));
+    cerca(v[4], 2, 1e-12);
+    expect(sim.eventos.filter(e => e.nombre.startsWith('Choque entre')).map(e => e.t)).toEqual([0.4, 0.4, 0.4, 0.4].map(() => expect.closeTo(0.4, 10)));
+  });
+
+  it('una pila de discos inelásticos cae y se asienta en y = r, 3r, 5r', () => {
+    const sim = simularMecanica({
+      duracion: 4, eParticulas: 0.5,
+      particulas: [0, 1, 2].map(k => ({ id: 'D' + k, m: 1, p: [0, 0.5 + k * 0.5], v: [0, 0], radio: 0.1 })),
+      superficies: [pared('suelo', [-5, 0], [5, 0], 0.5)],
+    });
+    expect(sim.incompleta).toBeNull();
+    estadoMecanica(sim, 4).forEach((s, k) => { cerca(s.y, 0.1 + 0.2 * k, 1e-8); cerca(s.vy, 0, 1e-8); });
+  });
+
+  it('montón inelástico bajo gravedad: termina y el balance de energía cierra', () => {
+    const paredes = [pared('s', [-1, 0], [1, 0], 0.3), pared('o', [-1, 2], [-1, 0], 0.3), pared('e', [1, 0], [1, 2], 0.3)];
+    const sim = simularMecanica({
+      duracion: 5, eParticulas: 0.3, superficies: paredes,
+      particulas: Array.from({ length: 10 }, (_, i) => ({ id: 'b' + i, m: 1, p: [-0.7 + (i % 5) * 0.35, 0.5 + Math.floor(i / 5) * 0.4], v: [Math.cos(i), 0], radio: 0.1 })),
+    });
+    expect(sim.incompleta).toBeNull();
+    const E0 = energiaMecanica(sim, 0).E, E1 = energiaMecanica(sim, 5).E;
+    const disipada = sim.eventos.reduce((a, e) => a + e.perdida, 0);
+    // Lo que no cuadra es la estabilización de Baumgarte en los apoyos (≈ 10⁻⁴·E0)
+    expect(Math.abs(E0 - E1 - disipada)).toBeLessThan(1e-3 * E0);
+    // Ningún disco atraviesa el suelo ni las paredes
+    for (let k = 0; k <= 200; k++) for (const s of estadoMecanica(sim, 5 * k / 200)) {
+      expect(s.y).toBeGreaterThanOrEqual(0.1 - 1e-3);
+      expect(Math.abs(s.x)).toBeLessThanOrEqual(0.9 + 1e-3);
+    }
+  });
+
+  it('al llegar al límite de eventos devuelve lo simulado y lo dice', () => {
+    const sim = simularMecanica({ ...gas(24, 20), maxEventos: 40 });
+    expect(sim.incompleta).toBeTruthy();
+    expect(sim.incompleta.motivo).toMatch(/límite de 40 eventos/);
+    expect(sim.tFin).toBeLessThan(5);
+    expect(sim.tFin).toBe(sim.incompleta.t);
+    // Más allá de lo simulado, el estado se queda en el último calculado
+    expect(estadoMecanica(sim, 5)).toEqual(estadoMecanica(sim, sim.tFin));
+  });
+
+  it('con choques, la misma escena da exactamente el mismo resultado', () => {
+    const a = simularMecanica(gas(12, 5, [0, -9.8])), b = simularMecanica(gas(12, 5, [0, -9.8]));
+    expect(a.eventos.map(e => e.t)).toEqual(b.eventos.map(e => e.t));
+    expect(estadoMecanica(a, 4.2)).toEqual(estadoMecanica(b, 4.2));
+  });
+});
+
+describe('deriva a largo plazo (100 s)', () => {
+  it('péndulo con cuerda: energía y largo', () => {
+    const sim = simularMecanica({ duracion: 100, particulas: [{ id: 'P', m: 1, p: [Math.sin(1), -Math.cos(1)], v: [0, 0] }], conectores: [{ id: 'C', tipo: 'cuerda', a: 'P', ancla: [0, 0], L: 1 }] });
+    const E0 = energiaMecanica(sim, 0).E;
+    for (let k = 1; k <= 100; k++) {
+      const s = estadoMecanica(sim, k)[0];
+      cerca(energiaMecanica(sim, k).E, E0, 1e-9);
+      cerca(Math.hypot(s.x, s.y), 1, 1e-10);
+    }
+  });
+  it('varilla girando: energía', () => {
+    const sim = simularMecanica({ duracion: 100, particulas: [{ id: 'P', m: 1, p: [0, -1], v: [5, 0] }], conectores: [{ id: 'C', tipo: 'varilla', a: 'P', ancla: [0, 0], L: 1 }] });
+    const E0 = energiaMecanica(sim, 0).E;
+    for (let k = 1; k <= 100; k++) cerca(energiaMecanica(sim, k).E, E0, 1e-8);
+  });
+  it('resorte en dos dimensiones con gravedad: energía', () => {
+    const sim = simularMecanica({ duracion: 100, particulas: [{ id: 'P', m: 0.5, p: [0.7, -0.4], v: [0.3, 1] }], conectores: [{ id: 'R', tipo: 'resorte', a: 'P', ancla: [0, 0], k: 20, L0: 0.5 }] });
+    const E0 = energiaMecanica(sim, 0).E;
+    for (let k = 1; k <= 100; k++) cerca(energiaMecanica(sim, k).E, E0, 1e-6);
+  });
+});

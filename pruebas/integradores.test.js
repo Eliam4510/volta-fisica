@@ -103,6 +103,28 @@ describe('Dormand–Prince 5(4)', () => {
     expect(s.evaluaciones).toBeGreaterThanOrEqual(6 * (s.pasosAceptados + s.pasosRechazados));
   });
 
+  it('hMaxDe acota el paso según el estado al empezar cada paso', () => {
+    // Movimiento uniforme x = 30·t: sin tope, DOPRI5 da unos pocos pasos largos
+    const lineal = (t, y) => [y[1], 0];
+    const libre = integrar(lineal, 0, [0, 30], 1);
+    expect(libre.pasosAceptados).toBeLessThan(10);
+    const tope = (t, y) => 0.05 / Math.abs(y[1]);    // nunca más de 5 cm por paso
+    const s = integrar(lineal, 0, [0, 30], 1, { hMaxDe: tope });
+    for (let i = 1; i < s.t.length; i++) expect(30 * (s.t[i] - s.t[i - 1])).toBeLessThanOrEqual(0.05 + 1e-12);
+    expect(s.pasosAceptados).toBeGreaterThanOrEqual(600);
+    cerca(s.y[s.y.length - 1][0], 30, 1e-12);
+  });
+
+  it('con hMaxDe no se pierde un evento que baja y vuelve a subir dentro de un paso', () => {
+    // x = 30·t pasa por una ventana estrecha alrededor de x = 10: g = |x − 10| − 0.01
+    const lineal = (t, y) => [y[1], 0];
+    const ev = [{ g: (t, y) => Math.abs(y[0] - 10) - 0.01, direccion: -1 }];
+    expect(integrar(lineal, 0, [0, 30], 1, { eventos: ev }).eventos).toHaveLength(0);
+    const s = integrar(lineal, 0, [0, 30], 1, { eventos: ev, hMaxDe: (t, y) => 0.005 / Math.abs(y[1]) });
+    expect(s.eventos).toHaveLength(1);
+    cerca(s.eventos[0].t, 9.99 / 30, 1e-12);
+  });
+
   it("se detiene sin colgarse ante una explosión (y' = y², y → ∞ en t = 1)", () => {
     const s = integrar((t, y) => [y[0] * y[0]], 0, [1], 2, { rtol: 1e-8, maxPasos: 5000 });
     expect(['pasoMinimo', 'maxPasos']).toContain(s.estado);

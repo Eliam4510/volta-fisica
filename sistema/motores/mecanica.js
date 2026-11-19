@@ -3,8 +3,9 @@
 
    Autómata híbrido:
    - Estado: posición y velocidad de cada partícula.
-   - Modo: qué restricciones unilaterales están activas (contacto con una
-     superficie, cuerda tensa). Las bilaterales (varillas) siempre lo están.
+   - Modo: qué restricciones unilaterales están activas (apoyos de cada
+     partícula en una o varias superficies, «i:js»; discos apoyados entre sí,
+     «i:j»; cuerdas tensas). Las bilaterales (varillas) siempre lo están.
    - En cada modo, la dinámica es M·a = F + Σ λ_j ∇C_j con J·a = −J̇·v
      − 2α·Ċ − β²·C (estabilización de Baumgarte), resuelta por evaluación.
    - Los cambios de modo son eventos localizados por el integrador
@@ -16,8 +17,15 @@
        · tensión nula (λ → 0)                          → cuerda floja
        · cuerda que toca un clavo                      → pivote nuevo
        · choque entre partículas (distancia → r1 + r2) → impulso con e
+       · contacto entre partículas que deja de empujar → se separan
        · velocidad tangencial nula con fricción        → reposo o sigue
-   Regla post-Zeno: cerca del límite de eventos se declara el contacto.
+   El radio de una partícula cuenta también contra las superficies (un disco
+   apoya su borde). Tras cada evento se resuelven los choques que ocurren en
+   el mismo instante (impulsos secuenciales), y el paso se acota según la
+   rapidez para que dos cuerpos no se crucen dentro de un paso.
+   Regla post-Zeno: un rebote más lento que `umbral`, o cerca del límite de
+   eventos, se convierte en contacto persistente. Si aun así se alcanza el
+   límite, se devuelve lo simulado con `incompleta`.
    Puro: sin DOM.
    ========================================================================== */
 import { integrar, interpolar } from '../nucleo/integradores.js';
@@ -28,7 +36,7 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {number} m                Masa (kg)
  * @property {[number, number]} p      Posición (m)
  * @property {[number, number]} v      Velocidad (m/s)
- * @property {number} [radio=0]        Radio para choques entre partículas (m)
+ * @property {number} [radio=0]        Radio del disco (m): cuenta en los choques entre partículas y contra las superficies
  * @property {[number, number]} [F]    Fuerza constante aplicada (N)
  *
  * @typedef {Object} Superficie
@@ -79,6 +87,18 @@ const UMBRAL_LAMBDA = 1e-12;
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
 const norm = a => Math.hypot(a[0], a[1]);
+/** Radio de la partícula i (0 si es puntual). */
+const radio = (S, i) => S.P[i].radio || 0;
+/** Hueco por debajo del cual dos cuerpos se consideran en contacto tras un evento (m). */
+const TOL_HUECO = 1e-9;
+/** Penetración máxima que todavía se trata como contacto con una superficie (m). */
+const TOL_PENETRACION = 1e-6;
+/** Duración de la pausa en la que se silencia un evento descartado (s). */
+const PAUSA = 1e-7;
+/** Fuerza de contacto mínima (N) para que dos discos sigan apoyados uno en otro. */
+const LAMBDA_PAR_MIN = 1e-9;
+/** Distancia (m) a la que un disco lento ya se considera apoyado (contacto persistente). */
+const tolContacto = R => Math.max(1e-6, 1e-3 * R);
 
 /** Datos derivados de un segmento: dirección unitaria, normal (lado libre a la izquierda de a→b) y largo. */
 function geoSegmento(s) {
@@ -125,9 +145,12 @@ function estadoInicial(P) {
  */
 function restriccionesDelModo(S, modo) {
   const lista = [];
-  for (const [i, s] of Object.entries(modo.contactos)) {
-    const sup = S.sup[s.sup], iP = Number(i);
-    lista.push({ clave: `contacto:${iP}`, unilateral: true, ...restriccionSuperficie(sup, iP) });
+  for (const [clave, s] of Object.entries(modo.contactos)) {
+    lista.push({ clave: `contacto:${clave}`, unilateral: true, ...restriccionSuperficie(S.sup[s.sup], s.i, radio(S, s.i)) });
+  }
+  for (const par of Object.keys(modo.pares)) {
+    const [i, j] = par.split(':').map(Number);
+    lista.push({ clave: `par:${par}`, unilateral: true, ...restriccionPar(S, i, j) });
   }
   for (const c of S.con) {
     if (c.tipo === 'varilla') lista.push({ clave: `varilla:${c.id}`, unilateral: false, ...restriccionDistancia(c, modo, true) });
@@ -137,23 +160,42 @@ function restriccionesDelModo(S, modo) {
   return lista;
 }
 
-function restriccionSuperficie(sup, i) {
+/**
+ * Hueco entre la partícula i (de radio r) y una superficie: C ≥ 0 es el lado libre.
+ * @param {any} sup @param {number} i @param {number} [r=0]
+ */
+function restriccionSuperficie(sup, i, r = 0) {
   if (sup.tipo === 'segmento') {
     const { n } = sup.geo;
     return {
       evaluar(y) {
         const p = [y[4 * i], y[4 * i + 1]], v = [y[4 * i + 2], y[4 * i + 3]];
-        return { C: dot(n, sub(p, sup.a)), Cp: dot(n, v), grad: [[i, n[0], n[1]]], jdv: 0 };
+        return { C: dot(n, sub(p, sup.a)) - r, Cp: dot(n, v), grad: [[i, n[0], n[1]]], jdv: 0 };
       },
     };
   }
-  // Arco: exterior C = |d| − r; interior C = r − |d|
-  const sg = sup.cara === 'interior' ? -1 : 1;
+  // Arco: exterior C = |d| − (R + r); interior C = (R − r) − |d|
+  const sg = sup.cara === 'interior' ? -1 : 1, Rc = sup.r + sg * r;
   return {
     evaluar(y) {
       const d = [y[4 * i] - sup.c[0], y[4 * i + 1] - sup.c[1]], v = [y[4 * i + 2], y[4 * i + 3]];
       const D = norm(d), u = [d[0] / D, d[1] / D], uv = dot(u, v);
-      return { C: sg * (D - sup.r), Cp: sg * uv, grad: [[i, sg * u[0], sg * u[1]]], jdv: sg * (dot(v, v) - uv * uv) / D };
+      return { C: sg * (D - Rc), Cp: sg * uv, grad: [[i, sg * u[0], sg * u[1]]], jdv: sg * (dot(v, v) - uv * uv) / D };
+    },
+  };
+}
+
+/**
+ * Contacto entre dos discos: C = |pi − pj| − (ri + rj) ≥ 0; λ ≥ 0 los separa.
+ * @param {any} S @param {number} i @param {number} j
+ */
+function restriccionPar(S, i, j) {
+  const R = radio(S, i) + radio(S, j);
+  return {
+    evaluar(y) {
+      const d = [y[4 * i] - y[4 * j], y[4 * i + 1] - y[4 * j + 1]], D = norm(d), u = [d[0] / D, d[1] / D];
+      const w = [y[4 * i + 2] - y[4 * j + 2], y[4 * i + 3] - y[4 * j + 3]], uw = dot(u, w);
+      return { C: D - R, Cp: uw, grad: [[i, u[0], u[1]], [j, -u[0], -u[1]]], jdv: (dot(w, w) - uw * uw) / D };
     },
   };
 }
@@ -255,10 +297,10 @@ function fuerzas(S, modo, y, lambdasPrevias) {
   }
   // Fricción cinética en contactos que deslizan: −μ·N·t̂·signo(v_t)
   if (lambdasPrevias) {
-    for (const [i, s] of Object.entries(modo.contactos)) {
-      const sup = S.sup[s.sup], iP = Number(i);
+    for (const [clave, s] of Object.entries(modo.contactos)) {
+      const sup = S.sup[s.sup], iP = s.i;
       if (!(sup.mu > 0) || s.pegado) continue;
-      const N = Math.max(0, lambdasPrevias[`contacto:${iP}`] || 0);
+      const N = Math.max(0, lambdasPrevias[`contacto:${clave}`] || 0);
       const t = tangente(sup, [y[4 * iP], y[4 * iP + 1]]);
       const vt = t[0] * y[4 * iP + 2] + t[1] * y[4 * iP + 3];
       if (Math.abs(vt) < 1e-15) continue;
@@ -290,11 +332,11 @@ function dinamica(S, modo, y, restr) {
     const ev = restr.map(r => r.evaluar(y));
     // Restricciones adicionales de adherencia (fricción estática)
     const pegadas = [];
-    for (const [i, s] of Object.entries(modo.contactos)) {
+    for (const [clave, s] of Object.entries(modo.contactos)) {
       if (!s.pegado) continue;
-      const iP = Number(i), t = tangente(S.sup[s.sup], [y[4 * iP], y[4 * iP + 1]]);
+      const iP = s.i, t = tangente(S.sup[s.sup], [y[4 * iP], y[4 * iP + 1]]);
       const vt = t[0] * y[4 * iP + 2] + t[1] * y[4 * iP + 3];
-      pegadas.push({ clave: `pegado:${iP}`, evaluar: () => ({ C: 0, Cp: vt, grad: [[iP, t[0], t[1]]], jdv: 0 }) });
+      pegadas.push({ clave: `pegado:${clave}`, evaluar: () => ({ C: 0, Cp: vt, grad: [[iP, t[0], t[1]]], jdv: 0 }) });
       ev.push(pegadas[pegadas.length - 1].evaluar());
     }
     const k = ev.length;
@@ -330,45 +372,56 @@ function dinamica(S, modo, y, restr) {
 // Eventos del modo
 // ---------------------------------------------------------------------------
 
-function eventosDelModo(S, modo, restr) {
+/**
+ * Eventos del modo. y0 es el estado al empezar el tramo: si dos cuerpos ya se
+ * solapan un poco (la estabilización deja restos de 10⁻⁶ m), el choque se mide
+ * desde ese solape; si no, un hueco que ya es negativo nunca cambiaría de signo
+ * y los cuerpos se atravesarían.
+ * @param {any} S @param {any} modo @param {any[]} restr @param {number[]} y0
+ */
+function eventosDelModo(S, modo, restr, y0) {
   /** @type {import('../nucleo/integradores.js').DefinicionEvento[]} */
   const ev = [];
   const n = S.n;
-  // Impactos con superficies no activas
+  // Impactos con las superficies en las que la partícula no se apoya (una que
+  // rueda por el suelo puede chocar con la pared)
   for (let i = 0; i < n; i++) {
-    if (modo.contactos[i]) continue;
     S.sup.forEach((sup, js) => {
-      const r = restriccionSuperficie(sup, i);
+      if (modo.contactos[`${i}:${js}`]) return;
+      const r = restriccionSuperficie(sup, i, radio(S, i));
+      const C0 = r.evaluar(y0).C, dentro0 = margenSuperficie(sup, [y0[4 * i], y0[4 * i + 1]]) >= 0;
+      // Un hueco inicial nulo o negativo no cambiaría de signo: se mide desde él
+      const off = C0 <= TOL_HUECO && C0 > -tolContacto(Math.max(radio(S, i), 1e-3)) * 100 && dentro0 ? Math.min(C0, 0) - TOL_HUECO : 0;
       ev.push({
         nombre: `impacto:${i}:${js}`, direccion: -1, terminal: true,
-        g: (t, y) => {
-          const { C } = r.evaluar(y);
-          // Solo cuenta dentro de la extensión de la superficie
-          return dentroDeSuperficie(sup, [y[4 * i], y[4 * i + 1]]) ? C : 1;
-        },
+        // Solo cuenta dentro de la extensión de la superficie. max(C, −margen)
+        // es continua (no salta al cruzar el borde), así que el cambio de signo
+        // entre dos pasos es fiable; un cruce por el borde con C < 0 (desde
+        // detrás) se descarta al tratarlo.
+        g: (t, y) => Math.max(r.evaluar(y).C - off, -margenSuperficie(sup, [y[4 * i], y[4 * i + 1]])),
       });
     });
   }
   // Contactos activos: despegue (λ → 0), fin del segmento, fricción
-  for (const [i, s] of Object.entries(modo.contactos)) {
-    const iP = Number(i), sup = S.sup[s.sup];
+  for (const [clave, s] of Object.entries(modo.contactos)) {
+    const iP = s.i, sup = S.sup[s.sup];
     ev.push({
-      nombre: `despegue:${iP}`, direccion: -1, terminal: true,
-      g: (t, y) => (dinamica(S, modo, y, restr).lambdas[`contacto:${iP}`] ?? 0),
+      nombre: `despegue:${clave}`, direccion: -1, terminal: true,
+      g: (t, y) => (dinamica(S, modo, y, restr).lambdas[`contacto:${clave}`] ?? 0),
     });
     if (sup.tipo === 'segmento' || sup.a0 != null) {
-      ev.push({ nombre: `fin:${iP}`, direccion: -1, terminal: true, g: (t, y) => margenSuperficie(sup, [y[4 * iP], y[4 * iP + 1]]) });
+      ev.push({ nombre: `fin:${clave}`, direccion: -1, terminal: true, g: (t, y) => margenSuperficie(sup, [y[4 * iP], y[4 * iP + 1]]) });
     }
     if (sup.mu > 0) {
       if (s.pegado) {
         // Deja de estar pegado cuando la fricción necesaria supera μs·N
         ev.push({
-          nombre: `desliza:${iP}`, direccion: -1, terminal: true,
-          g: (t, y) => { const L = dinamica(S, modo, y, restr).lambdas; return (sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${iP}`]) - Math.abs(L[`pegado:${iP}`]); },
+          nombre: `desliza:${clave}`, direccion: -1, terminal: true,
+          g: (t, y) => { const L = dinamica(S, modo, y, restr).lambdas; return (sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) - Math.abs(L[`pegado:${clave}`]); },
         });
       } else {
         ev.push({
-          nombre: `vt0:${iP}`, direccion: 0, terminal: true,
+          nombre: `vt0:${clave}`, direccion: 0, terminal: true,
           g: (t, y) => { const tg = tangente(sup, [y[4 * iP], y[4 * iP + 1]]); return tg[0] * y[4 * iP + 2] + tg[1] * y[4 * iP + 3]; },
         });
       }
@@ -406,19 +459,29 @@ function eventosDelModo(S, modo, restr) {
             const { punto, L } = piv(), p = [y[4 * c.ia], y[4 * c.ia + 1]];
             const dn = sub(nail, punto);
             if (norm(dn) >= L) return 1;            // el clavo queda fuera del alcance
+            // Cruce de la recta pivote → partícula por el clavo. Es continua por
+            // los dos lados: un valor fijo del otro lado del pivote cambiaba de
+            // signo en la frontera si la partícula empezaba a la izquierda del
+            // clavo (enganche falso en t = 0). El cruce del lado opuesto al
+            // clavo se descarta al atender el evento.
             const dp = sub(p, punto);
-            if (dot(dn, dp) <= 0) return 1;         // el clavo está del otro lado del pivote
-            return dn[0] * dp[1] - dn[1] * dp[0];   // cruce de la cuerda por el clavo
+            return dn[0] * dp[1] - dn[1] * dp[0];
           },
         });
       });
     }
   }
-  // Choques entre partículas con radio
+  // Choques entre partículas con radio; los pares en contacto se separan cuando λ → 0
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
-    const R = (S.P[i].radio || 0) + (S.P[j].radio || 0);
+    const R = radio(S, i) + radio(S, j);
     if (!(R > 0)) continue;
-    ev.push({ nombre: `choque:${i}:${j}`, direccion: -1, terminal: true, g: (t, y) => Math.hypot(y[4 * i] - y[4 * j], y[4 * i + 1] - y[4 * j + 1]) - R });
+    if (modo.pares[`${i}:${j}`]) {
+      ev.push({ nombre: `separa:${i}:${j}`, direccion: -1, terminal: true, g: (t, y) => dinamica(S, modo, y, restr).lambdas[`par:${i}:${j}`] ?? 0 });
+    } else {
+      const h0 = Math.hypot(y0[4 * i] - y0[4 * j], y0[4 * i + 1] - y0[4 * j + 1]) - R;
+      const off = h0 <= TOL_HUECO && h0 > -0.5 * R ? Math.min(h0, 0) - TOL_HUECO : 0;
+      ev.push({ nombre: `choque:${i}:${j}`, direccion: -1, terminal: true, g: (t, y) => Math.hypot(y[4 * i] - y[4 * j], y[4 * i + 1] - y[4 * j + 1]) - R - off });
+    }
   }
   return ev;
 }
@@ -446,6 +509,7 @@ function normalizarAngulo(a) { const d = 2 * Math.PI; return ((a % d) + d) % d; 
 function copiarModo(m) {
   return {
     contactos: Object.fromEntries(Object.entries(m.contactos).map(([k, v]) => [k, { ...v }])),
+    pares: { ...m.pares },
     cuerdas: Object.fromEntries(Object.entries(m.cuerdas).map(([k, v]) => [k, { ...v, clavos: [...v.clavos], sentido: [...v.sentido] }])),
   };
 }
@@ -476,21 +540,27 @@ export function simularMecanica(escena) {
   const S = preparar(escena);
   const DUR = escena.duracion ?? 5, UMBRAL = escena.umbral ?? 1e-3, RTOL = escena.rtol ?? 1e-10;
   let y = estadoInicial(S.P), t = 0;
-  /** @type {{contactos: Record<string, any>, cuerdas: Record<string, any>}} */
-  let modo = { contactos: {}, cuerdas: {} };
+  /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean}>, pares: Record<string, boolean>, cuerdas: Record<string, any>}} */
+  let modo = { contactos: {}, pares: {}, cuerdas: {} };
   for (const c of S.con) {
     if (c.tipo === 'cuerda' || c.tipo === 'polea') {
-      const r = c.tipo === 'polea' ? restriccionPolea(c) : restriccionDistancia(c, { cuerdas: { [c.id]: { clavos: [] } } }, false);
+      const r = c.tipo === 'polea' ? restriccionPolea(c) : restriccionDistancia(c, { contactos: {}, pares: {}, cuerdas: { [c.id]: { clavos: [] } } }, false);
       modo.cuerdas[c.id] = { tensa: Math.abs(r.evaluar(y).C) < 1e-9, clavos: [], sentido: [], Lrest: c.L };
     }
   }
   // Contactos iniciales: partícula apoyada sobre una superficie (C ≈ 0 y sin velocidad hacia fuera)
   S.sup.forEach((sup, js) => {
     for (let i = 0; i < S.n; i++) {
-      const { C, Cp } = restriccionSuperficie(sup, i).evaluar(y);
-      if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9 && dentroDeSuperficie(sup, [y[4 * i], y[4 * i + 1]])) modo.contactos[i] = { sup: js, pegado: false };
+      const { C, Cp } = restriccionSuperficie(sup, i, radio(S, i)).evaluar(y);
+      if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9 && dentroDeSuperficie(sup, [y[4 * i], y[4 * i + 1]])) modo.contactos[`${i}:${js}`] = { i, sup: js, pegado: false };
     }
   });
+  // Discos que empiezan tocándose y en reposo relativo (una pila, una fila)
+  for (let i = 0; i < S.n; i++) for (let j = i + 1; j < S.n; j++) {
+    if (!(radio(S, i) + radio(S, j) > 0)) continue;
+    const { C, Cp } = restriccionPar(S, i, j).evaluar(y);
+    if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9) modo.pares[`${i}:${j}`] = true;
+  }
 
   const tramos = [], eventos = [];
   const LIMITE = escena.maxEventos ?? 2000;
@@ -503,24 +573,138 @@ export function simularMecanica(escena) {
       cambio = false;
       const restr = restriccionesDelModo(S, modo);
       const { lambdas } = dinamica(S, modo, y, restr);
-      for (const i of Object.keys(modo.contactos)) {
-        if ((lambdas[`contacto:${i}`] ?? 0) < -UMBRAL_LAMBDA) { delete modo.contactos[i]; cambio = true; }
+      for (const clave of Object.keys(modo.contactos)) {
+        if ((lambdas[`contacto:${clave}`] ?? 0) < -UMBRAL_LAMBDA) { delete modo.contactos[clave]; cambio = true; }
       }
       for (const c of S.con) if ((c.tipo === 'cuerda' || c.tipo === 'polea') && modo.cuerdas[c.id].tensa && (lambdas[`${c.tipo}:${c.id}`] ?? 0) < -UMBRAL_LAMBDA) { modo.cuerdas[c.id].tensa = false; cambio = true; }
+      for (const par of Object.keys(modo.pares)) if (!((lambdas[`par:${par}`] ?? 0) > LAMBDA_PAR_MIN)) { delete modo.pares[par]; cambio = true; }
     }
   };
   revisarDespegues();
   // Fricción estática al arrancar: un apoyo en reposo queda pegado si μs alcanza
-  for (const [i, s] of Object.entries(modo.contactos)) {
+  for (const [clave, s] of Object.entries(modo.contactos)) {
     const sup = S.sup[s.sup];
     if (!(sup.mu > 0)) continue;
-    const iP = Number(i), tg = tangente(sup, [y[4 * iP], y[4 * iP + 1]]);
+    const iP = s.i, tg = tangente(sup, [y[4 * iP], y[4 * iP + 1]]);
     if (Math.abs(tg[0] * y[4 * iP + 2] + tg[1] * y[4 * iP + 3]) > 1e-12) continue;
     s.pegado = true;
     const L = dinamica(S, modo, y, restriccionesDelModo(S, modo)).lambdas;
-    if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${iP}`]) < Math.abs(L[`pegado:${iP}`])) s.pegado = false;
+    if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
   }
 
+  // Paso máximo según la rapidez: en un paso, nada recorre más de un cuarto de
+  // la escala menor de la escena (radio, medio segmento, medio radio de arco).
+  // Así un choque no puede empezar y terminar dentro de un mismo paso.
+  let escalaPaso = Infinity;
+  for (let i = 0; i < S.n; i++) if (radio(S, i) > 0) escalaPaso = Math.min(escalaPaso, radio(S, i));
+  for (const sup of S.sup) escalaPaso = Math.min(escalaPaso, sup.tipo === 'segmento' ? sup.geo.L / 2 : sup.r / 2);
+  const hMaxDe = Number.isFinite(escalaPaso) ? (/** @type {number} */ tt, /** @type {number[]} */ yy) => {
+    let v = 0;
+    for (let i = 0; i < S.n; i++) v = Math.max(v, Math.hypot(yy[4 * i + 2], yy[4 * i + 3]));
+    return v > 0 ? 0.25 * escalaPaso / v : Infinity;
+  } : undefined;
+
+  /** Impacto de la partícula i con la superficie js; devuelve la descripción o '' si no hay choque. */
+  const impacto = (i, js, zeno) => {
+    const sup = S.sup[js];
+    const n = normalLibre(sup, [y[4 * i], y[4 * i + 1]]);
+    const v = [y[4 * i + 2], y[4 * i + 3]], vn = dot(v, n);
+    const e = sup.e ?? 1, vn2 = -e * vn;
+    if (vn >= 0) return '';
+    if (vn2 < UMBRAL || zeno) {
+      y[4 * i + 2] -= vn * n[0]; y[4 * i + 3] -= vn * n[1];
+      modo.contactos[`${i}:${js}`] = { i, sup: js, pegado: false };
+      return `Choque y contacto con ${sup.id}`;
+    }
+    y[4 * i + 2] += (vn2 - vn) * n[0]; y[4 * i + 3] += (vn2 - vn) * n[1];
+    return `Choque con ${sup.id}`;
+  };
+  /** Choque entre las partículas i y j; un rebote lento las deja en contacto. */
+  const choque = (i, j, zeno) => {
+    const e = escena.eParticulas ?? 1, mi = S.P[i].m, mj = S.P[j].m;
+    const d = [y[4 * i] - y[4 * j], y[4 * i + 1] - y[4 * j + 1]], D = norm(d), n = [d[0] / D, d[1] / D];
+    const vrel = (y[4 * i + 2] - y[4 * j + 2]) * n[0] + (y[4 * i + 3] - y[4 * j + 3]) * n[1];
+    if (vrel >= 0) return '';
+    const contacto = e * -vrel < UMBRAL || zeno;
+    const J = -(1 + (contacto ? 0 : e)) * vrel / (1 / mi + 1 / mj);
+    y[4 * i + 2] += J * n[0] / mi; y[4 * i + 3] += J * n[1] / mi;
+    y[4 * j + 2] -= J * n[0] / mj; y[4 * j + 3] -= J * n[1] / mj;
+    if (contacto) { modo.pares[`${i}:${j}`] = true; return `Choque y contacto entre ${S.P[i].id} y ${S.P[j].id}`; }
+    return `Choque entre ${S.P[i].id} y ${S.P[j].id}`;
+  };
+  /** Registra un cambio instantáneo con la energía cinética que disipa. */
+  let perdidaAnotada = 0;
+  const anotar = (clave, aplicar) => {
+    const K0 = energiaCinetica(S, y), descripcion = aplicar(), perdida = K0 - energiaCinetica(S, y);
+    if (descripcion) { eventos.push({ t, nombre: descripcion, clave, perdida: perdida > 0 ? perdida : 0, y: y.slice() }); perdidaAnotada += perdida > 0 ? perdida : 0; }
+    return descripcion;
+  };
+  // Choques en el mismo instante (una bola que toca a dos, un disco que llega
+  // a la pared mientras choca con otro): impulsos secuenciales hasta que ningún
+  // par en contacto se acerca. Sin esto, un hueco ya nulo o apenas negativo no
+  // cambia de signo y el choque se perdería (los cuerpos se atravesarían).
+  /** Quita la velocidad de acercamiento de un contacto (impulso inelástico mínimo, sin evento). */
+  const proyectar = (grad, Cp) => {
+    let den = 0;
+    for (const [i, gx, gy] of grad) den += (gx * gx + gy * gy) / S.P[i].m;
+    const L = -Cp / den;
+    for (const [i, gx, gy] of grad) { y[4 * i + 2] += L * gx / S.P[i].m; y[4 * i + 3] += L * gy / S.P[i].m; }
+  };
+  // excluir: pares («i:j») o apoyos («i:js») que acaban de separarse en este
+  // instante por un evento; no se vuelven a juntar en el mismo instante.
+  const resolverSimultaneos = (zeno, excluir = new Set()) => {
+    for (let vuelta = 0; vuelta < 4 * S.n + 10; vuelta++) {
+      let hubo = false;
+      for (let i = 0; i < S.n; i++) for (let j = i + 1; j < S.n; j++) {
+        const R = radio(S, i) + radio(S, j);
+        if (!(R > 0)) continue;
+        const clave = `${i}:${j}`, { C, Cp, grad } = restriccionPar(S, i, j).evaluar(y);
+        if (modo.pares[clave]) {
+          // Apoyados: un impulso que llega (otro choque) se transmite como choque;
+          // un resto lento de acercamiento se quita sin evento; si un impulso los
+          // separa, dejan de estar apoyados (si vuelven a juntarse, es un choque)
+          if (Cp < -UMBRAL) { delete modo.pares[clave]; if (anotar(`choque:${clave}`, () => choque(i, j, zeno))) hubo = true; }
+          else if (Cp > UMBRAL) delete modo.pares[clave];
+          else if (Cp < -1e-12) { proyectar(grad, Cp); hubo = true; }
+        } else if (!excluir.has('par:' + clave) && Cp < -1e-12 && (C <= TOL_HUECO || (C <= tolContacto(R) && Cp >= -UMBRAL))) {
+          // Se tocan y se acercan: choque (si es lento, quedan apoyados)
+          if (anotar(`choque:${clave}`, () => choque(i, j, zeno))) hubo = true;
+        }
+      }
+      for (let i = 0; i < S.n; i++) {
+        const ri = radio(S, i), p = [y[4 * i], y[4 * i + 1]];
+        S.sup.forEach((sup, js) => {
+          const clave = `${i}:${js}`, actual = modo.contactos[clave];
+          const { C, Cp, grad } = restriccionSuperficie(sup, i, ri).evaluar(y);
+          if (actual) {
+            // Apoyada: un impulso hacia la superficie es un choque; uno que la
+            // aleja la despega; un resto lento se quita sin evento
+            if (Cp < -UMBRAL) {
+              delete modo.contactos[clave];
+              if (anotar(`impacto:${clave}`, () => impacto(i, js, zeno))) hubo = true;
+              if (modo.contactos[clave] && actual.pegado) modo.contactos[clave].pegado = true;
+            } else if (Cp > UMBRAL) delete modo.contactos[clave];
+            else if (Cp < -1e-12) { proyectar(grad, Cp); hubo = true; }
+            return;
+          }
+          if (excluir.has('sup:' + clave)) return;
+          if (C < -TOL_PENETRACION || margenSuperficie(sup, p) < 0) return;
+          if (Cp < -1e-12 && (C <= TOL_HUECO || (C <= tolContacto(ri) && Cp >= -UMBRAL))) {
+            if (anotar(`impacto:${clave}`, () => impacto(i, js, zeno))) hubo = true;
+          }
+        });
+      }
+      if (!hubo) break;
+    }
+  };
+  resolverSimultaneos(false);
+  revisarDespegues();
+
+  /** @type {null | {t: number, motivo: string}} */
+  let incompleta = null;
+  // Eventos descartados (un cruce sin choque): se silencian durante una pausa
+  // muy breve para que no se repitan en el mismo instante
+  let silencio = new Set();
   while (t < DUR - 1e-12 && k < LIMITE) {
     k++;
     const restr = restriccionesDelModo(S, modo);
@@ -533,13 +717,20 @@ export function simularMecanica(escena) {
     };
     // Paso máximo acotado: un evento cuya función baja y vuelve a subir dentro de un
     // paso (dos partículas que se cruzan) no se detecta por el signo en los extremos.
-    const sol = integrar(f, t, y, DUR, { rtol: RTOL, atol: RTOL * 1e-2, eventos: eventosDelModo(S, modo, restr), maxPasos: 200000, hMax: escena.pasoMax ?? Math.max(1e-3, DUR / 400) });
+    const silenciados = silencio;
+    silencio = new Set();
+    const tHasta = silenciados.size ? Math.min(DUR, t + PAUSA) : DUR;
+    const sol = integrar(f, t, y, tHasta, {
+      rtol: RTOL, atol: RTOL * 1e-2, maxPasos: 200000, hMaxDe,
+      eventos: eventosDelModo(S, modo, restr, y).filter(e => !silenciados.has(e.nombre)),
+      hMax: escena.pasoMax ?? Math.max(1e-3, DUR / 400),
+    });
     const tFin = sol.t[sol.t.length - 1];
     tramos.push({ t0: t, t1: tFin, sol, modo: copiarModo(modo) });
     t = tFin; y = sol.y[sol.y.length - 1].slice();
     if (sol.estado !== 'evento') {
-      if (sol.estado !== 'completo') throw new Error(`El integrador se detuvo (${sol.estado}) en t = ${t}.`);
-      break;
+      if (sol.estado !== 'completo') { incompleta = { t, motivo: `El integrador se detuvo (${sol.estado}).` }; break; }
+      continue;     // llegó al final, o al final de la pausa
     }
     const ev = sol.eventos[sol.eventos.length - 1];
     const nombre = ev.nombre || '';
@@ -547,36 +738,34 @@ export function simularMecanica(escena) {
     const zeno = k > LIMITE - 10;
     modo = copiarModo(modo);
     const partes = nombre.split(':');
+    const excluir = new Set();
     let descripcion = '';
     if (partes[0] === 'impacto') {
-      const i = Number(partes[1]), js = Number(partes[2]), sup = S.sup[js];
-      const n = normalLibre(sup, [y[4 * i], y[4 * i + 1]]);
-      const v = [y[4 * i + 2], y[4 * i + 3]], vn = dot(v, n);
-      const e = sup.e ?? 1, vn2 = -e * vn;
-      if (vn >= 0) {
-        // Cruce espurio (la partícula no se acerca a la superficie): se ignora
-        descripcion = '';
-      } else if (vn2 < UMBRAL || zeno) {
-        y[4 * i + 2] -= vn * n[0]; y[4 * i + 3] -= vn * n[1];
-        modo.contactos[i] = { sup: js, pegado: false };
-        descripcion = `Choque y contacto con ${sup.id}`;
-      } else {
-        y[4 * i + 2] += (vn2 - vn) * n[0]; y[4 * i + 3] += (vn2 - vn) * n[1];
-        descripcion = `Choque con ${sup.id}`;
-      }
+      const i = Number(partes[1]), js = Number(partes[2]);
+      const { C } = restriccionSuperficie(S.sup[js], i, radio(S, i)).evaluar(y);
+      // Si el evento lo disparó el borde (la partícula entra en la extensión de
+      // la superficie estando detrás, C < 0), o no se acerca, no hay choque.
+      // Dentro de la extensión es un impacto aunque haya un solape pequeño.
+      const porBorde = margenSuperficie(S.sup[js], [y[4 * i], y[4 * i + 1]]) <= TOL_HUECO && C < -TOL_PENETRACION;
+      descripcion = porBorde ? '' : impacto(i, js, zeno);
+      if (!descripcion) silencio.add(nombre);
     } else if (partes[0] === 'despegue') {
-      delete modo.contactos[partes[1]];
+      const clave = `${partes[1]}:${partes[2]}`;
+      excluir.add('sup:' + clave);
+      delete modo.contactos[clave];
       descripcion = `Se despega (${S.P[Number(partes[1])].id})`;
     } else if (partes[0] === 'fin') {
-      delete modo.contactos[partes[1]];
+      const clave = `${partes[1]}:${partes[2]}`;
+      excluir.add('sup:' + clave);
+      delete modo.contactos[clave];
       descripcion = `Sale del borde (${S.P[Number(partes[1])].id})`;
     } else if (partes[0] === 'vt0') {
-      const i = Number(partes[1]), s = modo.contactos[i];
+      const clave = `${partes[1]}:${partes[2]}`, i = Number(partes[1]), s = modo.contactos[clave];
       s.pegado = true;
       const restr2 = restriccionesDelModo(S, modo);
       const L = dinamica(S, modo, y, restr2).lambdas, sup = S.sup[s.sup];
       // ¿La fricción estática alcanza para mantenerlo quieto?
-      if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${i}`]) < Math.abs(L[`pegado:${i}`])) s.pegado = false;
+      if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
       descripcion = s.pegado ? `Se detiene (${S.P[i].id})` : `Invierte el deslizamiento (${S.P[i].id})`;
       if (!s.pegado) {
         // Empuja un poco para que el evento no se repita en el mismo instante
@@ -585,7 +774,7 @@ export function simularMecanica(escena) {
         y[4 * i + 2] += sgn * 1e-12 * tg[0]; y[4 * i + 3] += sgn * 1e-12 * tg[1];
       }
     } else if (partes[0] === 'desliza') {
-      modo.contactos[partes[1]].pegado = false;
+      modo.contactos[`${partes[1]}:${partes[2]}`].pegado = false;
       descripcion = `Empieza a deslizar (${S.P[Number(partes[1])].id})`;
     } else if (partes[0] === 'tensa') {
       const c = S.con.find(x => x.id === partes[1]);
@@ -599,11 +788,16 @@ export function simularMecanica(escena) {
       const c = S.con.find(x => x.id === partes[1]), kk = Number(partes[2]), est = modo.cuerdas[c.id];
       const { punto, L } = pivoteCuerda(c, modo), nail = c.clavos[kk];
       const dn = sub(nail, punto), p = [y[4 * c.ia], y[4 * c.ia + 1]], v = [y[4 * c.ia + 2], y[4 * c.ia + 3]];
-      est.Lrest = L - norm(dn); est.clavos.push(kk);
-      // Sentido de giro alrededor del clavo (para detectar el desenganche)
-      const dp = sub(p, nail);
-      est.sentido.push(Math.sign(dp[0] * v[1] - dp[1] * v[0]) * Math.sign(dn[0] * dp[1] - dn[1] * dp[0]) || 1);
-      descripcion = `La cuerda ${c.id} toca el clavo`;
+      if (dot(dn, sub(p, punto)) > 0) {
+        est.Lrest = L - norm(dn); est.clavos.push(kk);
+        // Sentido de giro alrededor del clavo (para detectar el desenganche)
+        const dp = sub(p, nail);
+        est.sentido.push(Math.sign(dp[0] * v[1] - dp[1] * v[0]) * Math.sign(dn[0] * dp[1] - dn[1] * dp[0]) || 1);
+        descripcion = `La cuerda ${c.id} toca el clavo`;
+      } else {
+        // La partícula cruzó la recta del clavo del otro lado del pivote: la cuerda no lo toca
+        silencio.add(nombre);
+      }
     } else if (partes[0] === 'desengancha') {
       const c = S.con.find(x => x.id === partes[1]), est = modo.cuerdas[c.id];
       const kk = est.clavos.pop(); est.sentido.pop();
@@ -611,23 +805,28 @@ export function simularMecanica(escena) {
       est.Lrest += norm(sub(c.clavos[kk], prev));
       descripcion = `La cuerda ${c.id} se suelta del clavo`;
     } else if (partes[0] === 'choque') {
-      const i = Number(partes[1]), j = Number(partes[2]);
-      const e = escena.eParticulas ?? 1, mi = S.P[i].m, mj = S.P[j].m;
-      const d = [y[4 * i] - y[4 * j], y[4 * i + 1] - y[4 * j + 1]], D = norm(d), n = [d[0] / D, d[1] / D];
-      const vrel = (y[4 * i + 2] - y[4 * j + 2]) * n[0] + (y[4 * i + 3] - y[4 * j + 3]) * n[1];
-      if (vrel < 0) {
-        const J = -(1 + e) * vrel / (1 / mi + 1 / mj);
-        y[4 * i + 2] += J * n[0] / mi; y[4 * i + 3] += J * n[1] / mi;
-        y[4 * j + 2] -= J * n[0] / mj; y[4 * j + 3] -= J * n[1] / mj;
-      }
-      descripcion = `Choque entre ${S.P[i].id} y ${S.P[j].id}`;
+      descripcion = choque(Number(partes[1]), Number(partes[2]), zeno);
+      if (!descripcion) silencio.add(nombre);
+    } else if (partes[0] === 'separa') {
+      excluir.add(`par:${partes[1]}:${partes[2]}`);
+      delete modo.pares[`${partes[1]}:${partes[2]}`];
+      descripcion = `Se separan ${S.P[Number(partes[1])].id} y ${S.P[Number(partes[2])].id}`;
     }
-    const perdida = K0 - energiaCinetica(S, y);
-    if (descripcion) eventos.push({ t, nombre: descripcion, clave: nombre, perdida: perdida > 0 ? perdida : 0, y: y.slice() });
+    const iEvento = eventos.length;
+    if (descripcion) eventos.push({ t, nombre: descripcion, clave: nombre, perdida: 0, y: y.slice() });
+    perdidaAnotada = 0;
+    resolverSimultaneos(zeno, excluir);
     revisarDespegues();
+    // Energía del instante que no registró ningún choque simultáneo: la del
+    // evento principal más la de las proyecciones sin evento
+    const resto = K0 - energiaCinetica(S, y) - perdidaAnotada;
+    if (resto > 0) {
+      const destino = eventos[iEvento] ?? eventos[eventos.length - 1];
+      if (destino) destino.perdida += resto;
+    }
   }
-  if (t < DUR - 1e-9) throw new Error(`Se alcanzó el límite de ${LIMITE} eventos en t = ${t}.`);
-  return { tramos, eventos, escena, S: { n: S.n, ids: S.P.map(p => p.id), m: S.P.map(p => p.m) }, duracion: DUR };
+  if (!incompleta && t < DUR - 1e-9) incompleta = { t, motivo: `Se alcanzó el límite de ${LIMITE} eventos.` };
+  return { tramos, eventos, escena, S: { n: S.n, ids: S.P.map(p => p.id), m: S.P.map(p => p.m) }, duracion: DUR, tFin: t, incompleta };
 }
 
 /** Tirón de una cuerda que se tensa: se anula la velocidad de alejamiento (inelástico). */
@@ -648,8 +847,11 @@ function aplicarTiron(S, c, modo, y) {
  * @returns {Array<{id: string, x: number, y: number, vx: number, vy: number}>}
  */
 export function estadoMecanica(sim, t) {
-  let tr = sim.tramos[0];
-  for (const q of sim.tramos) if (q.t0 <= t + 1e-15) tr = q;
+  // Último tramo que empieza en t o antes (búsqueda binaria: puede haber miles)
+  const T = sim.tramos;
+  let lo = 0, hi = T.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (T[mid].t0 <= t + 1e-15) lo = mid; else hi = mid - 1; }
+  const tr = T[lo];
   const tt = Math.max(tr.t0, Math.min(t, tr.t1));
   const y = interpolar(tr.sol, tt);
   return sim.S.ids.map((id, i) => ({ id, x: y[4 * i], y: y[4 * i + 1], vx: y[4 * i + 2], vy: y[4 * i + 3] }));
