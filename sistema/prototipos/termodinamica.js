@@ -10,6 +10,8 @@
    cuasiestático y registro de energía.
    Misma estructura que mecanica.js: motor → estado(t) → lienzo → paneles.
    ========================================================================== */
+import { aCSV } from '../nucleo/csv.js';
+import { descargarTexto, avisar as avisarLienzo } from '../componentes/exportar.js';
 import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, residuoGas, residuoEmbolo } from '../motores/gas.js';
 
 (function () {
@@ -527,11 +529,18 @@ import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, 
   }
 
   // Exportar datos a CSV (muestras cada 0.01 s)
+  // Piezas compartidas: CSV con precisión completa y BOM (nucleo/csv.js) y
+  // diálogo nativo «Guardar como» en la aplicación (componentes/exportar.js)
   $('#b-exportar').addEventListener('click', () => {
-    const cab = 't (s),P (Pa),V (m3),T (K),U (J),Q (J),W (J),h (m),v (m/s)\n';
-    const csv = cab + SIM.muestras.map(q => [q.t, q.P, q.V, q.T, q.U, Qtot(q), q.W, q.h, q.v].map(x => +x.toPrecision(8)).join(',')).join('\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'laboratorio-de-gases.csv'; a.click();
+    const filas = SIM.muestras.map(q => [q.t, q.P, q.V, q.T, q.U, Qtot(q), q.W, q.h, q.v]);
+    const csv = aCSV(['t (s)', 'P (Pa)', 'V (m³)', 'T (K)', 'U (J)', 'Q (J)', 'W (J)', 'h (m)', 'v (m/s)'], filas);
+    descargarTexto('laboratorio-de-gases-datos.csv', csv)
+      .then(r => { if (r) avisarExportado(filas.length); }, () => {});
   });
+  function avisarExportado(n) {
+    const area = document.getElementById('area') || document.querySelector('.lienzo-area');
+    if (area) avisarLienzo(area, `Datos exportados: ${n} filas`);
+  }
 
   // ---------------------------------------------------------------------
   // Reproducción
