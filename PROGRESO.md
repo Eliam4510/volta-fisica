@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.8.0 (publicada el 2026-11-19 con sus dos ejecutables; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.9.0 (publicada el 2026-11-19; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -21,16 +21,12 @@ física > funciones faltantes > rendimiento > pulido.
 - Magnetismo e inducción integrado (3 espacios, 47 pruebas, 13 MEXT).
   Falta: editar vértices de regiones libres, Hall en tiempo físico, vista
   3D de espiras y solenoides, bobina en modo motor.
-- Agentes en curso (relanzados en esta sesión; sus archivos siguen sin commit):
-  - Termodinámica: motores ciclos.js, cinetica.js, recipientes.js, calor.js,
-    pruebas nuevas, termodinamica-comun.js, termodinamica-escenas.js y
-    termodinamica-ciclos.html.
-  - Física moderna: moderna.js, moderna.test.js, moderna*.html|js.
-  Para integrar cada uno: suite, tipos y capturas; luego
-  `python <scratchpad>/integrar_modulo.py <id> '<Nombre>' <icono> <mini>
-  <nMEXT> '<desc|->' 'pagina|Título|icono' ...` (o a mano: MODULOS en
-  espacio.js; tarjeta, PANTALLAS, ESPACIOS y MINI en Inicio); README;
-  CHANGELOG.
+- Termodinámica ampliada e integrada (4 espacios, 154 pruebas, 29 de 30
+  MEXT; 2025 T7 solo tiene el tema). Falta: paletas de objetos (siguen
+  `data-pendiente`), arrastrar estados en Ciclos, gas molecular en 3D.
+- Física moderna integrada (2 espacios, 44 pruebas, 4 MEXT). Falta la zona
+  gris (Bohr, rayos X), carga espacial y energía de los neutrones de fisión.
+- Los nueve módulos están disponibles: 143 escenas MEXT en total.
 - Los conteos de las tarjetas de Inicio son a mano: actualizarlos al añadir
   espacios o escenas MEXT.
 - Ondas y sonido integrado (Medio 1D y Doppler y acústica). Falta la cubeta 2D, el pistón móvil y la escena MEXT 2012 del ventilador.
@@ -221,3 +217,4 @@ restricciones contabilizados, actuadores con trayectoria impuesta) y PhET
 - 2026-11-19 — Movimiento impuesto por tramos (perfil) en el motor y el Laboratorio; ejemplo del ascensor y MEXT 2017, 2019 y 2023 1-(1) (Mecánica: 36 MEXT).
 - 2026-11-19 — Prensa hidráulica en el motor y el Laboratorio (MEXT 2010 1-A); escena de estática 2010 1-B con un triángulo rígido; recientes reales en Inicio (Mecánica: 38 MEXT).
 - 2026-11-19 — v0.8.0 publicada (instalador 2 370 753 B, portátil 4 777 472 B). Después: regla y fotopuerta, editor de perfiles y panel de variables en el Laboratorio.
+- 2026-11-19 — Magnetismo, Electrostática, Termodinámica y Física moderna integrados; v0.9.0 publicada (859 pruebas). Siguiente: Ondas (cubeta 2D, 5 MEXT pendientes), Circuitos (3 de 10 MEXT), Óptica (polarización, espejo parabólico), cuerpo rígido con rotación.

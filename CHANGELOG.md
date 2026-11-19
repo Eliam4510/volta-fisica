@@ -7,6 +7,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.9.0] - 2026-11-19
+
+Los nueve módulos disponibles: Magnetismo e inducción y Física moderna
+nuevos, Termodinámica con cuatro espacios y Electrostática con dos, y 143
+escenas MEXT en total. Panel de variables en el Laboratorio de Mecánica.
+
 ### Añadido
 
 - Módulo Magnetismo e inducción con tres espacios de trabajo:
@@ -438,7 +444,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.8.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.1...v0.6.0
