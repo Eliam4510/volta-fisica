@@ -298,3 +298,62 @@ describe('determinismo', () => {
     expect(guion).toEqual(copia);
   });
 });
+
+describe('orientación del cilindro y giro', () => {
+  // El peso del émbolo empuja hacia el gas con g·cos α (α respecto de la vertical)
+  for (const ang of [0, 60, 90, 150, 180]) {
+    it(`inclinado ${ang}°: P = P0 + m·g·cos α/A en el equilibrio inicial`, () => {
+      const sim = simularGas({ ...ESCENA, angulo: ang }, [], { duracion: 1 });
+      const q0 = sim.muestras[0];
+      cerca(q0.P, P0 + m * g * Math.cos(ang * Math.PI / 180) / A, 1e-12);
+      cerca(q0.P * q0.V, n * R * T0, 1e-12);
+      expect(q0.ang).toBe(ang);
+      for (const q of sim.muestras) cerca(q.h, q0.h, 1e-12);     // sin acciones sigue en equilibrio
+    });
+  }
+
+  it('sin ángulo la corrida no cambia: ang = 0 en cada muestra (compatibilidad)', () => {
+    const a = simularGas(ESCENA, [ADIAB, { t: 1, tipo: 'pesa', valor: true }], { duracion: 3 });
+    const b = simularGas({ ...ESCENA, angulo: 0 }, [ADIAB, { t: 1, tipo: 'pesa', valor: true }], { duracion: 3 });
+    expect(a).toEqual(b);
+    for (const q of a.muestras) expect(q.ang).toBe(0);
+  });
+
+  for (const modelo of MODELOS) {
+    it(`${modelo}: girar 180° a temperatura constante duplica el volumen si P0 = 3·m·g/A (MEXT 2009 1-(4))`, () => {
+      const mm = P0 * A / (3 * g), esc = { ...ESCENA, m: mm, M: 0, G: 40, b: 2000, hMax: 2 };
+      const sim = simularGas(esc, [{ t: 1, tipo: 'giro', valor: 180 }], { modelo, duracion: 16, tauGiro: 6 });
+      const q0 = sim.muestras[0], q = ultima(sim);
+      cerca(estadoEn(sim, 4).ang, 90, 1e-9);                       // el giro es lineal en el tiempo
+      expect(q.ang).toBe(180);
+      cerca(q.V / q0.V, 2, 1e-6);
+      cerca(q.P, P0 - mm * g / A, 1e-6);
+      cerca(q.T, T0, 1e-6);
+      expect(sim.eventos.map(e => e.nombre)).toContain('Se gira el cilindro hasta 180°');
+      // El balance del gas y el del émbolo siguen cerrando durante el giro
+      const escala = Math.max(...sim.muestras.map(s => Math.abs(s.W)));
+      for (const s of sim.muestras) {
+        expect(Math.abs(residuoGas(s)) / escala).toBeLessThan(1e-9);
+        if (modelo === 'dinamico') expect(Math.abs(residuoEmbolo(s)) / escala).toBeLessThan(1e-9);
+      }
+    });
+  }
+
+  it('cilindro horizontal: la presión es la atmosférica y calentar es isobárico a P0', () => {
+    const sim = simularGas({ ...ESCENA, angulo: 90 }, [ADIAB, { t: 1, tipo: 'calentador', valor: true }, { t: 3, tipo: 'calentador', valor: false }],
+      { modelo: 'cuasiestatico', duracion: 4 });
+    const q0 = sim.muestras[0], q = ultima(sim);
+    for (const s of sim.muestras) cerca(s.P, P0, 1e-9);
+    cerca(q.W, P0 * (q.V - q0.V), 1e-9);
+    cerca(q.Qcal, n * 2.5 * R * (q.T - q0.T), 1e-9);
+  });
+
+  it('una inclinación o un giro que sacan el émbolo del cilindro son escenas inválidas', () => {
+    const pesado = { ...ESCENA, m: 1000 };                          // m·g/A = 196 kPa > P0
+    expect(() => simularGas({ ...pesado, angulo: 180 }, [], { duracion: 1 })).toThrow(/se saldría/);
+    expect(() => simularGas(pesado, [{ t: 1, tipo: 'giro', valor: 180 }], { duracion: 2 })).toThrow(/saca el émbolo/);
+    // Con topes el mismo giro es válido: el émbolo queda apoyado en ellos
+    const sim = simularGas({ ...pesado, hMax: 0.6 }, [{ t: 1, tipo: 'giro', valor: 180 }], { modelo: 'cuasiestatico', duracion: 8 });
+    cerca(ultima(sim).h, 0.6, 1e-12);
+  });
+});

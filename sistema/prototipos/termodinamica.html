@@ -21,6 +21,28 @@
   .barras-pie .sim { color: var(--texto-2); }
   .fila .btn-secundario { justify-self: start; }
   .aviso-lienzo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .migas { flex: none; }
+  .escena-btn { gap: var(--e-2); min-width: 0; max-width: 470px; padding: 0 var(--e-2); color: var(--texto-3); font-weight: 400; }
+  .escena-btn b { color: var(--texto-2); font-weight: var(--peso-medio); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .escena-btn .ico { color: var(--texto-3); }
+  #menu-escenas { position: fixed; z-index: 40; min-width: 400px; max-height: calc(100vh - 64px); overflow: auto; }
+  #menu-escenas .menu-item .nombre-escena { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #menu-escenas .menu-item .chip { margin-left: auto; flex: none; }
+  #menu-escenas .menu-item[aria-current="true"] { background: var(--campo); }
+  .lecturas .sim .r { font-style: normal; }
+  .lecturas .sim.palabra { font-style: normal; font-family: var(--fuente-interfaz); font-size: var(--t-pequeno); }
+  .var { grid-template-columns: 46px minmax(0, 1fr) minmax(84px, auto); }
+  .var .sim { text-align: left; white-space: nowrap; }
+  .examen { display: flex; flex-direction: column; gap: 5px; }
+  .ex-fila { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 30px 26px; align-items: baseline; column-gap: 6px; font-size: var(--t-pequeno); }
+  .ex-n { color: var(--texto-3); font-family: var(--fuente-numeros); font-size: 11px; }
+  .ex-etq { color: var(--texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ex-etq .sim { font-size: 14px; }
+  .ex-etq sub { font-size: .72em; }
+  .ex-v { text-align: right; font-family: var(--fuente-numeros); font-variant-numeric: tabular-nums; color: var(--texto); }
+  .ex-u { color: var(--texto-3); font-size: 11px; }
+  .ex-op { color: var(--texto-3); font-family: var(--fuente-numeros); font-size: 11px; text-align: right; }
+  #acciones-otro .fila .btn-secundario, #acciones-otro .fila .conmutador { justify-self: start; }
 </style>
 </head>
 <body>
@@ -37,7 +59,7 @@
       <span class="sep">/</span>
       <button class="btn btn-compacto">Laboratorio de gases<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
     </nav>
-    <span class="escena-titulo"><span class="chip">MEXT 2019</span>&nbsp; <b>Émbolo con pesa en un baño térmico</b></span>
+    <button class="btn btn-compacto escena-btn" id="b-escenas" aria-haspopup="menu" data-ayuda="Cambiar de escena|Scenes"><span id="escena-chip" class="chip lleno">MEXT 2019 P4</span><b id="escena-nombre">Émbolo con pesa en un baño térmico</b><svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
     <span class="sp"></span>
     <div class="transporte">
       <button class="btn btn-icono" id="b-reiniciar" data-ayuda="Reiniciar|Reset|Inicio"><svg class="ico"><use href="#i-reiniciar"/></svg></button>
@@ -63,7 +85,7 @@
     <div class="desplaza">
       <div class="seccion">
         <div class="panel-cab">Objetos</div>
-        <div class="paleta" data-exclusivo data-pendiente="Este espacio trabaja con el émbolo del examen y sus variables; colocar recipientes, válvulas y tabiques propios llega en una próxima versión.">
+        <div class="paleta" data-exclusivo data-pendiente="Cada escena trae su montaje (cilindro con émbolo, recipientes con válvulas, globo o columna de líquido); cámbialo con las variables y las acciones del inspector. Colocar objetos propios llega en una próxima versión.">
           <button class="herr" data-ayuda="Cilindro|Cylinder"><svg class="ico"><use href="#o-cilindro"/></svg><span>Cilindro</span></button>
           <button class="herr" data-ayuda="Recipiente rígido|Rigid vessel"><svg class="ico"><use href="#o-recipiente"/></svg><span>Recipiente</span></button>
           <button class="herr" data-ayuda="Émbolo|Piston"><svg class="ico"><use href="#o-embolo"/></svg><span>Émbolo</span></button>
@@ -74,6 +96,8 @@
           <button class="herr" data-ayuda="Baño térmico|Heat bath"><svg class="ico"><use href="#o-bano-termico"/></svg><span>Baño térmico</span></button>
           <button class="herr" data-ayuda="Gas ideal|Ideal gas"><svg class="ico"><use href="#o-gas"/></svg><span>Gas</span></button>
           <button class="herr" data-ayuda="Resorte|Spring"><svg class="ico"><use href="#o-resorte"/></svg><span>Resorte</span></button>
+          <button class="herr" data-ayuda="Globo aerostático|Hot-air balloon"><svg class="ico"><use href="#o-globo"/></svg><span>Globo</span></button>
+          <button class="herr" data-ayuda="Columna de líquido|Liquid column"><svg class="ico"><use href="#o-columna-liquido"/></svg><span>Columna de líquido</span></button>
         </div>
       </div>
       <div class="seccion">
@@ -87,16 +111,7 @@
       </div>
       <div class="seccion">
         <div class="panel-cab">Escena<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir objeto|Add object"><svg class="ico"><use href="#i-mas"/></svg></button></div>
-        <div class="arbol" id="arbol">
-          <div class="nodo" data-sel="cilindro"><svg class="ico"><use href="#o-cilindro"/></svg><span class="nombre">Cilindro</span><span class="acciones"><svg class="ico"><use href="#i-candado"/></svg></span></div>
-          <div class="nodo" data-sel="gas"><svg class="ico"><use href="#o-gas"/></svg><span class="nombre">Gas</span><span class="acciones"><svg class="ico"><use href="#i-ojo"/></svg></span></div>
-          <div class="nodo" data-sel="embolo"><svg class="ico"><use href="#o-embolo"/></svg><span class="nombre">Émbolo</span><span class="acciones"><svg class="ico"><use href="#i-ojo"/></svg></span></div>
-          <div class="nodo" data-sel="pesa"><svg class="ico"><use href="#o-pesa"/></svg><span class="nombre">Pesa</span><span class="dato" id="arbol-pesa"></span></div>
-          <div class="nodo" data-sel="calentador"><svg class="ico"><use href="#o-calentador"/></svg><span class="nombre">Calentador</span><span class="dato" id="arbol-cal"></span></div>
-          <div class="nodo" data-sel="bano"><svg class="ico"><use href="#o-bano-termico"/></svg><span class="nombre">Baño térmico</span><span class="dato" id="arbol-bano"></span></div>
-          <div class="nodo global"><svg class="ico"><use href="#o-atmosfera"/></svg><span class="nombre">Atmósfera</span><span class="dato" id="arbol-atm"></span></div>
-          <div class="nodo global"><svg class="ico"><use href="#o-gravedad"/></svg><span class="nombre">Gravedad</span><span class="dato" id="arbol-g"></span></div>
-        </div>
+        <div class="arbol" id="arbol"></div>
       </div>
     </div>
   </aside>
@@ -134,20 +149,27 @@
         <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg>Propiedades</summary>
         <div id="propiedades"></div>
       </details>
+      <details class="grupo" open id="grupo-examen" hidden>
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="examen-titulo">Examen</span></summary>
+        <div class="examen" id="examen"></div>
+      </details>
       <details class="grupo" open>
         <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="acc-titulo">Acciones</span></summary>
-        <div class="fila"><span class="etq">Pesa</span><button class="btn btn-secundario btn-compacto" id="a-pesa" data-ayuda="Poner o quitar la pesa en este instante|Add or remove the weight|P"><svg class="ico"><use href="#o-pesa"/></svg><span>Poner la pesa</span></button></div>
+        <div id="acciones-otro" hidden></div>
+        <div id="acciones-cilindro">
+        <div class="fila" id="fila-pesa"><span class="etq">Pesa</span><button class="btn btn-secundario btn-compacto" id="a-pesa" data-ayuda="Poner o quitar la pesa en este instante|Add or remove the weight|P"><svg class="ico"><use href="#o-pesa"/></svg><span>Poner la pesa</span></button></div>
         <div class="fila"><span class="etq">Calentador</span><label class="conmutador" data-ayuda="Encender o apagar en este instante|Heater on/off|C"><input type="checkbox" class="interruptor" id="a-cal"><span id="a-cal-txt">Apagado</span></label></div>
         <div class="fila"><span class="etq">Paredes</span><div class="segmentado texto" id="a-paredes" data-ayuda="Conductoras: en contacto con el baño. Adiabáticas: sin calor|Diathermal / adiabatic walls|A"><button data-v="conductoras">Conductoras</button><button data-v="adiabaticas">Adiabáticas</button></div></div>
         <div class="fila"><span class="etq">Modelo</span><div class="segmentado texto" id="a-motor" data-ayuda="Dinámico: el émbolo tiene inercia y oscila. Cuasiestático: pasa por estados de equilibrio y la pesa se carga poco a poco|Dynamic / quasi-static"><button data-v="dinamico">Dinámico</button><button data-v="cuasiestatico">Cuasiestático</button></div></div>
+        </div>
         <p class="ayuda-fila">Cada acción queda como evento en la línea de tiempo.</p>
       </details>
       <details class="grupo" open>
         <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg>Mostrar</summary>
         <label class="casilla"><input type="checkbox" id="m-q" checked>Calor que entra y sale<span class="muestra" style="color:var(--f-termico)"></span></label>
-        <label class="casilla"><input type="checkbox" id="m-f">Fuerzas sobre el émbolo<span class="muestra" style="color:var(--f-interaccion)"></span></label>
-        <label class="casilla"><input type="checkbox" id="m-v" checked>Velocidad del émbolo<span class="muestra" style="color:var(--f-movimiento)"></span></label>
-        <label class="casilla"><input type="checkbox" id="m-r" checked>Isoterma y adiabática<span class="muestra discontinua" style="color:var(--texto-3)"></span></label>
+        <label class="casilla" id="c-m-f"><input type="checkbox" id="m-f"><span id="m-f-txt">Fuerzas sobre el émbolo</span><span class="muestra" style="color:var(--f-interaccion)"></span></label>
+        <label class="casilla" id="c-m-v"><input type="checkbox" id="m-v" checked><span id="m-v-txt">Velocidad del émbolo</span><span class="muestra" style="color:var(--f-movimiento)"></span></label>
+        <label class="casilla" id="c-m-r"><input type="checkbox" id="m-r" checked>Isoterma y adiabática<span class="muestra discontinua" style="color:var(--texto-3)"></span></label>
       </details>
       <details class="grupo" open>
         <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
@@ -172,19 +194,22 @@
     </div>
     <div class="linea-tiempo"><canvas id="tl"></canvas></div>
     <div class="graficas" id="p-graficas" data-grupo="pest">
-      <div class="grafica"><div class="grafica-cab"><span><span class="sim">P</span> (kPa) contra <span class="sim">V</span> (L)</span><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
-      <div class="grafica"><div class="grafica-cab"><span><span class="sim">T</span> contra <span class="sim">t</span></span><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
-      <div class="grafica"><div class="grafica-cab"><span><span class="sim">h</span> contra <span class="sim">t</span></span><span class="lect" id="l3"></span></div><canvas id="g3"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t1"><span class="sim">P</span> (kPa) contra <span class="sim">V</span> (L)</span><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t2"><span class="sim">T</span> contra <span class="sim">t</span></span><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t3"><span class="sim">h</span> contra <span class="sim">t</span></span><span class="lect" id="l3"></span></div><canvas id="g3"></canvas></div>
     </div>
     <div class="energia" id="p-energia" data-grupo="pest" hidden>
       <div class="barras" id="e-gas"></div>
       <div class="barras" id="e-embolo"></div>
-      <div class="grafica"><div class="grafica-cab"><span class="leyenda"><span style="color:var(--f-termico)"><i></i><span class="sim">Q</span></span><span style="color:var(--tinta)"><i class="discontinua"></i><span class="sim">W</span></span><span style="color:var(--tinta)"><i></i><span class="sim">ΔU</span></span></span><span class="lect">J</span></div><canvas id="g4"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span class="leyenda" id="t4"><span style="color:var(--f-termico)"><i></i><span class="sim">Q</span></span><span style="color:var(--tinta)"><i class="discontinua"></i><span class="sim">W</span></span><span style="color:var(--tinta)"><i></i><span class="sim">ΔU</span></span></span><span class="lect">J</span></div><canvas id="g4"></canvas></div>
     </div>
     <div class="lista-eventos" id="p-eventos" data-grupo="pest" hidden><table class="tabla" id="t-eventos"></table></div>
     <div class="lista-eventos" id="p-tabla" data-grupo="pest" hidden><table class="tabla" id="t-datos"></table></div>
   </section>
 </div>
+
+<!-- Menú de escenas -->
+<div class="menu" id="menu-escenas" role="menu" hidden></div>
 
 <!-- Paleta de comandos -->
 <div class="velo comandos-velo" id="velo-comandos" hidden>

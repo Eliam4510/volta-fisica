@@ -312,5 +312,129 @@
     return lista.map(q => ({ u: pliegue(q.u0 + q.cx * fx), w: pliegue(q.w0 + q.cy * fy), r: q.r }));
   }
 
+  // ---------------------------------------------------------------------
+  // Ampliación: símbolos de los espacios Ciclos, Gas molecular, Calor y de
+  // los montajes nuevos del Laboratorio. Prefijo «termo» (espacio de nombres
+  // del dominio, docs/04 §11).
+  // ---------------------------------------------------------------------
+
+  // Caja cerrada (recipiente rígido) de mundo: pared conductora = línea de
+  // materia; adiabática = doble línea con rayado por fuera. o.sinTecho: sin
+  // la pared de arriba (vaso abierto). Devuelve el ancho de la pared en px.
+  P.termoCaja = function (x0, y0, x1, y1, o = {}) {
+    const [X, Y, W, H] = this.rectPx(x0, y0, x1, y1), c = this.ctx, w = G.materia + (o.grueso ? 0.5 : 0);
+    const d = o.tipo === 'adiabatica' ? GT.paredAdiabatica : 0, techo = !o.sinTecho;
+    if (d) {
+      const fuera = techo ? [[X - d, Y - d], [X + W + d, Y - d], [X + W + d, Y + H + d], [X - d, Y + H + d]] : [[X - d, Y], [X + W + d, Y], [X + W + d, Y + H + d], [X - d, Y + H + d]];
+      c.save(); c.beginPath(); fuera.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath();
+      c.rect(X, techo ? Y : Y - d - 1, W, H + (techo ? 0 : d + 1)); c.clip('evenodd');
+      this._rayarPoligono(fuera, GT.rayadoPared);
+      c.restore();
+      this.lineaPx(techo ? fuera.concat([fuera[0]]) : [fuera[0], fuera[3], fuera[2], fuera[1]], { grosor: w });
+    }
+    this.lineaPx(techo ? [[X, Y], [X + W, Y], [X + W, Y + H], [X, Y + H], [X, Y]] : [[X, Y], [X, Y + H], [X + W, Y + H], [X + W, Y]], { grosor: w });
+    if (d && !techo) { this.lineaPx([[X - d, Y], [X, Y]], { grosor: G.real }); this.lineaPx([[X + W, Y], [X + W + d, Y]], { grosor: G.real }); }
+    return d;
+  };
+
+  // Válvula en (x, y) px sobre un tubo horizontal: dos triángulos que se tocan
+  // por el vértice; cerrada, llenos de tinta; abierta, solo el contorno.
+  P.termoValvula = function (x, y, abierta, o = {}) {
+    const c = this.ctx, s = 7;
+    c.save(); c.setLineDash([]); c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(x - s, y - s * 0.75); c.lineTo(x, y); c.lineTo(x - s, y + s * 0.75); c.closePath();
+    c.moveTo(x + s, y - s * 0.75); c.lineTo(x, y); c.lineTo(x + s, y + s * 0.75); c.closePath();
+    c.fillStyle = abierta ? this.t.lienzo : this.t.tinta; c.fill();
+    c.strokeStyle = this.t.tinta; c.lineWidth = G.real + (o.grueso ? 0.5 : 0); c.stroke();
+    // Vástago y volante
+    c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - 12); c.moveTo(x - 5, y - 12); c.lineTo(x + 5, y - 12); c.stroke();
+    c.restore();
+    return [x - s, y - 14, 2 * s, 14 + s];
+  };
+
+  // Tabique vertical de mundo (x, y0 → y1) con un orificio [ya, yb]: dos
+  // tramos de materia; el orificio cerrado se dibuja como estado futuro
+  // (discontinuo) para que se vea dónde se abrirá.
+  P.termoTabique = function (x, y0, y1, ya, yb, abierto, o = {}) {
+    const w = G.materia + (o.grueso ? 0.5 : 0);
+    if (yb > ya) {
+      this.linea([[x, y0], [x, ya]], { grosor: w, extremo: 'butt' });
+      this.linea([[x, yb], [x, y1]], { grosor: w, extremo: 'butt' });
+      if (!abierto) this.linea([[x, ya], [x, yb]], { grosor: G.previsto, patron: 'previsto', color: 'texto-3', extremo: 'butt' });
+    } else this.linea([[x, y0], [x, y1]], { grosor: w });
+  };
+
+  // Moléculas de varias especies en pantalla: [x, y, especie] px. La materia
+  // no tiene color: las especies se distinguen por la forma (disco lleno,
+  // anillo, anillo con punto) y por el tamaño. o.marcada: índice con traza.
+  P.termoMoleculasPx = function (lista, radios) {
+    const c = this.ctx, col = this.t['texto-2'];
+    c.save(); c.setLineDash([]);
+    for (let e = 0; e < radios.length; e++) {
+      const r = radios[e], estilo = e % 3;
+      c.beginPath();
+      for (const [x, y, s] of lista) if (s === e) { c.moveTo(x + r, y); c.arc(x, y, r, 0, 2 * Math.PI); }
+      if (estilo === 0) { c.fillStyle = col; c.fill(); }
+      else { c.fillStyle = this.t.lienzo; c.fill(); c.strokeStyle = col; c.lineWidth = 1.25; c.stroke(); }
+      if (estilo === 2) { c.fillStyle = col; c.beginPath(); for (const [x, y, s] of lista) if (s === e) { c.moveTo(x + 1, y); c.arc(x, y, 1, 0, 2 * Math.PI); } c.fill(); }
+    }
+    c.restore();
+  };
+  // Muestra de una especie para leyendas (la misma forma que en el lienzo)
+  P.termoMuestraEspecie = function (x, y, e, r) {
+    this.termoMoleculasPx([[x, y, e]], Array.from({ length: e + 1 }, (_, i) => (i === e ? r : 0)));
+  };
+
+  // Flecha de trabajo en pantalla: el trabajo es energía en tránsito, sin
+  // quien la guarde: tinta discontinua (docs/04 §3.2), con su etiqueta W.
+  P.termoFlechaTrabajo = function (x1, y1, x2, y2, etiqueta) {
+    this.flechaPx(x1, y1, x2, y2, { color: 'tinta', grosor: G.vector, patron: 'previsto' });
+    if (etiqueta) this.compuesto(etiqueta, x2 + (x2 >= x1 ? 6 : -6), y2 - 6, { alinear: x2 >= x1 ? 'left' : 'right' });
+  };
+
+  // Globo aerostático: envoltura (circunferencia con faldón abierto abajo),
+  // cuerdas, cesta y quemador. (cx, yCesta) de mundo; R radio de la envoltura.
+  P.termoGlobo = function (cx, yCesta, R, o = {}) {
+    const v = this.vista, w = G.materia + (o.grueso ? 0.5 : 0), yc = yCesta + 0.9 * R + R * 1.05;
+    const [X, Y] = v.P([cx, yc]), r = R * v.escala, c = this.ctx;
+    const a0 = Math.PI * 0.5 + 0.55, a1 = Math.PI * 0.5 - 0.55;           // faldón abierto abajo
+    c.save(); c.setLineDash([]);
+    c.beginPath(); c.arc(X, Y, r, a0, a1 + 2 * Math.PI, false);
+    c.fillStyle = this.t.lienzo; c.fill();
+    c.strokeStyle = this.t.tinta; c.lineWidth = w; c.stroke(); c.restore();
+    const izq = [X + r * Math.cos(a0), Y + r * Math.sin(a0)], der = [X + r * Math.cos(a1), Y + r * Math.sin(a1)];
+    const cesta = v.P([cx, yCesta]), ac = Math.max(6, 0.22 * R * v.escala), hc = Math.max(5, 0.16 * R * v.escala);
+    this.lineaPx([izq, [cesta[0] - ac, cesta[1] - hc]], { color: 'texto-2', grosor: 1 });
+    this.lineaPx([der, [cesta[0] + ac, cesta[1] - hc]], { color: 'texto-2', grosor: 1 });
+    this.lineaPx([[cesta[0] - ac, cesta[1] - hc], [cesta[0] + ac, cesta[1] - hc], [cesta[0] + ac * 0.85, cesta[1]], [cesta[0] - ac * 0.85, cesta[1]]], { grosor: w, cerrar: true });
+    return { centro: [X, Y], r, boca: [(izq[0] + der[0]) / 2, (izq[1] + der[1]) / 2], cesta, caja: [X - r, Y - r, 2 * r, cesta[1] - Y + r] };
+  };
+
+  // Burbuja de gas en pantalla: contorno de materia y lleno de lienzo
+  P.termoBurbuja = function (x, y, r, o = {}) {
+    const c = this.ctx; c.save(); c.setLineDash([]);
+    c.beginPath(); c.arc(x, y, r, 0, 2 * Math.PI); c.fillStyle = this.t.lienzo; c.fill();
+    c.strokeStyle = this.t.tinta; c.lineWidth = G.real + (o.grueso ? 0.5 : 0); c.stroke(); c.restore();
+  };
+
+  // Cuerpo térmico: cuerpo rígido con su nombre dentro (si cabe). o.fundido:
+  // fracción ya fundida, que se dibuja como fluido en la parte baja.
+  P.termoCuerpo = function (x0, y0, x1, y1, o = {}) {
+    const [X, Y, W, H] = this.bloque(x0, y0, x1, y1, { grueso: o.grueso, centroMasa: false });
+    if (o.fundido > 0.002) {
+      const h = H * Math.min(1, o.fundido);
+      const c = this.ctx; c.save(); c.globalAlpha = 0.06; c.fillStyle = this.t.tinta; c.fillRect(X + 1, Y + H - h, W - 2, h - 1); c.restore();
+      this.lineaPx([[X + 1, Y + H - h + 0.5], [X + W - 1, Y + H - h + 0.5]], { color: 'texto-3', grosor: 1, extremo: 'butt' });
+    }
+    if (o.nombre && W > 46 && H > 18) this.texto(o.nombre, X + W / 2, Y + H / 2 + 4, { tam: 11.5, color: 'texto-2', alinear: 'center' });
+    return [X, Y, W, H];
+  };
+
+  // Vaso de calorímetro: pared adiabática abierta arriba (el aislante del
+  // calorímetro) con el vaso conductor por dentro.
+  P.termoVaso = function (x0, y0, x1, y1, o = {}) {
+    return this.termoCaja(x0, y0, x1, y1, { tipo: 'adiabatica', sinTecho: true, grueso: o.grueso });
+  };
+
   global.Volta.Termo = { GT, crearMoleculas, posicionesMoleculas, desplazar };
 })(window);
