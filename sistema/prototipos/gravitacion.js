@@ -7,13 +7,13 @@
    Escenas: el cañón de Newton, satélite en órbita circular, órbita elíptica
    con áreas barridas, órbita geoestacionaria (MEXT 2023 P3) y velocidad de
    escape (MEXT 2018 P3).
-   Parámetros de URL para capturas: ?escena=canon|circular|eliptica|geo|escape,
+   Parámetros de URL para capturas: ?escena=canon|circular|eliptica|geo|escape|fuerza-altura|escape-horizontal|periodo-radio|masa-planeta|kepler-tercera|geo-luna,
    ?t= (s), ?fase= (fracción de la duración), ?pest=energia|eventos|tabla,
    ?areas=1, ?marco=rotante, ?mostrar=f
    ========================================================================== */
 import {
   CUERPOS, G as G_UNIVERSAL, elementosOrbitales, puntosConica, simularGravitacion, estadoEn,
-  alturaSincrona, semiejeDesdePeriodo, velocidadCircular, cuerposOrbita,
+  alturaSincrona, semiejeDesdePeriodo, velocidadCircular, cuerposOrbita, escapeDesdeGravedad,
 } from '../motores/gravitacion.js';
 import { aCSV, muestrear } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
@@ -77,6 +77,70 @@ import { evaluar } from '../nucleo/unidades.js';
       orbitas: 1, libre: 3 * 3600, maxDur: 24 * 3600, velocidad: 2000,
     },
   ];
+  // Preguntas cortas MEXT: cada una con las lecturas que contestan el examen
+  // (extra(s, el) → filas [símbolo, valor, unidad, ayuda] añadidas a las lecturas)
+  const MU_EX = TIERRA_EXAMEN.mu, R_EX = TIERRA_EXAMEN.radio, G_EX = TIERRA_EXAMEN.g;
+  const T_LUNA_27 = 27 * 86400;
+  ESCENAS.push(
+    {
+      id: 'fuerza-altura', titulo: 'Fuerza gravitatoria a una altura', tipo: 'MEXT', anio: 2027, planeta: TIERRA_EXAMEN, examen: true,
+      cuerpo: 'Satélite', icono: 'o-satelite', phi: 60, sentido: 1,
+      h: { val: 1600, min: 150, max: 20000, paso: 10 }, v0: { val: velocidadCircular(MU_EX, R_EX + 1.6e6) / KM, min: 2, max: 11, paso: 0.001 },
+      orbitas: 1, libre: 4 * 3600, maxDur: 12 * 3600, velocidad: 1000,
+      extra: (s, el) => [['F/F<sub class="r">0</sub>', fmt((R_EX / el.r) ** 2, 4), '', 'Fuerza a esta distancia entre la fuerza en la superficie: (R/r)²|Force ratio']],
+    },
+    {
+      id: 'escape-horizontal', titulo: 'Escape lanzando en horizontal', tipo: 'MEXT', anio: 2014, planeta: TIERRA_EXAMEN, examen: true,
+      cuerpo: 'Proyectil', icono: 'o-particula', phi: 0, sentido: 1,
+      h: null, v0: { val: escapeDesdeGravedad(G_EX, R_EX) / KM, min: 6, max: 14, paso: 0.01 },
+      orbitas: 1, libre: 6 * 3600, maxDur: 24 * 3600, velocidad: 2000,
+      extra: () => [
+        ['√<span class="sim">gR</span>', fmt(Math.sqrt(G_EX * R_EX) / KM, 4), 'km/s', 'Órbita circular rasante: no basta para escapar|Grazing circular speed'],
+        ['√<span class="sim">2gR</span>', fmt(escapeDesdeGravedad(G_EX, R_EX) / KM, 4), 'km/s', 'Mínima para escapar desde la superficie|Escape speed'],
+      ],
+    },
+    {
+      id: 'periodo-radio', titulo: 'Periodo de una órbita circular', tipo: 'MEXT', anio: 2010, planeta: TIERRA_EXAMEN, examen: true,
+      cuerpo: 'Satélite', icono: 'o-satelite', phi: 45, sentido: 1,
+      h: { val: 6400, min: 150, max: 30000, paso: 10 }, v0: { val: velocidadCircular(MU_EX, 2 * R_EX) / KM, min: 2, max: 11, paso: 0.001 },
+      orbitas: 2, libre: 8 * 3600, maxDur: 24 * 3600, velocidad: 2000,
+      extra: (s, el) => { const [v, u] = tiempoLegible(2 * Math.PI * (el.r / R_EX) * Math.sqrt(el.r / G_EX)); return [['2π(<span class="sim">r</span>/<span class="sim">R</span>)√(<span class="sim">r</span>/<span class="sim">g</span>)', v, u, 'Periodo de la órbita circular de radio r, con g y R de la superficie|Circular period']]; },
+    },
+    {
+      id: 'masa-planeta', titulo: 'Masa de un planeta a partir de su luna', tipo: 'MEXT', anio: 2015, planeta: TIERRA,
+      cuerpo: 'Luna', icono: 'o-satelite', phi: 30, sentido: 1,
+      h: { val: (384400e3 - TIERRA.radio) / KM, min: 20000, max: 500000, paso: 100 }, v0: { val: velocidadCircular(TIERRA.mu, 384400e3) / KM, min: 0.5, max: 1.5, paso: 0.0001 },
+      orbitas: 1, libre: 40 * 86400, maxDur: 80 * 86400, velocidad: 100000, escalaVel: 100,
+      extra: (s, el) => T_MEDIDO == null ? [] : [
+        ['4π²<span class="sim">a</span>³/(<span class="sim">G</span><span class="sim">T</span>²)', fmt(4 * Math.PI ** 2 * EL0.a ** 3 / (G_UNIVERSAL * T_MEDIDO ** 2), 4), 'kg', 'Masa deducida del semieje y del periodo medido|Mass from Kepler'],
+        ['M', fmt(esc.planeta.masa, 4), 'kg', 'Masa del planeta|Planet mass'],
+      ],
+    },
+    {
+      id: 'kepler-tercera', titulo: 'Tercera ley de Kepler', tipo: 'MEXT', anio: 2013, planeta: CUERPOS.sol,
+      cuerpo: 'Planeta', icono: 'o-planeta', phi: 0, sentido: 1,
+      h: { val: (1.496e11 - CUERPOS.sol.radio) / KM, min: 3e7, max: 4e8, paso: 1e5 }, v0: { val: velocidadCircular(CUERPOS.sol.mu, 1.496e11) / KM, min: 15, max: 45, paso: 0.01 },
+      orbitas: 1, libre: 2 * 365.25 * 86400, maxDur: 6 * 365.25 * 86400, velocidad: 2000000, escalaVel: 1000,
+      extra: (s, el) => [
+        ['<span class="sim">T</span>²/<span class="sim">a</span>³', ligada(el) ? fmt(el.periodo ** 2 / (el.a / KM) ** 3, 4) : '—', 's²/km³', 'Cambia la rapidez: la órbita cambia y el cociente no|Kepler ratio'],
+        ['4π²/(<span class="sim">GM</span>)', fmt(4 * Math.PI ** 2 / esc.planeta.mu * KM ** 3, 4), 's²/km³', 'La constante k de la tercera ley|Kepler constant'],
+      ],
+    },
+    {
+      id: 'geo-luna', titulo: 'Satélite geoestacionario y la Luna', tipo: 'MEXT', anio: 2009, planeta: TIERRA, rotacion: true,
+      cuerpo: 'Satélite', icono: 'o-satelite', phi: 35, sentido: 1,
+      h: { val: alturaSincrona(TIERRA.mu, TIERRA.radio, 86400) / KM, min: 20000, max: 50000, paso: 1 },
+      v0: { val: Math.cbrt(2 * Math.PI * TIERRA.mu / 86400) / KM, min: 2, max: 4.5, paso: 0.001 },
+      orbitas: 1, libre: 2 * 86400, maxDur: 3 * 86400, velocidad: 5000,
+      extra: (s, el) => {
+        const rL = semiejeDesdePeriodo(esc.planeta.mu, T_LUNA_27);
+        return [
+          ['<span class="sim">r</span><sub class="r">L</sub>', fmt(rL / KM, 4), 'km', 'Radio de la órbita de la Luna con un periodo de 27 días (Kepler)|Moon orbit radius'],
+          ['<span class="sim">a</span>/<span class="sim">r</span><sub class="r">L</sub>', ligada(el) ? fmt(el.a / rL, 4) : '—', '', '(T/T_L)^(2/3): con un día y 27 días, 1/9|Radius ratio'],
+        ];
+      },
+    },
+  );
   const escenaPorId = id => ESCENAS.find(e => e.id === id) || ESCENAS[0];
   const chipEscena = e => (e.tipo === 'MEXT' ? `MEXT ${e.anio}` : e.tipo);
 
@@ -170,6 +234,13 @@ import { evaluar } from '../nucleo/unidades.js';
     if (!Number.isFinite(v) || a === 0) return [v, u];
     const [f, p] = PREF.find(([f]) => a >= f * 0.99995) || PREF[PREF.length - 1];
     return [v / f, p + u];
+  }
+  // Velocidad de reproducción compacta: 2000×, 5·10⁴×, 10⁶×
+  function etiquetaVelocidad(v) {
+    if (v < 1e4) return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '×';
+    const e = Math.floor(Math.log10(v) + 1e-9), m = Math.round(v / 10 ** e);
+    const sup = String(e).replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(d)]);
+    return (m === 1 ? '' : m + '·') + '10' + sup + '×';
   }
   // Duración legible: s, min, h o d según la magnitud
   function tiempoLegible(s) {
@@ -440,7 +511,7 @@ import { evaluar } from '../nucleo/unidades.js';
     const pl = esc.planeta, s = estado(t), el = elementosOrbitales(pl.mu, [s.x, s.y], [s.vx, s.vy]);
     $('#reloj').innerHTML = `<span class="sim">t</span>${fmt(t, 4).padStart(6, ' ')}<span class="u">s</span>`;
     $('#lect-titulo').textContent = `Lecturas en t = ${fmt(t, 4)} s`;
-    $('#insp-estado').textContent = `${esc.icono === 'o-satelite' ? 'Satélite' : 'Partícula'} · ${estadoTexto(el)}`;
+    $('#insp-estado').textContent = `${({ 'o-satelite': 'Satélite', 'o-planeta': 'Planeta' })[esc.icono] || 'Partícula'} · ${estadoTexto(el)}`;
     // Energía específica: un cero numérico se escribe 0 (parábola exacta)
     const eps = Math.abs(el.energia) < 1e-9 * pl.mu / el.r ? 0 : el.energia;
     const [ev, eu] = prefijado(eps, 'J/kg'), [Tv, Tu] = tiempoLegible(ligada(el) ? el.periodo : Infinity);
@@ -458,7 +529,8 @@ import { evaluar } from '../nucleo/unidades.js';
       + fila('h', fmt((el.r - pl.radio) / KM, 4), 'km', 'Altura sobre la superficie|Altitude')
       + fila('|v|', fmt(el.v / KM, 4), 'km/s', 'Rapidez|Speed')
       + fila('v<sub class="r">c</sub>', fmt(el.vCircular / KM, 4), 'km/s', 'Velocidad circular a esta distancia, √(GM/r)|Circular velocity')
-      + fila('v<sub class="r">e</sub>', fmt(el.vEscape / KM, 4), 'km/s', 'Velocidad de escape a esta distancia, √(2GM/r)|Escape velocity');
+      + fila('v<sub class="r">e</sub>', fmt(el.vEscape / KM, 4), 'km/s', 'Velocidad de escape a esta distancia, √(2GM/r)|Escape velocity')
+      + (esc.extra ? esc.extra(s, el).map(([sm, v, u, ay]) => fila(sm, v, u, ay)).join('') : '');
     $('#f-v').textContent = fmtVar(V.v0);
     if (V.h) { const fv = $('#f-h'); if (fv) fv.textContent = fmtVar(V.h); }
     if (document.activeElement !== $('#f-a')) $('#f-a').value = String(Math.round(alfa / GRADO * 10) / 10).replace('-', '−');
@@ -655,7 +727,13 @@ import { evaluar } from '../nucleo/unidades.js';
     const r0 = esc.planeta.radio + altura(), g0 = esc.planeta.mu / (r0 * r0);
     kV = 70 / (velocidadCircular(esc.planeta.mu, r0) / KM); kA = 56 / g0; kF = kA / masa;
     velocidad = esc.velocidad;
-    document.querySelectorAll('#velocidades button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === velocidad)));
+    // Las órbitas largas (la Luna, un año) piden otras velocidades de reproducción
+    const factorVel = esc.escalaVel || 1;
+    document.querySelectorAll('#velocidades button').forEach((b, k) => {
+      const v = [200, 500, 1000, 2000, 5000][k] * factorVel;
+      b.dataset.v = String(v); b.textContent = etiquetaVelocidad(v);
+      b.setAttribute('aria-pressed', String(v === velocidad));
+    });
     $('#escena-chip').textContent = chipEscena(esc);
     $('#escena-chip').className = 'chip' + (esc.tipo === 'MEXT' ? ' lleno' : '');
     $('#escena-nombre').textContent = esc.titulo;

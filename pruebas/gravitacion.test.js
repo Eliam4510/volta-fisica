@@ -446,3 +446,70 @@ describe('determinismo', () => {
     }
   });
 });
+
+// Escenas MEXT cortas del espacio Órbitas: cada respuesta del examen sale de
+// la simulación (periodo medido, radio, energía), no solo de la fórmula.
+describe('MEXT: preguntas cortas de gravitación', () => {
+  const gx = 9.8, Rx = 6.4e6, planetaExamen = { mu: gx * Rx * Rx, radio: Rx };
+  const circular = (planeta, h, o = {}) => {
+    const r = planeta.radio + h, v = velocidadCircular(planeta.mu, r), T = periodoOrbital(planeta.mu, r);
+    const sim = simularGravitacion({ cuerpos: cuerposOrbita(planeta, { altura: h, velocidad: v, phi: 0 }), duracion: 1.02 * T, dt: T / 3000, ...o });
+    return { sim, r, v, T, Tmed: sim.eventos.find(e => e.tipo === 'vuelta').t };
+  };
+
+  it('2027 1-(2): a 1.6·10⁶ m de altura, F/F₀ = (R/(R + h))² = 0.64', () => {
+    const { sim, r } = circular(planetaExamen, 1.6e6), sat = sim.cuerpos[1];
+    // La aceleración medida en la órbita entre la gravedad en la superficie
+    const k = 100, a = velocidadCircular(planetaExamen.mu, r) ** 2 / Math.hypot(sat.x[k], sat.y[k]);
+    expect(rel(a / gx, 0.64)).toBeLessThan(1e-9);
+    expect(rel((Rx / r) ** 2, 0.64)).toBeLessThan(1e-14);
+  });
+
+  it('2015 1-(2): la masa del planeta sale del radio y el periodo de su luna, M = 4π²R³/(GT²)', () => {
+    const luna = 384400e3 - TIERRA.radio, { r, Tmed } = circular(TIERRA, luna);
+    const M = 4 * Math.PI ** 2 * r ** 3 / (G * Tmed ** 2);
+    expect(rel(M, TIERRA.masa)).toBeLessThan(1e-9);
+    // Las otras opciones dan masas con otras dimensiones o de otro orden
+    expect(rel(4 * Math.PI ** 2 * r ** 2 / (G * Tmed ** 2), TIERRA.masa)).toBeGreaterThan(0.99);
+  });
+
+  it('2014 1-(2): lanzado en horizontal desde la superficie, escapa a partir de √(2gR)', () => {
+    const ve = escapeDesdeGravedad(gx, Rx);
+    const lanzar = k => cuerposOrbita(planetaExamen, { altura: 0, velocidad: k * ve, alfa: 0, phi: 0 });
+    // Justo en √(2gR): energía nula (parábola); un poco menos, vuelve (apoapsis)
+    const [, s1] = lanzar(1);
+    expect(Math.abs(elementosOrbitales(planetaExamen.mu, [s1.x, s1.y], [s1.vx, s1.vy]).energia)).toBeLessThan(1e-6);
+    const bajo = simularGravitacion({ cuerpos: lanzar(0.98), duracion: 3 * 86400, dt: 5 });
+    expect(bajo.eventos.find(e => e.tipo === 'apoapsis')).toBeDefined();
+    const alto = simularGravitacion({ cuerpos: lanzar(1.01), duracion: 3 * 86400, dt: 5 });
+    expect(alto.eventos.find(e => e.tipo === 'apoapsis')).toBeUndefined();
+    // √(gR) es la circular rasante: la otra opción tentadora no escapa
+    expect(rel(Math.sqrt(gx * Rx), velocidadCircular(planetaExamen.mu, Rx))).toBeLessThan(1e-14);
+  });
+
+  it('2013 1-(2): T² = k·a³ con k = 4π²/(GM), igual para órbitas de cualquier tamaño y forma', () => {
+    const sol = CUERPOS.sol, k = 4 * Math.PI ** 2 / sol.mu;
+    for (const [rp, e] of [[1.496e11, 0], [0.7e11, 0.2], [2.2e11, 0.6]]) {
+      const { sim, a } = orbita({ rp, e, mu: sol.mu, orbitas: 1.02, pasos: 4000 });
+      const T = sim.eventos.find(x => x.tipo === 'vuelta').t;
+      expect(rel(T * T / (a * a * a), k)).toBeLessThan(1e-8);
+    }
+  });
+
+  it('2010 1-G: el periodo de la órbita circular de radio r es 2π(r/R)√(r/g)', () => {
+    for (const h of [Rx, 3 * Rx]) {
+      const { r, Tmed } = circular(planetaExamen, h);
+      expect(rel(Tmed, 2 * Math.PI * (r / Rx) * Math.sqrt(r / gx))).toBeLessThan(1e-9);
+      // Las demás opciones no coinciden
+      expect(rel(Tmed, 2 * Math.PI * r / Math.sqrt(gx * Rx))).toBeGreaterThan(0.1);
+    }
+  });
+
+  it('2009 1-(2): con la Luna a 27 días, el satélite geoestacionario está a 1/9 de su distancia', () => {
+    const dia = 86400, TL = 27 * dia;
+    const geo = circular(TIERRA, alturaSincrona(MU, R, dia)), luna = circular(TIERRA, alturaSincrona(MU, R, TL));
+    expect(rel(geo.Tmed, dia)).toBeLessThan(1e-9);
+    expect(rel(luna.Tmed, TL)).toBeLessThan(1e-9);
+    expect(rel(geo.r / luna.r, 1 / 9)).toBeLessThan(1e-12);
+  });
+});

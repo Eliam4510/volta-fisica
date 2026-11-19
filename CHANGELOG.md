@@ -7,6 +7,16 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Gravitación: seis escenas MEXT nuevas en «Órbitas» (2027 1-(2) fuerza a
+  una altura, 2015 1-(2) masa de un planeta por su luna, 2014 1-(2) escape
+  lanzando en horizontal, 2013 1-(2) tercera ley de Kepler alrededor del
+  Sol, 2010 1-G periodo de una órbita circular y 2009 1-(2) satélite
+  geoestacionario frente a la Luna), cada una con las lecturas que
+  contestan el examen y una prueba que obtiene la respuesta de la
+  simulación. Las órbitas largas ajustan las velocidades de reproducción.
+
 ### Corregido
 
 - Montones de discos con apoyos redundantes (una fila de pared a pared, un
