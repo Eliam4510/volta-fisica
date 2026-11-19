@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.9.0 (publicada el 2026-11-19; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.9.0 (publicada el 2026-11-19 con instalador de 2 786 448 B y portátil de 5 191 168 B; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -218,3 +218,4 @@ restricciones contabilizados, actuadores con trayectoria impuesta) y PhET
 - 2026-11-19 — Prensa hidráulica en el motor y el Laboratorio (MEXT 2010 1-A); escena de estática 2010 1-B con un triángulo rígido; recientes reales en Inicio (Mecánica: 38 MEXT).
 - 2026-11-19 — v0.8.0 publicada (instalador 2 370 753 B, portátil 4 777 472 B). Después: regla y fotopuerta, editor de perfiles y panel de variables en el Laboratorio.
 - 2026-11-19 — Magnetismo, Electrostática, Termodinámica y Física moderna integrados; v0.9.0 publicada (859 pruebas). Siguiente: Ondas (cubeta 2D, 5 MEXT pendientes), Circuitos (3 de 10 MEXT), Óptica (polarización, espejo parabólico), cuerpo rígido con rotación.
+- 2026-11-19 — Ejecutables de la v0.9.0 comprobados. Agentes en curso: Ondas (cubeta 2D: ondas2d.js, ondas-cubeta*, 2012 P5 en ondas-doppler) y Circuitos (7 escenas MEXT). Al integrar la cubeta: espacio `cubeta` en MODULOS de espacio.js y ESPACIOS de Inicio; conteos de Ondas y Circuitos.
