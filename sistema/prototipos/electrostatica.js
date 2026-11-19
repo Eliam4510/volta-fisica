@@ -1,17 +1,20 @@
 /* ==========================================================================
    Volta · prototipo de Electrostática — "Cargas y campos"
    Escena MEXT 2020 P2: dos cargas +q fijas en A(−a, 0) y B(a, 0) y una
-   partícula de carga −q y masa m que se suelta en C(0, a). Ley de Coulomb
-   3D (1/r²) en el plano, superposición exacta y movimiento de la partícula
-   con Dormand–Prince 5(4), salida densa de Hermite y eventos localizados por
-   bisección. Misma estructura que el prototipo de Mecánica.
+   partícula de carga −q y masa m que se suelta en C(0, a). La física
+   (Coulomb 1/r², superposición, Dormand–Prince 5(4) con salida densa y
+   eventos por Brent) vive en el motor puro sistema/motores/electrostatica.js,
+   probado aparte. Misma estructura que el prototipo de Mecánica.
    ========================================================================== */
+import {
+  K_COULOMB as K, campo, potencial, simularCargas, estadoEn, energiaEstado, componentesVelocidad,
+} from '../motores/electrostatica.js';
+
 (function () {
   'use strict';
   const { Trazo, G, fmt, cantidad, grafica, LineaTiempo } = Volta;
   const { conPrefijo, nivelesAuto } = Volta.electro;
   const $ = s => document.querySelector(s);
-  const K = 8.9875517923e9;   // constante de Coulomb (N·m²/C²)
   const DUR = 6.5;            // duración simulada (s)
   const R_CHOQUE = 0.02;      // distancia a una carga fija que cuenta como choque (m)
 
@@ -53,121 +56,37 @@
   }
 
   // ---------------------------------------------------------------------
-  // Física: superposición de cargas puntuales (Coulomb 1/r²)
+  // Física: motor puro en sistema/motores/electrostatica.js (probado aparte).
+  // campo(lista, x, y) y potencial(lista, x, y) son la superposición de
+  // Coulomb; simularCargas integra la partícula y localiza los eventos.
   // ---------------------------------------------------------------------
-  function campo(lista, x, y) {
-    let ex = 0, ey = 0;
-    for (const c of lista) {
-      const dx = x - c.x, dy = y - c.y, r2 = dx * dx + dy * dy, r = Math.sqrt(r2);
-      if (r < 1e-9) continue;
-      const f = K * c.q / (r2 * r); ex += f * dx; ey += f * dy;
-    }
-    return [ex, ey];
-  }
-  function potencial(lista, x, y) {
-    let v = 0;
-    for (const c of lista) v += K * c.q / Math.max(1e-9, Math.hypot(x - c.x, y - c.y));
-    return v;
-  }
-
-  // ---------------------------------------------------------------------
-  // Movimiento de la partícula: Dormand–Prince 5(4) con control de error
-  // ---------------------------------------------------------------------
-  const DP = {
-    c: [0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1, 1],
-    a: [[], [1 / 5], [3 / 40, 9 / 40], [44 / 45, -56 / 15, 32 / 9], [19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729],
-      [9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656], [35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84]],
-    e: [71 / 57600, 0, -71 / 16695, 71 / 1920, -17253 / 339200, 22 / 525, -1 / 40],
-  };
-  function pasoDP(f, s, d, h) {
-    const k = [d];
-    for (let i = 1; i < 7; i++) {
-      const y = s.map((v, n) => v + h * DP.a[i].reduce((acc, aij, j) => acc + aij * k[j][n], 0));
-      k.push(f(y));
-      if (i === 6) {
-        const err = s.map((_, n) => h * DP.e.reduce((acc, ej, j) => acc + ej * k[j][n], 0));
-        return { y, d: k[6], err };
-      }
-    }
-  }
-  // Interpolación cúbica de Hermite entre dos muestras (posición con v, velocidad con a)
-  function hermite(t0, s0, d0, t1, s1, d1, tt) {
-    const h = t1 - t0, u = (tt - t0) / h, u2 = u * u, u3 = u2 * u;
-    const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
-    return s0.map((_, i) => h00 * s0[i] + h10 * h * d0[i] + h01 * s1[i] + h11 * h * d1[i]);
-  }
-  function raiz(g, a, b) {               // bisección: g(a) y g(b) de signo opuesto
-    let ga = g(a);
-    for (let i = 0; i < 60; i++) { const m = (a + b) / 2, gm = g(m); if (ga * gm <= 0) b = m; else { a = m; ga = gm; } }
-    return (a + b) / 2;
-  }
-
   let SIM;
   function simular() {
     resolverEscena();
-    const P = PART, qm = P.q / P.m, a = vsi('a');
-    const f = s => { const [ex, ey] = campo(FIJAS, s[0], s[1]); return [s[2], s[3], qm * ex, qm * ey]; };
-    const al = P.alfa * Math.PI / 180;
-    let t = 0, s = [P.x, P.y, P.v0 * Math.cos(al), P.v0 * Math.sin(al)], d = f(s);
-    if (P.v0 === 0) { s[2] = 0; s[3] = 0; }
-    const T = [0], S = [s], D = [d];
-    const enC = ligada(cargaPorId('P').y) && cargaPorId('P').x === 0;
-    const eventos = [{ t: 0, nombre: (P.v0 > 0 ? 'Se lanza' : 'Se suelta') + (enC ? ' en C' : ''), x: s[0], y: s[1], v: P.v0 }];
-    const vEsc = Math.sqrt(Math.abs(K * P.q * P.q / (P.m * a)));
-    const U = st => P.q * potencial(FIJAS, st[0], st[1]);
-    const E0 = 0.5 * P.m * (s[2] * s[2] + s[3] * s[3]) + U(s);
-    let h = 1e-3, choque = null, deriva = 0;
-    const HMAX = 0.004, RTOL = 1e-10, ATOL = 1e-10;
-    for (let n = 0; n < 200000 && t < DUR - 1e-12; n++) {
-      h = Math.min(h, HMAX, DUR - t);
-      const r = pasoDP(f, s, d, h);
-      let e = 0;
-      for (let i = 0; i < 4; i++) e = Math.max(e, Math.abs(r.err[i]) / (ATOL + RTOL * Math.max(Math.abs(s[i]), Math.abs(r.y[i]))));
-      if (e > 1) { h *= Math.max(0.2, 0.9 * Math.pow(e, -0.2)); if (h < 1e-12) break; continue; }
-      const t1 = t + h, s1 = r.y, d1 = r.d;
-      const H = tt => hermite(t, s, d, t1, s1, d1, tt);
-      // Eventos dentro del paso, en orden temporal
-      const nuevos = [];
-      if (s[1] * s1[1] < 0) {
-        const te = raiz(tt => H(tt)[1], t, t1), q = H(te);
-        nuevos.push({ t: te, nombre: Math.abs(q[0]) < 1e-3 * a ? 'Pasa por O' : 'Cruza el eje x', x: q[0], y: 0, v: Math.hypot(q[2], q[3]) });
-      }
-      if (s[3] * s1[3] < 0) {
-        const te = raiz(tt => H(tt)[3], t, t1), q = H(te), rap = Math.hypot(q[2], q[3]);
-        let nombre;
-        if (rap < 1e-3 * vEsc) nombre = Math.hypot(q[0] - S[0][0], q[1] - S[0][1]) < 1e-3 * a ? (enC ? 'Vuelve a C' : 'Vuelve al inicio') : 'Punto de retorno';
-        else nombre = s1[3] > 0 ? 'Altura mínima' : 'Altura máxima';
-        nuevos.push({ t: te, nombre, x: q[0], y: q[1], v: rap });
-      }
-      for (const c of FIJAS) {
-        const dist = st => Math.hypot(st[0] - c.x, st[1] - c.y) - R_CHOQUE;
-        if (dist(s1) < 0 && dist(s) >= 0) {
-          const te = raiz(tt => dist(H(tt)), t, t1), q = H(te);
-          if (!choque || te < choque.t) choque = { t: te, nombre: 'Choca con la carga ' + c.nombre, x: q[0], y: q[1], v: Math.hypot(q[2], q[3]), estado: q };
-        }
-      }
-      nuevos.sort((p, q) => p.t - q.t).forEach(ev => { if (!choque || ev.t < choque.t) eventos.push(ev); });
-      if (choque) {
-        T.push(choque.t); S.push(choque.estado); D.push(f(choque.estado));
-        eventos.push(choque); t = choque.t; break;
-      }
-      T.push(t1); S.push(s1); D.push(d1);
-      deriva = Math.max(deriva, Math.abs(0.5 * P.m * (s1[2] * s1[2] + s1[3] * s1[3]) + U(s1) - E0));
-      t = t1; s = s1; d = d1;
-      h *= Math.min(5, 0.9 * Math.pow(Math.max(e, 1e-10), -0.2));
-    }
-    SIM = { T, S, D, eventos, tFin: t, choque, E0, deriva: deriva / Math.abs(E0 || 1), vEsc };
+    const P = PART, a = vsi('a');
+    // Ángulo exacto en los múltiplos de 90°: lanzada a −90° no sale del eje
+    const [vx, vy] = componentesVelocidad(P.v0, P.alfa);
+    const sim = simularCargas(
+      { fijas: FIJAS, libres: [{ id: 'P', nombre: P.nombre, x: P.x, y: P.y, q: P.q, m: P.m, vx, vy }] },
+      {
+        duracion: DUR, rtol: 1e-10, atol: 1e-10, maxPasos: 200000, radioChoque: R_CHOQUE,
+        hMax: 0.004,                  // muestras densas para trazos y gráficas
+        // Escalas de la figura: "pasa por O" y "vuelve" a menos de 10⁻³·a;
+        // un retorno con rapidez < 10⁻³·√(kq²/(m·a))
+        escalaLongitud: a, escalaVelocidad: Math.sqrt(Math.abs(K * P.q * P.q / (P.m * a))),
+      });
+    // Nombres de la figura del examen cuando la partícula sale de C(0, a)
+    const c = cargaPorId('P'), enC = ligada(c.y) && c.x === 0;
+    const eventos = sim.eventos.map(e => {
+      if (!enC) return e;
+      if (e.tipo === 'inicio') return { ...e, nombre: e.nombre + ' en C' };
+      return e.nombre === 'Vuelve al inicio' ? { ...e, nombre: 'Vuelve a C' } : e;
+    });
+    // T, S: instantes y estados [x, y, vx, vy] de los pasos aceptados
+    SIM = { sim, T: sim.solucion.t, S: sim.solucion.y, eventos, tFin: sim.tFin, choque: sim.choque, E0: sim.E0, deriva: sim.deriva };
   }
-  function estado(tt) {
-    const T = SIM.T, n = T.length - 1;
-    tt = Math.max(0, Math.min(tt, SIM.tFin));
-    if (n === 0) { const s = SIM.S[0]; return { x: s[0], y: s[1], vx: s[2], vy: s[3] }; }
-    let lo = 0, hi = n;
-    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] <= tt) lo = m; else hi = m; }
-    const q = hermite(T[lo], SIM.S[lo], SIM.D[lo], T[hi], SIM.S[hi], SIM.D[hi], tt);
-    return { x: q[0], y: q[1], vx: q[2], vy: q[3] };
-  }
-  const energia = s => ({ K: 0.5 * PART.m * (s.vx * s.vx + s.vy * s.vy), U: PART.q * potencial(FIJAS, s.x, s.y) });
+  const estado = tt => estadoEn(SIM.sim, tt);
+  const energia = s => energiaEstado(SIM.sim, [s.x, s.y, s.vx, s.vy]);
 
   // ---------------------------------------------------------------------
   // Estado de la interfaz
