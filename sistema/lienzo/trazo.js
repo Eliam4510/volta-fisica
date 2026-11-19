@@ -165,8 +165,30 @@ import { ESP, fmt, fmtMarca, cantidad, conPrefijo, pasoAgradable } from '../nucl
         if (Math.abs(y) < paso / 2 || v.Y(y) < 34 || v.Y(y) > this.h - 12 || tapado(X0 - 14, v.Y(y))) continue;
         this.texto(marca(y), X0 - 6, v.Y(y), { fuente: 'num', tam: 11, color: 'texto-3', alinear: 'right', base: 'middle', halo: true });
       }
-      if (o.x) this.compuesto([{ t: o.x, f: 'sim', tam: 14 }, { t: ' (' + (o.ux || 'm') + ')', f: 'ui', tam: 11 }], this.w - 12, Y0 - 8, { color: 'texto-3', alinear: 'right' });
-      if (o.y) this.compuesto([{ t: o.y, f: 'sim', tam: 14 }, { t: ' (' + (o.uy || 'm') + ')', f: 'ui', tam: 11 }], X0 + 8, 18, { color: 'texto-3' });
+      // Las etiquetas de los ejes no van debajo de las barras flotantes del
+      // lienzo (capas, zoom): se apartan de o.zonas o de las .flotante hermanas
+      const zonas = o.zonas || this.zonasFlotantes();
+      const choca = (x, y, w, h) => zonas.find(z => x < z.x + z.w && x + w > z.x && y < z.y + z.h && y + h > z.y);
+      if (o.x) {
+        let xd = this.w - 12, z;
+        for (let i = 0; i < 4 && (z = choca(xd - 70, Y0 - 22, 70, 20)); i++) xd = z.x - 8;
+        this.compuesto([{ t: o.x, f: 'sim', tam: 14 }, { t: ' (' + (o.ux || 'm') + ')', f: 'ui', tam: 11 }], xd, Y0 - 8, { color: 'texto-3', alinear: 'right' });
+      }
+      if (o.y) {
+        let yb = 18, z;
+        for (let i = 0; i < 4 && (z = choca(X0 + 8, yb - 14, 70, 20)); i++) yb = z.y + z.h + 18;
+        this.compuesto([{ t: o.y, f: 'sim', tam: 14 }, { t: ' (' + (o.uy || 'm') + ')', f: 'ui', tam: 11 }], X0 + 8, yb, { color: 'texto-3' });
+      }
+    }
+
+    /** Rectángulos (px del lienzo) de las barras .flotante que hay sobre él. */
+    zonasFlotantes() {
+      const padre = this.canvas && this.canvas.parentElement;
+      if (!padre || typeof padre.querySelectorAll !== 'function') return [];
+      const r0 = this.canvas.getBoundingClientRect();
+      return [...padre.querySelectorAll(':scope > .flotante')]
+        .filter(el => !el.hidden && el.getClientRects().length)
+        .map(el => { const r = el.getBoundingClientRect(); return { x: r.left - r0.left, y: r.top - r0.top, w: r.width, h: r.height }; });
     }
 
     // ------------------------------------------------ texto
