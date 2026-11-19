@@ -7,6 +7,7 @@ import { simularProyectil, estadoEn, energiaEn } from '../motores/proyectiles.js
 import { aCSV, muestrear } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
 import { crearEscena, numero } from '../nucleo/escena.js';
+import { Historial } from '../nucleo/historial.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
 
 (function () {
@@ -160,12 +161,13 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       const ent = fila.querySelector('input'), val = fila.querySelector('.valor');
       const pintar = () => { val.innerHTML = `${fmtVar(d)}${d.u ? `<span class="u">${d.u}</span>` : ''}`; if (ent) Volta.pintarDeslizador(ent); };
       if (ent) ent.addEventListener('input', () => { d.val = parseFloat(ent.value); pintar(); recalcular(); });
+      if (ent) ent.addEventListener('change', registrar);   // un paso de deshacer por arrastre
       pintar(); cont.appendChild(fila);
     }
   }
   $('#f-a').addEventListener('change', () => {
     const a = parseFloat($('#f-a').value.replace('−', '-'));
-    if (isFinite(a)) { alfa = Math.max(-80, Math.min(80, a)) * Math.PI / 180; recalcular(); }
+    if (isFinite(a)) { alfa = Math.max(-80, Math.min(80, a)) * Math.PI / 180; recalcular(); registrar(); }
   });
 
   const lt = new LineaTiempo($('#tl'), { duracion: DUR, eventos: [], alCambiar: nt => { t = nt; jugando = false; todo(); } });
@@ -237,16 +239,37 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       datos: { variables: Object.fromEntries(Object.entries(V).map(([k, d]) => [k, d.val])), alfaGrados: alfa * 180 / Math.PI },
     });
   }
-  function aplicarEscena(escena) {
-    const d = escena.datos || {}, vars = d.variables || {};
+  // Aplica variables y ángulo de una escena o de un paso del historial
+  function aplicarDatos(d = {}) {
+    const vars = d.variables || {};
     for (const [k, def] of Object.entries(V)) if (!def.constante) def.val = numero(vars[k], def.val, def.min, def.max);
     alfa = numero(d.alfaGrados, 0, -80, 80) * Math.PI / 180;
     t = 0; jugando = false;
     construirVariables(); recalcular();
   }
+  function aplicarEscena(escena) {
+    aplicarDatos(escena.datos);
+    if (historial) historial.reiniciar(escenaActual().datos);
+    botonesHistorial();
+  }
+
+  // ---------------------------------------------------------------------
+  // Deshacer y rehacer: un paso por cambio de condiciones iniciales
+  // ---------------------------------------------------------------------
+  let historial = null;
+  function botonesHistorial() {
+    $('#b-deshacer').disabled = !historial?.puedeDeshacer;
+    $('#b-rehacer').disabled = !historial?.puedeRehacer;
+  }
+  function registrar() { if (historial && historial.registrar(escenaActual().datos)) botonesHistorial(); }
+  function deshacer() { const d = historial?.deshacer(); if (d) { aplicarDatos(d); botonesHistorial(); avisar(area, 'Cambio deshecho'); } }
+  function rehacer() { const d = historial?.rehacer(); if (d) { aplicarDatos(d); botonesHistorial(); avisar(area, 'Cambio rehecho'); } }
+  $('#b-deshacer').addEventListener('click', deshacer);
+  $('#b-rehacer').addEventListener('click', rehacer);
+
   function restablecer() {
     for (const [k, v] of Object.entries(ORIGINAL)) V[k].val = v;
-    alfa = 0; t = 0; jugando = false; construirVariables(); recalcular();
+    alfa = 0; t = 0; jugando = false; construirVariables(); recalcular(); registrar();
     avisar(area, 'Escena original restablecida');
   }
   function guardar() { guardarEscena(escenaActual()); avisar(area, 'Escena guardada'); }
@@ -316,7 +339,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (paneo) { vistaTocada = true; tz.vista.ox = paneo[2] + x - paneo[0]; tz.vista.oy = paneo[3] + y - paneo[1]; dibujar(); return; }
     if (t === 0) { const [px, py] = puntaVelocidad(); lienzo.style.cursor = Math.hypot(x - px, y - py) < 10 ? 'grab' : 'default'; }
   });
-  lienzo.addEventListener('pointerup', () => { arrastre = null; paneo = null; dibujar(); });
+  lienzo.addEventListener('pointerup', () => { if (arrastre === 'velocidad') registrar(); arrastre = null; paneo = null; dibujar(); });
   lienzo.addEventListener('contextmenu', ev => ev.preventDefault());
   lienzo.addEventListener('wheel', ev => {
     ev.preventDefault();
@@ -394,6 +417,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); abrirComandos(); return; }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); guardar(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && !ev.target.matches('input, textarea') && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && !ev.target.matches('input, textarea') && ev.key.toLowerCase() === 'z') { ev.preventDefault(); deshacer(); return; }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'o') { ev.preventDefault(); abrir(); return; }
     if (ev.target.matches('input, textarea')) return;
     if (ev.code === 'Space') { ev.preventDefault(); if (!ev.repeat) alternar(); espacioPulsado = true; }
@@ -425,6 +450,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (q.has('t')) t = Math.max(0, Math.min(DUR, parseFloat(q.get('t'))));
     tz.ajustar(); encuadrar(); escala0 = tz.vista.escala;
     recalcular(); zoomTexto();
+    historial = new Historial(escenaActual().datos); botonesHistorial();
     requestAnimationFrame(a => { ultimo = a; requestAnimationFrame(cuadro); });
   });
 })();
