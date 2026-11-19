@@ -7,6 +7,45 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Campos con unidades y expresiones: se puede escribir `250 g`, `3 km/h`,
+  `2*a` o `v0 cos 30°`; Volta convierte a SI y comprueba la dimensión
+  (análisis dimensional) con mensajes que dicen qué se esperaba.
+- Diálogos nativos de Windows para guardar, exportar y abrir en la
+  aplicación de escritorio; en el navegador se usa la descarga.
+- Integradores numéricos (`nucleo/integradores.js`): Dormand–Prince 5(4) con
+  salida densa y localización de eventos por Brent, RK4, Verlet y
+  Gauss–Legendre.
+- Motor general de Mecánica (`motores/mecanica.js`): varias partículas,
+  superficies rectas y circulares, cuerdas que se aflojan, varillas, poleas,
+  resortes, clavos, fricción de Coulomb con adherencia, arrastre lineal y
+  cuadrático, y choques entre partículas con restitución. Validado contra el
+  péndulo exacto (integral elíptica), la máquina de Atwood y problemas MEXT.
+- Motor de Electrostática (`motores/electrostatica.js`): superposición de
+  Coulomb, potencial, flujo de Gauss y partículas libres con eventos.
+- Motor de gas de Termodinámica (`motores/gas.js`) con 27 pruebas analíticas
+  y balance de energía cerrado.
+- Termodinámica y Electrostática: guardar, abrir y autoguardar escenas
+  `.volta`; exportar CSV con BOM e imagen PNG.
+- Revisión de tipos con TypeScript sobre el núcleo y los motores
+  (`npm run tipos`), también en la integración continua.
+
+### Corregido
+
+- Los números que al redondear subían de orden perdían una cifra
+  significativa (−0.99999999 se escribía −1.0000 en lugar de −1.000).
+
+### Seguridad
+
+- Las escenas que se abren desde un archivo se validan y se acotan antes de
+  usarse; los nombres de objetos no pueden inyectar marcado en la interfaz.
+
+### Cambiado
+
+- La integración continua separa las pruebas (en cada envío) de la
+  compilación de Windows.
+
 ## [0.2.0] - 2026-11-19
 
 Mecánica pasa de prototipo a herramienta de trabajo: se guarda, se exporta y
