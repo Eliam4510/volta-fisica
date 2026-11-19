@@ -10,6 +10,7 @@ import {
   K_COULOMB as K, campo, potencial, simularCargas, estadoEn, energiaEstado, componentesVelocidad,
 } from '../motores/electrostatica.js';
 import { aCSV, muestrear } from '../nucleo/csv.js';
+import { evaluar, DIM as DIMS } from '../nucleo/unidades.js';
 import { crearEscena, numero, texto, magnitud } from '../nucleo/escena.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
 import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
@@ -315,28 +316,17 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
   // ---------------------------------------------------------------------
   // Unidades de los campos del inspector
   // ---------------------------------------------------------------------
+  // Campos con unidades y expresiones (nucleo/unidades.js): «3 µC», «−2q»,
+  // «30 cm», «k q/a». Sin unidad, se usa la del campo.
   const UNI = { carga: { u: 'µC', f: 1e-6 }, longitud: { u: 'm', f: 1 }, masa: { u: 'g', f: 1e-3 }, velocidad: { u: 'm/s', f: 1 }, potencial: { u: 'kV', f: 1e3 } };
-  const TABLA = {
-    longitud: { m: 1, cm: 1e-2, mm: 1e-3, km: 1e3 },
-    carga: { C: 1, mC: 1e-3, 'µC': 1e-6, 'μC': 1e-6, uC: 1e-6, nC: 1e-9, pC: 1e-12 },
-    masa: { kg: 1, g: 1e-3, mg: 1e-6 },
-    velocidad: { 'm/s': 1, 'km/h': 1 / 3.6, 'cm/s': 1e-2 },
-    tiempo: { s: 1, ms: 1e-3, min: 60 },
-    potencial: { V: 1, kV: 1e3, mV: 1e-3, MV: 1e6 },
-  };
-  const NOMBRE_DIM = { longitud: 'una longitud', carga: 'una carga', masa: 'una masa', velocidad: 'una velocidad', tiempo: 'un tiempo', potencial: 'un potencial' };
   const DIM = { q: 'carga', x: 'longitud', y: 'longitud', m: 'masa', v0: 'velocidad', dV: 'potencial' };
+  const DIM_VAR = { q: DIMS.carga, a: DIMS.longitud, m: DIMS.masa, v0: DIMS.velocidad, k: DIMS.fuerza.map((e, i) => e + 2 * DIMS.longitud[i] - 2 * DIMS.carga[i]) };
   function leerCantidad(txt, dim) {
-    const m = String(txt).trim().replace(/−/g, '-').replace(',', '.').match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*(.*)$/i);
-    const u = UNI[dim] ? UNI[dim].u : '';
-    if (!m) return { error: `Escribe un número, por ejemplo 0.5${u ? ' ' + u : ''}.` };
-    const num = parseFloat(m[1]), unidad = m[2].trim().replace(/^°$/, '');
-    if (!unidad) return { valor: num * (UNI[dim] ? UNI[dim].f : 1) };
-    for (const [d, tabla] of Object.entries(TABLA)) {
-      if (unidad in tabla) return d === dim ? { valor: num * tabla[unidad] } : { error: `La expresión da ${NOMBRE_DIM[d]} y este campo espera ${NOMBRE_DIM[dim] || 'un número'}.` };
-    }
-    return { error: `No se reconoce la unidad «${unidad}».` };
+    const variables = Object.fromEntries(Object.keys(V).map(n => [n, { valor: vsi(n), dim: DIM_VAR[n] }]));
+    try { return { valor: evaluar(txt, { variables, esperada: dim, unidadPorDefecto: UNI[dim] && UNI[dim].u }).valor }; }
+    catch (e) { return { error: e.message }; }
   }
+
 
   // ---------------------------------------------------------------------
   // Paneles: árbol, inspector, lecturas, variables

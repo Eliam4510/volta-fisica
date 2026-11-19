@@ -9,9 +9,10 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
-- Campos con unidades y expresiones: se puede escribir `250 g`, `3 km/h`,
-  `2*a` o `v0 cos 30°`; Volta convierte a SI y comprueba la dimensión
-  (análisis dimensional) con mensajes que dicen qué se esperaba.
+- Campos con unidades y expresiones en Mecánica y Electrostática: se puede
+  escribir `250 g`, `3 km/h`, `2*a`, `v0 cos 30°`, `30 cm` o `k q/a`; Volta
+  convierte a SI y comprueba la dimensión (análisis dimensional) con mensajes
+  que dicen qué se esperaba.
 - Diálogos nativos de Windows para guardar, exportar y abrir en la
   aplicación de escritorio; en el navegador se usa la descarga.
 - Integradores numéricos (`nucleo/integradores.js`): Dormand–Prince 5(4) con
