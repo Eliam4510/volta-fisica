@@ -15,7 +15,13 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   constante (una mano, un ascensor, una paleta). `energiaMecanica` devuelve
   su trabajo `W` y el balance E + Qc + Qi = E0 + W cierra a 10⁻⁹. Pruebas:
   bloque sobre una tabla libre (MEXT 2016 P3), mano que sube un peso con
-  resorte (MEXT 2006 1-(1)), ascensor y paleta. Falta llevarlo al Laboratorio.
+  resorte (MEXT 2006 1-(1)), ascensor y paleta.
+- Laboratorio de Mecánica: una superficie puede ir sobre una partícula y
+  moverse con ella («Va sobre» en el inspector), y una partícula puede tener
+  movimiento impuesto (velocidad constante pase lo que pase). El panel de
+  energía muestra el trabajo del movimiento impuesto. Escenas MEXT nuevas:
+  2016 P3 (objeto sobre un bloque que se lanza) y 2006 1-(1) (subir con la
+  mano un peso colgado de un resorte), con sus pruebas.
 
 - Gravitación: seis escenas MEXT nuevas en «Órbitas» (2027 1-(2) fuerza a
   una altura, 2015 1-(2) masa de un planeta por su luna, 2014 1-(2) escape

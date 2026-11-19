@@ -180,15 +180,15 @@ export function normalizarEscena(d) {
     if (o.tipo === 'particula') {
       n = { id: o.id, tipo: 'particula', nombre, m: numero(o.m, 1, 1e-6, 1e6), x: numero(o.x, 0, -1e6, 1e6), y: numero(o.y, 0, -1e6, 1e6),
         v: numero(o.v, 0, 0, 1e5), ang: numero(o.ang, 0, -360, 360), radio: numero(o.radio, 0, 0, 100), sobre: typeof o.sobre === 'string' ? o.sobre : null,
-        F: numero(o.F, 0, 0, 1e9), angF: numero(o.angF, 0, -360, 360) };
+        F: numero(o.F, 0, 0, 1e9), angF: numero(o.angF, 0, -360, 360), cinematica: o.cinematica === true };
     } else if (o.tipo === 'superficie' && ['suelo', 'pared', 'plano', 'segmento'].includes(o.forma)) {
       const a = num2(o.a, [0, 0]), b = num2(o.b, [1, 0]);
       if (largo(resta(b, a)) < 1e-6) continue;
-      n = { id: o.id, tipo: 'superficie', forma: o.forma, nombre, a, b, ...material(o) };
+      n = { id: o.id, tipo: 'superficie', forma: o.forma, nombre, a, b, ...material(o), cuerpo: typeof o.cuerpo === 'string' ? o.cuerpo : null };
     } else if (o.tipo === 'superficie' && o.forma === 'arco') {
       const a0 = numero(o.a0, 0, -720, 720), a1 = numero(o.a1, 180, -720, 1080);
       n = { id: o.id, tipo: 'superficie', forma: 'arco', nombre, c: num2(o.c, [0, 0]), r: numero(o.r, 1, 1e-4, 1e5), a0, a1: Math.min(a0 + 360, Math.max(a0 + 1, a1)),
-        cara: o.cara === 'interior' ? 'interior' : 'exterior', ...material(o) };
+        cara: o.cara === 'interior' ? 'interior' : 'exterior', ...material(o), cuerpo: typeof o.cuerpo === 'string' ? o.cuerpo : null };
     } else if (CONECTORES.includes(o.tipo)) {
       if (typeof o.a !== 'string') continue;
       n = { id: o.id, tipo: o.tipo, nombre, a: o.a, b: typeof o.b === 'string' ? o.b : null };
@@ -208,6 +208,8 @@ export function normalizarEscena(d) {
   const tipoDe = Object.fromEntries(e.objetos.map(o => [o.id, o.tipo]));
   e.objetos = e.objetos.filter(o => !CONECTORES.includes(o.tipo) || (tipoDe[o.a] === 'particula' && (o.b == null || (tipoDe[o.b] === 'particula' && o.b !== o.a))));
   for (const o of e.objetos) if (o.tipo === 'particula' && o.sobre && tipoDe[o.sobre] !== 'superficie') o.sobre = null;
+  // Una superficie va sobre una partícula que existe (no sobre otra cosa)
+  for (const o of e.objetos) if (o.tipo === 'superficie' && o.cuerpo && tipoDe[o.cuerpo] !== 'particula') o.cuerpo = null;
   return e;
 }
 
@@ -305,11 +307,17 @@ export function aMotor(esc) {
     g: [esc.g * cosd(esc.gAng), esc.g * sind(esc.gAng)], b: esc.b, cAire: esc.cAire, eParticulas: esc.eParticulas, duracion: esc.duracion,
     particulas: particulas.map((p, i) => ({
       id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0,
-      ...(p.F > 0 ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)] } : {}),
+      ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)] } : {}),
+      ...(p.cinematica ? { cinematica: true } : {}),
     })),
-    superficies: superficies.map(s => (s.forma === 'arco'
-      ? { id: s.id, tipo: 'arco', c: [...s.c], r: s.r, cara: s.cara, e: s.e, mu: s.mu, muS: s.muS ?? s.mu, ...(s.a1 - s.a0 >= 360 - 1e-9 ? {} : { a0: s.a0 * DEG, a1: s.a1 * DEG }) }
-      : { id: s.id, tipo: 'segmento', a: [...s.a], b: [...s.b], e: s.e, mu: s.mu, muS: s.muS ?? s.mu })),
+    // Una superficie llevada por un cuerpo se da relativa a su posición inicial
+    superficies: superficies.map(s => {
+      const j = s.cuerpo != null ? indice[s.cuerpo] : undefined, o0 = j != null ? posiciones[j] : [0, 0];
+      const rel = q => [q[0] - o0[0], q[1] - o0[1]], sobre = j != null ? { sobre: s.cuerpo } : {};
+      return s.forma === 'arco'
+        ? { id: s.id, tipo: 'arco', c: rel(s.c), r: s.r, cara: s.cara, e: s.e, mu: s.mu, muS: s.muS ?? s.mu, ...(s.a1 - s.a0 >= 360 - 1e-9 ? {} : { a0: s.a0 * DEG, a1: s.a1 * DEG }), ...sobre }
+        : { id: s.id, tipo: 'segmento', a: rel(s.a), b: rel(s.b), e: s.e, mu: s.mu, muS: s.muS ?? s.mu, ...sobre };
+    }),
     conectores,
   };
   return { motor, avisos, particulas, superficies, clavos, conectores: conObjs, indice, posiciones };
@@ -668,6 +676,24 @@ export const ESCENARIOS = [
     }),
   },
   {
+    id: 'mext-2006-1-1', tipo: 'mext', anio: 2006, ref: '2006 · 1-(1)', titulo: 'Subir con la mano un peso colgado',
+    nota: ['El peso cuelga en reposo del resorte, estirado mg/k. La mano lo sube despacio, a velocidad constante, hasta el largo natural.', 'La mano es un cuerpo de movimiento impuesto: su trabajo es la fila «Trabajo del movimiento impuesto» del panel de energía.', 'Al final vale m²g²/(2k): la potencial gravitatoria sube mg·(mg/k) y la elástica baja la mitad de eso.'],
+    // m = 1, k = 50: estiramiento 0.196 m; a 5 cm/s tarda 3.92 s; W = 9.8²/100 ≈ 0.960 J
+    crear: () => {
+      const m = 1, k = 50, L0 = 0.5, y0 = 1 - L0 - m * 9.8 / k, v = 0.05;
+      return {
+        duracion: (m * 9.8 / k) / v,
+        objetos: [
+          SEG('s1', 'suelo', 'Techo', [0.4, 1], [-0.4, 1]),
+          { ...P_('p2', 'Mano', 1, 0, y0, { v, ang: 90 }), cinematica: true },
+          { ...SEG('s2', 'segmento', 'Palma', [-0.12, y0], [0.12, y0], { e: 0 }), cuerpo: 'p2' },
+          P_('p1', 'Peso', m, 0, y0, { sobre: 's2', v, ang: 90 }),
+          RESORTE('c1', 'Resorte', 'p1', [0, 1], k, L0),
+        ],
+      };
+    },
+  },
+  {
     id: 'mext-2007-1-1', tipo: 'mext', anio: 2007, ref: '2007 · 1-(1)', titulo: 'Bola incrustada en un bloque con resorte',
     nota: ['Vista desde arriba: la mesa sin fricción es el plano del dibujo (g = 0).', 'Bola de 0.1 kg a 20 m/s; bloque de 1.9 kg; k = 20 N/m (el examen es simbólico).'],
     // Pegados salen con V = mν/(M + m): compresión máxima mν/√(k(M + m)). La escena
@@ -875,6 +901,20 @@ export const ESCENARIOS = [
         ],
       };
     },
+  },
+  {
+    id: 'mext-2016-p3', tipo: 'mext', anio: 2016, ref: '2016 · P3', titulo: 'Objeto sobre un bloque que se lanza',
+    nota: ['El bloque P se lanza con v0 sobre el suelo liso; Q va encima, con fricción μ, y empieza quieto.', 'Q acelera con μg y P frena con (m/M)μg hasta igualar velocidades en T = Mv0/((M + m)μg).', 'Mira la tabla de eventos: el instante en que Q se pega a P es T, y la energía disipada por rozamiento es μmg por lo que Q se desliza sobre P.'],
+    // M = 2, m = 1, v0 = 3, μ = 0.4: T = 6/(3·3.92) ≈ 0.510 s; Q se desliza Mv0²/(2(M + m)μg) ≈ 0.765 m sobre P
+    crear: () => ({
+      duracion: 1.2,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo liso', [-1.5, 0], [4, 0], { e: 0 }),
+        P_('p1', 'P', 2, 0, 0.1, { radio: 0.1, sobre: 's1', v: 3, ang: 0 }),
+        { ...SEG('s2', 'segmento', 'Cara de P', [-1, 0.2], [0.6, 0.2], { e: 0, mu: 0.4 }), cuerpo: 'p1' },
+        P_('p2', 'Q', 1, 0, 0.2, { sobre: 's2' }),
+      ],
+    }),
   },
   {
     id: 'mext-2017-1-3', tipo: 'mext', anio: 2017, ref: '2017 · 1-(3)', titulo: 'Velocidad de un bloque unido a un resorte',
@@ -1164,6 +1204,13 @@ function iniciar() {
   // -------------------------------------------------------------------------
   // Dibujo del lienzo
   // -------------------------------------------------------------------------
+  /** Cuánto se ha trasladado el cuerpo que lleva la superficie o en el estado est. */
+  function desplazamientoSuperficie(o, est) {
+    const j = o.cuerpo != null ? M.indice[o.cuerpo] : undefined;
+    if (j == null || !est || !est[j]) return [0, 0];
+    const p0 = M.posiciones[j];
+    return [est[j].x - p0[0], est[j].y - p0[1]];
+  }
   function dibujar() {
     if (!encuadreHecho) encuadrar();
     const v = tz.vista, s = estadoEn(t), pd = posDibujo(s), tr = SIM && t > 0 ? tramoEn(SIM, t) : null;
@@ -1174,12 +1221,13 @@ function iniciar() {
     const tapado = X0 + 8 + 40 > capasR.left - lz.left - 4 && X0 + 8 < capasR.right - lz.left;
     if (X0 > 0 && X0 < tz.w - 40) tz.compuesto([{ t: 'y', f: 'sim', tam: 14 }, { t: ' (m)', f: 'ui', tam: 11 }], X0 + 8, tapado ? capasR.bottom - lz.top + 16 : 18, { color: 'texto-3' });
 
-    // 3. Geometría fija
+    // 3. Geometría (las superficies llevadas por un cuerpo se trasladan con él)
     for (const o of esc.objetos) {
       if (o.tipo !== 'superficie') continue;
-      const grueso = hover === o.id;
-      if (o.forma === 'arco') tz.mecArco(o.c, o.r, o.a0 * DEG, o.a1 * DEG, o.cara, { grueso });
-      else { tz.superficie([o.a, o.b]); if (grueso) tz.linea([o.a, o.b], { color: 'tinta', grosor: G.materia + 0.5 }); }
+      const grueso = hover === o.id, d = desplazamientoSuperficie(o, s);
+      const T = q => [q[0] + d[0], q[1] + d[1]];
+      if (o.forma === 'arco') tz.mecArco(T(o.c), o.r, o.a0 * DEG, o.a1 * DEG, o.cara, { grueso });
+      else { tz.superficie([T(o.a), T(o.b)]); if (grueso) tz.linea([T(o.a), T(o.b)], { color: 'tinta', grosor: G.materia + 0.5 }); }
     }
 
     // 5. Construcción: cotas, trayectoria prevista, trazas y estroboscopio
@@ -1562,14 +1610,20 @@ function iniciar() {
       c += fila('Velocidad', doble(campo(`${o.id}.v`, o.v, 'velocidad', 'v'), campo(`${o.id}.ang`, o.ang, 'angulo', 'α', 'Ángulo desde el eje x|Direction')));
       c += fila('Radio', campo(`${o.id}.radio`, o.radio, 'longitud', 'r', 'Con radio, choca con otros discos y apoya su borde en las superficies; 0 es una partícula puntual|Radius'));
       c += fila('Fuerza aplicada', doble(campo(`${o.id}.F`, o.F || 0, 'fuerza', 'F', 'Fuerza constante sobre la partícula durante toda la simulación; 0 la quita|Applied force'), campo(`${o.id}.angF`, o.angF || 0, 'angulo', 'β', 'Dirección de la fuerza desde el eje x|Direction')));
+      c += fila('Movimiento', segmentado(`${o.id}.cinematica`, [['no', 'Libre'], ['si', 'Impuesto']], o.cinematica ? 'si' : 'no'));
+      if (o.cinematica) c += ayudaFila('Se mueve con su velocidad inicial pase lo que pase, como una mano, una cinta o un ascensor. Su masa no cuenta; el trabajo que hace aparece en la energía.');
       if (o.sobre) c += fila('Apoyo', `<div class="apoyo"><span>Sobre ${conArticulo(nombreDe(o.sobre))}</span><button class="btn btn-compacto" data-accion-insp="soltar" data-ayuda="Deja de seguir a la superficie|Detach">Soltar</button></div>`);
       h += grupo('Condiciones iniciales', c);
       h += grupoMostrar();
       h += grupo('Lecturas', '<div class="lecturas" id="lecturas"></div>', 'lect-titulo');
     } else if (o.tipo === 'superficie') {
       const nombreForma = { suelo: 'Suelo o techo', pared: 'Pared', plano: 'Plano inclinado', segmento: 'Segmento', arco: 'Arco' }[o.forma];
-      h += cab(ICONOS[o.forma], o.nombre, `Superficie fija · ${nombreForma.toLowerCase()}`);
+      h += cab(ICONOS[o.forma], o.nombre, `${o.cuerpo ? `Sobre ${conArticulo(nombreDe(o.cuerpo))}` : 'Superficie fija'} · ${nombreForma.toLowerCase()}`);
       let g = '';
+      // Una superficie puede ir sobre una partícula y moverse con ella: una tabla
+      // sobre la que desliza un bloque, la palma de una mano, el piso de un ascensor
+      const portadores = esc.objetos.filter(x => x.tipo === 'particula');
+      if (portadores.length) g += fila('Va sobre', segmentado(`${o.id}.cuerpo`, [['', 'Nada'], ...portadores.slice(0, 4).map(x => [x.id, x.nombre])], o.cuerpo || ''));
       if (o.forma === 'suelo') {
         const izq = Math.min(o.a[0], o.b[0]), der = Math.max(o.a[0], o.b[0]);
         g += fila('Altura', campo(`${o.id}.y`, o.a[1], 'longitud', 'y')) + fila('Desde', doble(campo(`${o.id}.x0`, izq, 'longitud', 'x'), campo(`${o.id}.x1`, der, 'longitud', 'x')));
@@ -1809,6 +1863,8 @@ function iniciar() {
       if (prop === 'sentido') { const pl = datosPlano(o); rehacerPlano(o, pl.alto, pl.th, pl.L, valor); }
       if (prop === 'cara') o.cara = valor;
       if (prop === 'soloTira') o.soloTira = valor === 'si';
+      if (prop === 'cinematica') o.cinematica = valor === 'si';
+      if (prop === 'cuerpo') o.cuerpo = valor || null;
       seguirSuperficie(o); registrar(); recalcular(); construirInspector(); return;
     }
     const a = ev.target.closest('[data-accion-insp]'); if (!a) return;
@@ -1987,6 +2043,7 @@ function iniciar() {
   const sinRuido = (x, escala) => (Math.abs(x) < 1e-9 * Math.max(escala, 1e-300) ? 0 : x);
   const escalaEnergia = () => (SIM ? Math.max(1e-12, ...energias().flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF)])) : 1);
   const hayFuerzaAplicada = () => !!(M && M.motor.particulas.some(p => p.F));
+  const hayImpuesto = () => !!(M && M.motor.particulas.some(p => p.cinematica));
   // ¿Hay algo que disipe de forma continua? (fricción, arrastre, amortiguadores)
   const hayRozamiento = () => !!(M && ((M.motor.b || 0) > 0 || (M.motor.cAire || 0) > 0
     || (M.motor.superficies || []).some(s => s.mu > 0) || (M.motor.conectores || []).some(c => c.tipo === 'resorte' && c.c > 0)));
@@ -1994,7 +2051,7 @@ function iniciar() {
     if (cacheE && cacheE.sim === SIM) return cacheE.datos;
     // La disipada la lleva el motor: la de los choques (Qi) y la continua (Qc);
     // su suma es E0 − E a la tolerancia del integrador
-    const datos = MUESTRAS.map(m => { const e = energiaMecanica(SIM, m.t); return { t: m.t, K: e.K, Ug: e.Ug, Ue: e.Ue, UF: e.UF, E: e.E, Q: e.Qc + e.Qi, Qc: e.Qc, Qi: e.Qi }; });
+    const datos = MUESTRAS.map(m => { const e = energiaMecanica(SIM, m.t); return { t: m.t, K: e.K, Ug: e.Ug, Ue: e.Ue, UF: e.UF, E: e.E, Q: e.Qc + e.Qi, Qc: e.Qc, Qi: e.Qi, W: e.W }; });
     cacheE = { sim: SIM, datos };
     return datos;
   }
@@ -2006,7 +2063,8 @@ function iniciar() {
     if (hayFuerzaAplicada()) s.push({ tramos: cortar(x => [x.t, x.UF]), familia: 'interaccion' });
     document.querySelectorAll('.ley-uf').forEach(el => { el.hidden = !hayFuerzaAplicada(); });
     if (hayQ) s.push({ tramos: cortar(x => [x.t, x.Q]), familia: 'termico', patron: 'discontinuo' });
-    s.push({ tramos: cortar(x => [x.t, x.E + x.Q]), familia: 'tinta', patron: 'punteado' });
+    // Total: E + disipada − trabajo del movimiento impuesto, constante e igual a E0
+    s.push({ tramos: cortar(x => [x.t, x.E + x.Q - x.W]), familia: 'tinta', patron: 'punteado' });
     return s;
   }
   function energiaPanel() {
@@ -2018,9 +2076,11 @@ function iniciar() {
       ? [['Disipada en choques', 'f-termico', e.Qi], ['Disipada por rozamiento', 'f-termico', e.Qc]]
       : [[hayRozamiento() ? 'Disipada por rozamiento' : 'Disipada', 'f-termico', Q]];
     const filas = [['Cinética', 'f-movimiento', e.K], ['Potencial gravitatoria', 'f-cambio', e.Ug], ['Elástica', 'f-electrico', e.Ue],
-      ...(hayFuerzaAplicada() ? [['Potencial de la fuerza aplicada', 'f-interaccion', e.UF]] : []), ...disipadas, ['Total inicial', 'tinta', e0.E]];
-    const d = energias(), maxAbs = Math.max(1e-12, ...d.flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF), Math.abs(x.Q), Math.abs(x.E + x.Q)]));
-    const conSigno = d.some(x => x.Ug < -1e-12 || x.UF < -1e-12 || x.E + x.Q < -1e-12);
+      ...(hayFuerzaAplicada() ? [['Potencial de la fuerza aplicada', 'f-interaccion', e.UF]] : []), ...disipadas,
+      // Con un cuerpo de movimiento impuesto, E + disipada = E0 + W
+      ...(hayImpuesto() ? [['Trabajo del movimiento impuesto', 'f-interaccion', e.W]] : []), ['Total inicial', 'tinta', e0.E]];
+    const d = energias(), maxAbs = Math.max(1e-12, ...d.flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF), Math.abs(x.Q), Math.abs(x.W), Math.abs(x.E + x.Q - x.W)]));
+    const conSigno = d.some(x => x.Ug < -1e-12 || x.UF < -1e-12 || x.E + x.Q - x.W < -1e-12);
     $('#barras').className = 'barras' + (conSigno ? ' con-signo' : '');
     $('#barras').innerHTML = '<div class="barras-tit">Energía en t = ' + fmt(t, 4) + ' s</div>' + filas.map(([n, c, val]) => {
       const w = Math.min(100, Math.abs(val) / maxAbs * (conSigno ? 50 : 100));
@@ -2029,7 +2089,7 @@ function iniciar() {
     }).join('') + `<div class="barras-pie">${conSigno ? 'Potencial gravitatoria con cero en y = 0' : 'Cero de la potencial gravitatoria en y = 0'}</div>`;
     const se = seriesEnergia();
     grafica($('#g4'), { x: { min: 0, max: tf }, y: rango(se), series: se, cursor: t, eventos: eventosGraf() });
-    $('#l4').textContent = cantidad(sinRuido(e.E + Q, maxAbs), 'J');
+    $('#l4').textContent = cantidad(sinRuido(e.E + Q - e.W, maxAbs), 'J');
   }
 
   function tablas() {

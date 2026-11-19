@@ -341,3 +341,31 @@ describe('escenas MEXT: cuerda elástica', () => {
     cerca(energiaMecanica(sim, 1).E, energiaMecanica(sim, 0).E, 1e-8);
   });
 });
+
+describe('escenas MEXT: superficies que se mueven y movimiento impuesto', () => {
+  it('2016 · P3: Q se pega a P en T = Mv0/((M + m)μg), con v común Mv0/(M + m) y deslizamiento Mv0²/(2(M + m)μg)', () => {
+    const { M, sim } = simular('mext-2016-p3');
+    const Mp = 2, m = 1, v0 = 3, mu = 0.4, T = Mp * v0 / ((Mp + m) * mu * g);
+    const pega = sim.eventos.find(e => e.clave.startsWith('vt0:'));
+    cerca(pega.t, T, 1e-8);
+    expect(describirEvento(pega, M)).toMatch(/Q/);
+    // Velocidad de P (opción d): v0 − (m/M)μg·t; la de Q: μg·t
+    for (const t of [0.1, 0.3]) { cerca(est(sim, t, 0).vx, v0 - m / Mp * mu * g * t, 1e-9); cerca(est(sim, t, 1).vx, mu * g * t, 1e-9); }
+    const P = est(sim, 1.2, 0), Q = est(sim, 1.2, 1);
+    cerca(P.vx, Mp * v0 / (Mp + m), 1e-9); cerca(Q.vx, P.vx, 1e-9);
+    // Lo que Q se desliza sobre P (opción f) y el calor μmg por esa distancia
+    const d = (est(sim, 0, 1).x - est(sim, 0, 0).x) - (est(sim, T, 1).x - est(sim, T, 0).x);
+    cerca(d, Mp * v0 * v0 / (2 * (Mp + m) * mu * g), 1e-8);
+    cerca(energiaMecanica(sim, 1.2).Qc, mu * m * g * d, 1e-8);
+  });
+
+  it('2006 · 1-(1): la mano que sube el peso despacio hasta el largo natural hace W = m²g²/(2k)', () => {
+    const { sim } = simular('mext-2006-1-1');
+    const m = 1, k = 50, D = (m * g / k) / 0.05;
+    expect(sim.eventos).toEqual([]);
+    cerca(est(sim, D, 1).y, 0.5, 1e-9);          // el peso llega al largo natural del resorte
+    const e = energiaMecanica(sim, D), e0 = energiaMecanica(sim, 0);
+    cerca(e.W, m * m * g * g / (2 * k), 1e-9);
+    cerca(e.E + e.Qc + e.Qi - e.W, e0.E, 1e-9);
+  });
+});
