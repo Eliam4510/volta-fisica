@@ -7,6 +7,46 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.6.0] - 2026-11-19
+
+Módulo de Óptica con tres espacios de trabajo y 14 problemas MEXT.
+
+### Añadido
+
+- Módulo Óptica con tres espacios de trabajo:
+  - «Óptica geométrica»: trazado exacto de rayos contra segmentos y arcos
+    en medios de forma libre (lámina, prisma, círculo, semicírculo,
+    polígono, lente gruesa, recipiente con líquido), con índice fijo o de
+    Cauchy. Snell, reflexión total, reparto de Fresnel (R + T = 1),
+    espejos planos y esféricos, lente ideal, divisor de haz, pantalla y
+    ojo. La luz blanca se separa en la primera interfaz dispersiva. Las
+    imágenes salen de la fórmula y también del cruce de los rayos
+    trazados, con aumento y carácter real o virtual. 18 escenas, 8 MEXT.
+  - «Interferencia y difracción»: suma de fasores de Huygens con las
+    distancias exactas y la forma cerrada de Fraunhofer; rendija simple,
+    doble, N rendijas y red; medio entre rendijas y pantalla; franjas con
+    su color real, punto P con los caminos r₁ y r₂, regla y tabla de
+    máximos y mínimos. 9 escenas, 4 MEXT.
+  - «Películas e interferómetros»: reflectancia de Airy (el cambio de fase
+    de π sale de Fresnel), cuña, anillos de Newton y Michelson con espejo
+    móvil o lámina girada y contador de franjas. 9 escenas, 3 MEXT.
+- Color de cada longitud de onda con las funciones CIE 1931 llevadas a
+  sRGB y ajustadas en OKLab para mantener el contraste con el fondo.
+- 51 pruebas del motor de Óptica, incluidas las respuestas de 14
+  problemas MEXT.
+
+### Cambiado
+
+- Inicio muestra los conteos reales de espacios de trabajo y escenas MEXT
+  de cada módulo; los módulos en preparación ya no muestran cifras.
+- Abrir un archivo de Óptica desde un espacio distinto lleva a la pantalla
+  de su espacio en lugar de rechazarlo.
+
+### Corregido
+
+- Los atajos de teclado y la línea de tiempo ya no lanzan errores con
+  eventos que no vienen de un elemento.
+
 ## [0.5.1] - 2026-11-19
 
 ### Corregido
@@ -233,7 +273,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.1...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.3.0...v0.4.0

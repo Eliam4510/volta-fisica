@@ -53,7 +53,7 @@ Principios del proyecto:
 | Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC |
 | Magnetismo e inducción | Planeado | Fuerza de Lorentz, inducción electromagnética |
 | Ondas y sonido | Utilizable | Cuerdas y tubos (reflexión, uniones, modos, resonancia) y Doppler con audio; la cubeta 2D, en preparación |
-| Óptica | Planeado | Rayos, refracción, interferencia |
+| Óptica | Utilizable | Trazado de rayos (Snell, Fresnel, reflexión total, prismas con dispersión, lentes y espejos), interferencia y difracción por suma de Huygens, películas delgadas, anillos de Newton y Michelson |
 | Física moderna | Planeado | Efecto fotoeléctrico, núcleo |
 
 El plan completo, con dependencias y orden de implementación, está en
@@ -78,6 +78,14 @@ El plan completo, con dependencias y orden de implementación, está en
 | Ondas: medio 1D | Ondas: Doppler y acústica |
 |---|---|
 | ![Ondas](docs/diseno/capturas/f9_ondas.png) | ![Doppler](docs/diseno/capturas/f10_doppler.png) |
+
+| Óptica geométrica | Interferencia y difracción |
+|---|---|
+| ![Óptica geométrica](docs/diseno/capturas/f11_optica.png) | ![Interferencia](docs/diseno/capturas/f12_interferencia.png) |
+
+| Películas e interferómetros | |
+|---|---|
+| ![Michelson](docs/diseno/capturas/f13_peliculas.png) | |
 
 ## Instalación
 
