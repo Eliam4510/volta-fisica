@@ -5,16 +5,22 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.5.1 (publicada el 2026-11-19; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.6.0 (publicada el 2026-11-19; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
 - Circuitos (pantalla «Transitorios», 56 pruebas) integrado y enlazado.
 - Laboratorio de Mecánica integrado.
-- Agente en curso: Óptica (`motores/optica.js`, `pruebas/optica.test.js`,
-  `lienzo/dominios/optica.js`, `prototipos/optica*.html|js`). Al integrar:
-  añadirlo a MODULOS en `componentes/espacio.js`, a PANTALLAS y a la tarjeta
-  de Inicio (espacios por `e.espacio`), README, CHANGELOG.
+- Óptica integrado (geométrica, interferencia y difracción, películas e
+  interferómetros; 51 pruebas, 15 escenas MEXT). Falta: espejo parabólico,
+  polarización, polígono y capas en la paleta, Michelson con luz blanca.
+- Agente en curso: Magnetismo e inducción (`motores/magnetismo.js`,
+  `pruebas/magnetismo.test.js`, `lienzo/dominios/magnetismo.js`,
+  `prototipos/magnetismo*.html|js`; espacios `campos`, `particulas`,
+  `induccion`). Al integrar: MODULOS en `componentes/espacio.js`, PANTALLAS
+  y ESPACIOS en Inicio, conteos reales de la tarjeta, README, CHANGELOG.
+- Los conteos de las tarjetas de Inicio son a mano: actualizarlos al añadir
+  espacios o escenas MEXT.
 - Ondas y sonido integrado (Medio 1D y Doppler y acústica). Falta la cubeta 2D, el pistón móvil y la escena MEXT 2012 del ventilador.
 - Escenas MEXT del Laboratorio integradas: 24 escenas MEXT con prueba cada
   una. Sin representar: 2016 P3 (fricción entre dos cuerpos móviles),
@@ -59,7 +65,8 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Circuitos: motor nodal con transitorios (56 pruebas) y pantalla «Transitorios» con cinco escenarios.
 - [x] Ondas y sonido: motor (66 pruebas), «Medio 1D» y «Doppler y acústica».
 - [ ] Ondas: cubeta 2D (WebGL2), pistón que se mueve durante la simulación.
-- [ ] Óptica, Magnetismo e inducción, Física moderna.
+- [x] Óptica: motor (51 pruebas) y tres espacios.
+- [ ] Magnetismo e inducción (agente en curso), Física moderna.
 
 ## Autocrítica 1 (2026-11-19 01:05)
 
@@ -158,3 +165,4 @@ análisis de datos:
 - 2026-11-19 06:40 — Presupuesto de cálculo en Mecánica (pasos y reloj), experimento de conjunto activo descartado, campos muertos corregidos (cilindro, x de salida), GIF del Laboratorio en el README. Lanzado el agente de escenas MEXT del Laboratorio.
 - 2026-11-19 07:20 — 19 escenas MEXT nuevas en el Laboratorio (agente + 2010 1-F), cuerda elástica en el motor, extremos de segmento cerrados y silencio acumulado (errores encontrados por el agente). 439 pruebas.
 - 2026-11-19 07:50 — Ondas y sonido integrado. v0.5.0 publicada (439 pruebas).
+- 2026-11-19 04:55 — Óptica integrado (menús, Inicio con conteos reales, abrir escenas de otro espacio lleva a su pantalla). v0.6.0 publicada (499 pruebas). Lanzado el agente de Magnetismo e inducción.
