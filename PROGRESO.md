@@ -14,18 +14,21 @@ física > funciones faltantes > rendimiento > pulido.
 - Óptica integrado (geométrica, interferencia y difracción, películas e
   interferómetros; 51 pruebas, 15 escenas MEXT). Falta: espejo parabólico,
   polarización, polígono y capas en la paleta, Michelson con luz blanca.
-- Agentes en curso (2026-11-19 05:20), cada uno con sus archivos:
-  - Magnetismo e inducción (`motores/magnetismo.js`,
-    `pruebas/magnetismo.test.js`, `lienzo/dominios/magnetismo.js`,
-    `prototipos/magnetismo*.html|js`; espacios `campos`, `particulas`,
-    `induccion`).
-  - Termodinámica: escenas MEXT y espacios nuevos (`motores/gas.js` y
-    motores nuevos, `prototipos/termodinamica*.html|js`).
-  - Electrostática: escenas MEXT y quizá «Conductores y dieléctricos»
-    (`motores/electrostatica.js`, `prototipos/electrostatica*.html|js`).
-  Al integrar cada uno: revisar suite, tipos y capturas; MODULOS en
-  `componentes/espacio.js`; PANTALLAS y ESPACIOS en Inicio; conteos reales
-  de la tarjeta; README; CHANGELOG.
+- Magnetismo e inducción integrado (3 espacios, 47 pruebas, 13 MEXT).
+  Falta: editar vértices de regiones libres, Hall en tiempo físico, vista
+  3D de espiras y solenoides, bobina en modo motor.
+- Agentes en curso (relanzados en esta sesión; sus archivos siguen sin commit):
+  - Termodinámica: motores ciclos.js, cinetica.js, recipientes.js, calor.js,
+    pruebas nuevas, termodinamica-comun.js, termodinamica-escenas.js y
+    termodinamica-ciclos.html.
+  - Electrostática: electrostatica.js, electrostatica-conductores.js,
+    pruebas de distribuciones y conductores, pantallas electrostatica*.
+  - Física moderna: moderna.js, moderna.test.js, moderna*.html|js.
+  Para integrar cada uno: suite, tipos y capturas; luego
+  `python <scratchpad>/integrar_modulo.py <id> '<Nombre>' <icono> <mini>
+  <nMEXT> '<desc|->' 'pagina|Título|icono' ...` (o a mano: MODULOS en
+  espacio.js; tarjeta, PANTALLAS, ESPACIOS y MINI en Inicio); README;
+  CHANGELOG.
 - Los conteos de las tarjetas de Inicio son a mano: actualizarlos al añadir
   espacios o escenas MEXT.
 - Ondas y sonido integrado (Medio 1D y Doppler y acústica). Falta la cubeta 2D, el pistón móvil y la escena MEXT 2012 del ventilador.
