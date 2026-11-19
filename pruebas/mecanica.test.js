@@ -411,3 +411,25 @@ describe('extremos de las superficies', () => {
     cerca(estadoMecanica(sim, 3)[0].y, 2 - g * 9 / 2, 1e-9);
   });
 });
+
+describe('cuerda elástica (resorte que solo tira)', () => {
+  it('MEXT 2010 1-F: soltada desde el suelo, sube hasta 45 cm y la energía se conserva', () => {
+    // k = mg/0.10; oscila hasta el largo natural (30 cm sobre el suelo) con v² = k(0.2² − 0.1²)/m
+    // y luego vuela v²/(2g) = 15 cm más: 45 cm
+    const m = 0.5, k = m * g / 0.1, L0 = 0.5, yEq = -(L0 + 0.1), ySuelo = yEq - 0.2;
+    const sim = simularMecanica({ duracion: 1.2, particulas: [{ id: 'P', m, p: [0, ySuelo], v: [0, 0] }], conectores: [{ id: 'goma', tipo: 'resorte', a: 'P', ancla: [0, 0], k, L0, soloTira: true }] });
+    const floja = ev(sim, 'queda floja');
+    expect(floja).toBeTruthy();
+    cerca(floja.y[1], -L0, 1e-9);
+    const v = Math.hypot(floja.y[2], floja.y[3]);
+    cerca(v * v, k * (0.04 - 0.01) / m, 1e-8);
+    const tMax = floja.t + v / g;
+    cerca(estadoMecanica(sim, tMax)[0].y - ySuelo, 0.45, 1e-9);
+    for (const t of [0.1, 0.5, 0.9, 1.2]) cerca(energiaMecanica(sim, t).E, energiaMecanica(sim, 0).E, 1e-8);
+  });
+  it('floja no empuja: comprimida no ejerce fuerza ni guarda energía', () => {
+    const sim = simularMecanica({ g: [0, 0], duracion: 1, particulas: [{ id: 'P', m: 1, p: [0.3, 0], v: [0, 0] }], conectores: [{ id: 'goma', tipo: 'resorte', a: 'P', ancla: [0, 0], k: 50, L0: 1, soloTira: true }] });
+    cerca(estadoMecanica(sim, 1)[0].x, 0.3, 1e-12);
+    expect(energiaMecanica(sim, 1).Ue).toBe(0);
+  });
+});

@@ -328,3 +328,16 @@ describe('escenas MEXT: oscilaciones (M7)', () => {
     cerca(energiaMecanica(sim, 1.5).E, energiaMecanica(sim, 0).E, 1e-6);
   });
 });
+
+describe('escenas MEXT: cuerda elástica', () => {
+  it('2010 · 1-F: la pesa sube hasta 45 cm sobre el suelo; la goma queda floja a 30 cm', () => {
+    // k = mg/0.10; hasta el largo natural v² = k(0.2² − 0.1²)/m; después vuela v²/(2g) = 15 cm
+    const { sim, M } = simular('mext-2010-1f');
+    expect(sim.incompleta).toBeNull();
+    const floja = evento(sim, M, 'queda floja');
+    cerca(est(sim, floja.t).y, 0.3, 1e-9);
+    const v = rapidez(est(sim, floja.t));
+    cerca(est(sim, floja.t + v / g).y, 0.45, 1e-8);
+    cerca(energiaMecanica(sim, 1).E, energiaMecanica(sim, 0).E, 1e-8);
+  });
+});

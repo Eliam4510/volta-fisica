@@ -192,7 +192,7 @@ export function normalizarEscena(d) {
       else if (o.tipo === 'union') { if (!n.b) continue; }
       else {
         if (!n.b) n.ancla = num2(o.ancla, [0, 0]);
-        if (o.tipo === 'resorte') { n.k = numero(o.k, 50, 1e-6, 1e9); n.L0 = numero(o.L0, 1, 0, 1e5); n.amort = numero(o.amort, 0, 0, 1e6); }
+        if (o.tipo === 'resorte') { n.k = numero(o.k, 50, 1e-6, 1e9); n.L0 = numero(o.L0, 1, 0, 1e5); n.amort = numero(o.amort, 0, 0, 1e6); n.soloTira = o.soloTira === true; }
         else n.L = numero(o.L, 1, 1e-6, 1e5);
       }
     } else if (o.tipo === 'clavo') {
@@ -285,7 +285,7 @@ export function aMotor(esc) {
       m = { id: c.id, tipo: 'cuerda', a: c.a, b: c.b, L: (A.radio || 0) + (B.radio || 0) + HOLGURA_UNION };
     } else {
       const base = { id: c.id, tipo: c.tipo, a: c.a, ...(c.b != null ? { b: c.b } : { ancla: [...c.ancla] }) }, D = largo(resta(pa, pb));
-      if (c.tipo === 'resorte') m = { ...base, k: c.k, L0: c.L0, c: c.amort || 0 };
+      if (c.tipo === 'resorte') m = { ...base, k: c.k, L0: c.L0, c: c.amort || 0, ...(c.soloTira ? { soloTira: true } : {}) };
       // La varilla es rígida: su largo es la distancia entre sus extremos
       else if (c.tipo === 'varilla') m = { ...base, L: D };
       else {
@@ -438,6 +438,7 @@ export function fuerzasEn(sim, M, t) {
     const ia = idx[c.a], ib = c.b != null ? idx[c.b] : -1;
     const pa = pos(ia), pb = ib >= 0 ? pos(ib) : c.ancla, va = vel(ia), vb = ib >= 0 ? vel(ib) : [0, 0];
     const d = resta(pa, pb), D = largo(d) || 1e-300, u = [d[0] / D, d[1] / D];
+    if (c.soloTira && D <= c.L0) { tensiones[c.id] = 0; continue; }   // cuerda elástica floja
     const f = -c.k * (D - c.L0) - (c.c || 0) * punto(u, resta(va, vb));
     F[2 * ia] += f * u[0]; F[2 * ia + 1] += f * u[1];
     lista[ia].push({ tipo: 'elastica', F: [f * u[0], f * u[1]], valor: Math.abs(f), id: c.id });
@@ -754,6 +755,22 @@ export const ESCENARIOS = [
         );
       });
       return { duracion: 1.4, objetos };
+    },
+  },
+  {
+    id: 'mext-2010-1f', tipo: 'mext', anio: 2010, ref: '2010 · 1-F', titulo: 'Pesa colgada de una cuerda de goma',
+    nota: ['La goma se estira 10 cm con la pesa de 500 g: k = mg/0.10 m. Su largo natural (50 cm) no lo da el examen.', 'Se suelta desde el suelo, 20 cm por debajo del equilibrio: cuando la goma queda floja, la pesa sigue subiendo sola.'],
+    // Hasta el largo natural (30 cm sobre el suelo) v² = k(0.2² − 0.1²)/m; luego sube v²/(2g) = 15 cm: 45 cm
+    crear: () => {
+      const m = 0.5, k = m * 9.8 / 0.1, L0 = 0.5;
+      return {
+        duracion: 1.2,
+        objetos: [
+          SEG('s1', 'suelo', 'Suelo', [-0.6, 0], [0.6, 0], { e: 0 }), SEG('s2', 'suelo', 'Techo', [0.6, 0.8], [-0.6, 0.8]),
+          P_('p1', 'Pesa', m, 0, 0, { sobre: 's1' }),
+          { ...RESORTE('c1', 'Goma', 'p1', [0, 0.8], k, L0), soloTira: true },
+        ],
+      };
     },
   },
   {
@@ -1251,7 +1268,11 @@ function iniciar() {
     for (const c of M.conectores) {
       const ia = M.indice[c.a], ib = c.b != null ? M.indice[c.b] : -1;
       const pa = pd[ia], pb = ib >= 0 ? pd[ib] : c.ancla, grueso = hover === c.id;
-      if (c.tipo === 'resorte') tz.resorte(pb, pa);
+      if (c.tipo === 'resorte' && c.soloTira) {
+        // Cuerda elástica: tensa en recta; floja, colgando con su largo natural
+        if (largo(resta(pa, pb)) > c.L0) tz.mecCuerda([pb, pa], { grueso });
+        else tz.mecCuerda([pb, pa], { longitud: c.L0, abajo: abajo(), grueso });
+      } else if (c.tipo === 'resorte') tz.resorte(pb, pa);
       else if (c.tipo === 'varilla') tz.mecVarilla(pb, pa, { grueso });
       else if (c.tipo === 'cuerda') {
         const est = estadoCuerda(c, tr, [s[ia].x, s[ia].y], ib >= 0 ? [s[ib].x, s[ib].y] : c.ancla);
@@ -1579,7 +1600,7 @@ function iniciar() {
       h += cab(ICONOS[o.tipo], o.nombre, sub);
       let c = fila('Extremos', `<span class="texto-dato">${extremos}</span>`);
       if (o.tipo === 'cuerda') c += fila('Longitud', campo(`${o.id}.L`, o.L, 'longitud', 'L')) + (o.b == null ? '' : '');
-      if (o.tipo === 'resorte') c += fila('Rigidez', campo(`${o.id}.k`, o.k, 'rigidez', 'k')) + fila('Largo natural', campo(`${o.id}.L0`, o.L0, 'longitud', 'L<sub>0</sub>')) + fila('Amortiguam.', campo(`${o.id}.amort`, o.amort, 'amort', 'c', 'Amortiguamiento: F = −c·(velocidad de alargamiento)|Damping'));
+      if (o.tipo === 'resorte') c += fila('Tipo', segmentado(`${o.id}.soloTira`, [['no', 'Resorte'], ['si', 'Cuerda elástica']], o.soloTira ? 'si' : 'no')) + fila('Rigidez', campo(`${o.id}.k`, o.k, 'rigidez', 'k')) + fila('Largo natural', campo(`${o.id}.L0`, o.L0, 'longitud', 'L<sub>0</sub>')) + fila('Amortiguam.', campo(`${o.id}.amort`, o.amort, 'amort', 'c', 'Amortiguamiento: F = −c·(velocidad de alargamiento)|Damping'));
       if (o.tipo === 'varilla') c += fila('Longitud', campo(`${o.id}.L`, largoVarilla(o), 'longitud', 'L'));
       if (o.tipo === 'polea') c += fila('Eje', doble(campo(`${o.id}.px`, o.P[0], 'longitud', 'x'), campo(`${o.id}.py`, o.P[1], 'longitud', 'y'))) + fila('Cuerda', campo(`${o.id}.L`, o.L, 'longitud', 'L')) + fila('Rueda', campo(`${o.id}.r`, o.r, 'longitud', 'r', 'Radio de la rueda en el dibujo; la polea es ideal|Wheel radius'));
       if (o.ancla) c += fila('Punto fijo', doble(campo(`${o.id}.axx`, o.ancla[0], 'longitud', 'x'), campo(`${o.id}.axy`, o.ancla[1], 'longitud', 'y')));
@@ -1783,6 +1804,7 @@ function iniciar() {
       if (prop === 'lado' && o.forma === 'pared') { const derAhora = o.a[1] <= o.b[1]; if ((valor === 'der') !== derAhora) [o.a, o.b] = [o.b, o.a]; }
       if (prop === 'sentido') { const pl = datosPlano(o); rehacerPlano(o, pl.alto, pl.th, pl.L, valor); }
       if (prop === 'cara') o.cara = valor;
+      if (prop === 'soloTira') o.soloTira = valor === 'si';
       seguirSuperficie(o); registrar(); recalcular(); construirInspector(); return;
     }
     const a = ev.target.closest('[data-accion-insp]'); if (!a) return;
@@ -1830,7 +1852,7 @@ function iniciar() {
         h += filaL(o.tipo === 'resorte' ? 'F' : 'T', o.tipo === 'resorte' ? 'e' : '', o.tipo === 'resorte' ? Math.abs(T) : T, 'N');
         const D = o.tipo === 'polea' ? largo(resta(pa, o.P)) + largo(resta([s[M.indice[o.b]].x, s[M.indice[o.b]].y], o.P)) : largo(resta(pa, o.b != null ? [s[M.indice[o.b]].x, s[M.indice[o.b]].y] : o.ancla));
         h += filaL(o.tipo === 'polea' ? 'ℓ' : 'd', '', D, 'm');
-        if (o.tipo === 'resorte') h += filaL('Δ', '', D - o.L0, 'm') + filaL('U', 'e', 0.5 * o.k * (D - o.L0) ** 2, 'J');
+        if (o.tipo === 'resorte') h += filaL('Δ', '', D - o.L0, 'm') + filaL('U', 'e', o.soloTira && D <= o.L0 ? 0 : 0.5 * o.k * (D - o.L0) ** 2, 'J');
       }
     } else if (o.tipo === 'superficie' && SIM) {
       const tr = tramoEn(SIM, Math.min(t, tFinal())), js = M.superficies.indexOf(o);

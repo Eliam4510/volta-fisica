@@ -60,6 +60,7 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {number} [k]              Resorte: constante (N/m)
  * @property {number} [L0]             Resorte: longitud natural (m)
  * @property {number} [c]              Resorte: amortiguamiento (N·s/m)
+ * @property {boolean} [soloTira]      Resorte: cuerda elástica (de goma), que no empuja cuando está más corta que L0
  * @property {number} [L]              Cuerda o varilla: longitud; polea: longitud total
  * @property {[number, number]} [polea] Polea: punto fijo sobre el que pasa la cuerda (a y b son los extremos)
  * @property {Array<[number, number]>} [clavos] Cuerda: clavos donde puede engancharse
@@ -92,6 +93,11 @@ const UMBRAL_LAMBDA = 1e-12;
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
 const norm = a => Math.hypot(a[0], a[1]);
+/** Largo actual de un resorte en el estado y. */
+function largoResorte(c, y) {
+  const pa = [y[4 * c.ia], y[4 * c.ia + 1]], pb = c.ib < 0 ? c.ancla : [y[4 * c.ib], y[4 * c.ib + 1]];
+  return norm(sub(pa, pb));
+}
 /** Claves de las restricciones unilaterales activas de un modo. */
 const activas = modo => new Set([
   ...Object.keys(modo.contactos).map(k => 'contacto:' + k),
@@ -302,6 +308,7 @@ function fuerzas(S, modo, y, lambdasPrevias) {
     const pa = [y[4 * ia], y[4 * ia + 1]], pb = ib < 0 ? c.ancla : [y[4 * ib], y[4 * ib + 1]];
     const va = [y[4 * ia + 2], y[4 * ia + 3]], vb = ib < 0 ? [0, 0] : [y[4 * ib + 2], y[4 * ib + 3]];
     const d = sub(pa, pb), D = norm(d), u = [d[0] / D, d[1] / D];
+    if (c.soloTira && D <= c.L0) continue;      // cuerda elástica floja: no empuja
     const f = -c.k * (D - c.L0) - (c.c || 0) * dot(u, sub(va, vb));
     F[2 * ia] += f * u[0]; F[2 * ia + 1] += f * u[1];
     if (ib >= 0) { F[2 * ib] -= f * u[0]; F[2 * ib + 1] -= f * u[1]; }
@@ -440,6 +447,11 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
         });
       }
     }
+  }
+  // Cuerdas elásticas: pasan por su largo natural (la fuerza tiene un quiebre)
+  for (const c of S.con) {
+    if (c.tipo !== 'resorte' || !c.soloTira) continue;
+    ev.push({ nombre: `elastica:${c.id}`, direccion: 0, terminal: true, g: (t, y) => largoResorte(c, y) - c.L0 });
   }
   // Cuerdas: se tensa (C → 0 desde C > 0), se afloja (λ → 0), toca un clavo
   for (const c of S.con) {
@@ -859,6 +871,14 @@ export function simularMecanica(escena) {
     } else if (partes[0] === 'choque') {
       descripcion = choque(Number(partes[1]), Number(partes[2]), zeno);
       if (!descripcion) silenciar(nombre);
+    } else if (partes[0] === 'elastica') {
+      const c = S.con.find(x => x.id === partes[1]);
+      const pa = [y[4 * c.ia], y[4 * c.ia + 1]], pb = c.ib < 0 ? c.ancla : [y[4 * c.ib], y[4 * c.ib + 1]];
+      const va = [y[4 * c.ia + 2], y[4 * c.ia + 3]], vb = c.ib < 0 ? [0, 0] : [y[4 * c.ib + 2], y[4 * c.ib + 3]];
+      const d = sub(pa, pb), alarga = dot(d, sub(va, vb)) > 0;
+      descripcion = alarga ? `La cuerda elástica ${c.id} se tensa` : `La cuerda elástica ${c.id} queda floja`;
+      // Pasa por el largo natural con g ≈ 0: se silencia una pausa para no repetirlo
+      silenciar(nombre);
     } else if (partes[0] === 'separa') {
       excluir.add(`par:${partes[1]}:${partes[2]}`);
       delete modo.pares[`${partes[1]}:${partes[2]}`];
@@ -949,8 +969,9 @@ export function energiaMecanica(sim, t) {
   const pos = Object.fromEntries(est.map(s => [s.id, [s.x, s.y]]));
   for (const c of e.conectores || []) {
     if (c.tipo !== 'resorte') continue;
-    const pb = c.b != null ? pos[c.b] : c.ancla;
-    Ue += 0.5 * c.k * (norm(sub(pos[c.a], pb)) - c.L0) ** 2;
+    const pb = c.b != null ? pos[c.b] : c.ancla, D = norm(sub(pos[c.a], pb));
+    if (c.soloTira && D <= c.L0) continue;
+    Ue += 0.5 * c.k * (D - c.L0) ** 2;
   }
   return { K, Ug, Ue, UF, E: K + Ug + Ue + UF };
 }

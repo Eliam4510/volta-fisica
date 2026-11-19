@@ -14,7 +14,11 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   2008 P3; 2009 1-(1); 2010 1-D y 1-E; 2012 1-(1) y P3; 2014 1-(1);
   2016 1-(4) y 1-(5); 2017 1-(3); 2018 1-(2); 2019 1-(2); 2020 1-(1),
   1-(2) y P3; 2023 1-(2)), cada una con una prueba que compara la
-  simulación con la respuesta del examen. Ya son 23 escenas MEXT.
+  simulación con la respuesta del examen.
+- Cuerda elástica (de goma): un resorte que solo tira y no empuja cuando
+  está floja, con eventos al tensarse y al aflojarse; en el Laboratorio se
+  elige en el inspector del resorte. Con ella, la escena MEXT 2010 1-F
+  (la pesa sube 45 cm). El Laboratorio tiene 24 escenas MEXT.
 
 - Laboratorio de Mecánica: fuerza constante aplicada a una partícula
   (módulo y dirección), con su vector en el lienzo y su energía potencial
