@@ -34,3 +34,26 @@ vieja.
 8. **Prototipos como páginas de la aplicación.** `sistema/prototipos/*.html`
    pasan a ser las pantallas reales (Inicio, Mecánica, Electrostática,
    Termodinámica, Guía). Se renombrarán cuando la estructura lo pida.
+9. **Motor general de Mecánica dirigido por eventos (autómata híbrido), no por
+   pasos fijos.** Cada cambio de contacto es un evento localizado con Brent
+   sobre la salida densa de Dormand–Prince, así que los instantes de choque,
+   despegue o cuerda floja son exactos y comparables con las respuestas MEXT.
+   Para muchos cuerpos en reposo esto cuesta muchos eventos; cuando haga
+   falta se añadirá un modo multitud de paso fijo aparte, sin cambiar este.
+10. **Robustez de los choques (2026-11-19).** Paso máximo según la rapidez
+    (`hMaxDe` en el integrador); funciones de impacto continuas y medidas
+    desde el hueco al empezar cada tramo; choques del mismo instante por
+    impulsos secuenciales; contactos persistentes entre discos que se sueltan
+    si dejan de empujarse o se separan; el radio cuenta contra las
+    superficies; una partícula puede apoyarse en varias superficies.
+11. **Un motor nunca aborta una simulación válida.** Al llegar al límite de
+    eventos o si el integrador se detiene, devuelve lo simulado con
+    `incompleta = {t, motivo}`; la pantalla lo muestra como aviso. Solo lanza
+    con escenas inválidas (datos que no describen una situación física).
+12. **Lo que se abre de un archivo es entrada no confiable.** Cada pantalla
+    valida y acota los datos de una escena `.volta` antes de usarlos y sanea
+    los nombres con `texto()` (`nucleo/escena.js`), porque se insertan en el
+    marcado.
+13. **Las barras flotantes del lienzo son zonas reservadas.** `trazo.ejes`
+    aparta de ellas las etiquetas de los ejes; las demás etiquetas del lienzo
+    deben respetarlas igual.
