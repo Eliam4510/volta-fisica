@@ -46,7 +46,7 @@ Principios del proyecto:
 
 | Módulo | Estado | Qué simula |
 |---|---|---|
-| Mecánica | En desarrollo | Proyectiles; motor general con superficies, cuerdas, poleas, resortes, fricción y choques entre discos |
+| Mecánica | Utilizable | Proyectiles y Laboratorio (caja de arena): superficies, cuerdas, poleas, resortes, varillas, clavos, fricción y choques entre discos |
 | Electrostática | Utilizable | Cargas, campo, potencial, cargas en movimiento |
 | Termodinámica | Utilizable | Gas en cilindro con émbolo, calor, trabajo, diagrama P-V |
 | Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria |
@@ -60,6 +60,8 @@ El plan completo, con dependencias y orden de implementación, está en
 [PLAN.md](PLAN.md).
 
 ## Capturas
+
+![Laboratorio de Mecánica: péndulo con clavo (MEXT 2014)](docs/diseno/capturas/f8_laboratorio.png)
 
 | Mecánica | Electrostática |
 |---|---|

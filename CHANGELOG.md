@@ -7,6 +7,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.4.0] - 2026-11-19
+
+El Laboratorio de Mecánica: una caja de arena donde se construye y se
+simula cualquier situación mecánica, sobre el motor general con eventos
+exactos.
+
 ### Añadido
 
 - Laboratorio de Mecánica: la caja de arena donde se construye cualquier
@@ -166,7 +172,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.3.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Eliam4510/volta-fisica/releases/tag/v0.1.0
