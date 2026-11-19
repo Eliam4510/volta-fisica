@@ -90,6 +90,23 @@ regularización):
 | Hecho | Un apoyo que se perdía en un instante por otra causa (unión plano-suelo, impulso que separa) no quedaba registrado | Diferencia de restricciones activas antes y después de cada instante; prueba de la unión plano-suelo con tres pasos distintos |
 | Pulido | La etiqueta del eje vertical queda bajo la barra de capas (`trazo.ejes`); los subíndices de v_c y v_e se confunden a 10 px; falta favicon | Corregir en las piezas compartidas cuando no haya agentes usándolas |
 
+## Autocrítica 3 (2026-11-19, tras integrar el Laboratorio)
+
+Comparado con cajas de arena de física (Algodoo, PhET «Forces and Motion» y
+«Collision Lab», el banco de pruebas de Box2D) y con Logger Pro para el
+análisis de datos:
+
+| Prioridad | Hallazgo | Tarea |
+|---|---|---|
+| Función | El Laboratorio solo tiene partículas y discos que no giran: no hay bloques que vuelquen ni rodadura (Algodoo, Box2D) | Motor de cuerpo rígido 2D (disco y rectángulo con rotación, fricción en el contacto y rodadura sin deslizar), validado contra I·α = τ y rodadura en un plano |
+| Función | Las gráficas del Laboratorio son fijas (y, \|v\|, energías); Logger Pro deja elegir la magnitud y la partícula de cada eje | Gráficas configurables: magnitud (x, y, vx, vy, \|v\|, ax, ay, energías) y partícula por gráfica, y una gráfica y contra x |
+| Función | Sin instrumentos en el Laboratorio (regla, cronómetro, fotopuerta, transportador), que PhET sí tiene | Instrumentos con su lectura en el lienzo |
+| Función | Sin panel de variables en el Laboratorio: no se puede ligar una magnitud a una variable ni barrerla con un deslizador | Variables ligadas como en Electrostática |
+| Rendimiento | Montones de discos inelásticos: miles de eventos | Reposo agrupado (islas que duermen) |
+| Exactitud | Deriva de Baumgarte ≈ 2·10⁻⁶·E0 en montones | Post-estabilización al iniciar cada tramo |
+| Hecho | Fuerza aplicada constante sin balance de energía | U_F = −F·r en `energiaMecanica` |
+| Hecho | Navegación entre módulos y espacios inexistente | Menús en las migas (`espacio.js`) |
+
 ## Problemas conocidos
 
 - Los botones de exportar, deshacer y paleta de objetos de algunos
