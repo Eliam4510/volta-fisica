@@ -60,7 +60,7 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  *
  * @typedef {Object} Conector
  * @property {string} id
- * @property {'resorte'|'cuerda'|'varilla'|'polea'} tipo
+ * @property {'resorte'|'cuerda'|'varilla'|'polea'|'prensa'} tipo
  * @property {string} a                Partícula
  * @property {string} [b]              Otra partícula (o ancla fija)
  * @property {[number, number]} [ancla] Punto fijo si no hay b
@@ -71,6 +71,9 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {number} [L]              Cuerda o varilla: longitud; polea: longitud total
  * @property {[number, number]} [polea] Polea: punto fijo sobre el que pasa la cuerda (a y b son los extremos)
  * @property {Array<[number, number]>} [clavos] Cuerda: clavos donde puede engancharse
+ * @property {number} [n]              Prensa hidráulica: el émbolo b tiene n veces el área del a. El
+ *   líquido (incompresible, sin peso) conserva el volumen: Δy_a + n·Δy_b = 0; la presión es la misma
+ *   en los dos émbolos, así que la fuerza sobre b es n veces la de a (Pascal)
  *
  * @typedef {Object} EscenaMecanica
  * @property {[number, number]} [g]    Gravedad (m/s²)
@@ -156,6 +159,10 @@ function preparar(e) {
   const con = (e.conectores || []).map(c => ({ ...c, ia: idx[c.a], ib: c.b != null ? idx[c.b] : -1 }));
   for (const c of con) {
     if (c.ia == null || (c.b != null && c.ib == null)) throw new Error(`El conector ${c.id} une partículas que no existen.`);
+    if (c.tipo === 'prensa') {
+      if (!(c.ib >= 0) || !(c.n > 0)) throw new Error(`La prensa ${c.id} necesita dos émbolos y una razón de áreas positiva.`);
+      Object.assign(c, { ya0: P[c.ia].p[1], yb0: P[c.ib].p[1] });
+    }
   }
   // Masas inversas. Un cuerpo cinemático (cinematica: true) es un conductor de
   // masa infinita que se mueve a velocidad constante pase lo que pase: la mano
@@ -232,6 +239,7 @@ function restriccionesDelModo(S, modo) {
   }
   for (const c of S.con) {
     if (c.tipo === 'varilla') lista.push({ clave: `varilla:${c.id}`, unilateral: false, ...restriccionDistancia(c, modo, true) });
+    if (c.tipo === 'prensa') lista.push({ clave: `prensa:${c.id}`, unilateral: false, ...restriccionPrensa(c) });
     if (c.tipo === 'cuerda' && modo.cuerdas[c.id]?.tensa) lista.push({ clave: `cuerda:${c.id}`, unilateral: true, ...restriccionDistancia(c, modo, false) });
     if (c.tipo === 'polea' && modo.cuerdas[c.id]?.tensa) lista.push({ clave: `polea:${c.id}`, unilateral: true, ...restriccionPolea(c) });
   }
@@ -321,6 +329,19 @@ function restriccionDistancia(c, modo, bilateral) {
       const grad = [[ia, s * u[0], s * u[1]]];
       if (ib >= 0) grad.push([ib, -s * u[0], -s * u[1]]);
       return { C: s * (D - piv.L), Cp: s * uw, grad, jdv: s * (dot(w, w) - uw * uw) / D };
+    },
+  };
+}
+
+/**
+ * Prensa hidráulica entre los émbolos a y b (verticales): el volumen de
+ * líquido se conserva, (y_a − y_a0) + n·(y_b − y_b0) = 0. Bilateral y lineal.
+ */
+function restriccionPrensa(c) {
+  const ia = c.ia, ib = c.ib, n = c.n;
+  return {
+    evaluar(y) {
+      return { C: (y[4 * ia + 1] - c.ya0) + n * (y[4 * ib + 1] - c.yb0), Cp: y[4 * ia + 3] + n * y[4 * ib + 3], grad: [[ia, 0, 1], [ib, 0, n]], jdv: 0 };
     },
   };
 }
@@ -883,6 +904,17 @@ export function simularMecanica(escena) {
       if (!cambio) return;
     }
   };
+  // Velocidades iniciales incompatibles con una varilla o una prensa (dar
+  // velocidad a un solo émbolo): se proyectan como un impulso a través de la
+  // restricción, conservando el momento. Sin esto, la estabilización las
+  // corregía después como una oscilación ficticia.
+  {
+    const filas = restriccionesDelModo(S, modo).filter(r => !r.unilateral).map(r => r.evaluar(y)).filter(e => Math.abs(e.Cp) > 1e-12);
+    if (filas.length) {
+      const P = resolverRegularizado(matrizJMJ(filas, S.im), filas.map(e => -e.Cp));
+      filas.forEach((e, r) => { for (const [i, gx, gy] of e.grad) { y[4 * i + 2] += P[r] * gx * S.im[i]; y[4 * i + 3] += P[r] * gy * S.im[i]; } });
+    }
+  }
   revisarDespegues();
   // Fricción estática al arrancar: un apoyo en reposo queda pegado si μs alcanza
   for (const [clave, s] of Object.entries(modo.contactos)) {

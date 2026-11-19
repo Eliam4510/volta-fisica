@@ -729,3 +729,39 @@ describe('cuerpos cinemáticos y superficies fijas', () => {
     cerca(s.x, 6, 1e-12); cerca(s.y, -3, 1e-12);
   });
 });
+
+describe('prensa hidráulica (Pascal)', () => {
+  const prensa = (extra = {}) => ({
+    duracion: 2,
+    particulas: [{ id: 'A', m: 1, p: [0, 0], v: [0, 0], ...extra.A }, { id: 'B', m: 4, p: [2, 0], v: [0, 0], ...extra.B }],
+    conectores: [{ id: 'P', tipo: 'prensa', a: 'A', b: 'B', n: 4 }],
+  });
+  it('con pesos proporcionales a las áreas, los émbolos quedan en equilibrio', () => {
+    const sim = simularMecanica(prensa());
+    const [A, B] = estadoMecanica(sim, 2);
+    cerca(A.y, 0, 1e-9); cerca(B.y, 0, 1e-9);
+  });
+  it('si A baja h, B sube h/n; y F sobre A se equilibra con n·F sobre B (MEXT 2010 1-A)', () => {
+    // Equilibrio con F = 5 N sobre A y 4·5 = 20 N sobre B: A baja a 0.3 m/s y B sube a 0.3/4
+    const sim = simularMecanica(prensa({ A: { v: [0, -0.3], F: [0, -5] }, B: { v: [0, 0.3 / 4], F: [0, -20] } }));
+    const [A, B] = estadoMecanica(sim, 2);
+    cerca(A.y, -0.6, 1e-9); cerca(B.y, 0.6 / 4, 1e-9);
+    cerca(A.vy, -0.3, 1e-9); cerca(B.vy, 0.3 / 4, 1e-9);
+    // Sin la fuerza sobre B, el sistema acelera: lo que equilibra es exactamente n·F
+    const libre = simularMecanica(prensa({ A: { F: [0, -5] } }));
+    expect(estadoMecanica(libre, 1)[0].y).toBeLessThan(-0.1);
+  });
+  it('una velocidad inicial dada a un solo émbolo se reparte como un impulso por el líquido', () => {
+    const sim = simularMecanica(prensa({ A: { v: [0, -1] } }));
+    const [A, B] = estadoMecanica(sim, 0);
+    cerca(A.vy + 4 * B.vy, 0, 1e-12);
+    // Impulso P a lo largo de (1, n)/m: vA = −1 + P/mA, vB = n·P/mB
+    const P = 1 / (1 / 1 + 16 / 4);
+    cerca(A.vy, -1 + P, 1e-12); cerca(B.vy, 4 * P / 4, 1e-12);
+  });
+  it('la energía se conserva (el líquido no disipa)', () => {
+    const sim = simularMecanica(prensa({ A: { v: [0, 1] } }));
+    const E0 = energiaMecanica(sim, 0).E;
+    cerca(energiaMecanica(sim, 1.5).E, E0, 1e-9);
+  });
+});
