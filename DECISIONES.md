@@ -71,3 +71,16 @@ vieja.
     posiciones se proyectan para quitar los solapes de cuerpos (Cline y Pai,
     2003); las cuerdas no se proyectan. Un contacto persistente con hueco
     exige que la rapidez relativa entera sea lenta, no solo la normal.
+15. **Superficies que se mueven y movimiento impuesto (2026-11-19).** Una
+    superficie puede ir sobre un cuerpo (`sobre`): su geometría es relativa a
+    él, se traslada sin girar y la reacción y la fricción lo empujan al revés.
+    El movimiento impuesto es un cuerpo cinemático de masa inversa cero que
+    sigue su velocidad inicial o un perfil de aceleración por tramos; dentro
+    de cada tramo la aceleración es constante, así que los tramos de la
+    simulación se cortan en cada cambio y allí se revisan los apoyos como en
+    un instante de evento. Su trabajo (continuo e impulsivo) es una
+    componente más del estado, `W`, y el balance es E + Qc + Qi = E0 + W. Un
+    cinemático no interactúa con superficies fijas ni con otros cinemáticos.
+    Sigue sin haber rotación: los cuerpos rígidos se arman con varillas.
+16. **«Continuar» muestra solo lo real.** Inicio no inventa actividad: las
+    escenas recientes salen del autoguardado de cada pantalla.
