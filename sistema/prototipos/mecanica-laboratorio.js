@@ -737,7 +737,7 @@ function iniciar() {
     for (let k = 0; k <= n; k++) tiempos.push(tf * k / n);
     for (const e of SIM.eventos) if (e.t > 0 && e.t < tf) tiempos.push(Math.max(0, e.t - 1e-9), e.t);
     tiempos.sort((a, b) => a - b);
-    MUESTRAS = tiempos.map(tt => ({ t: tt, est: estadoMecanica(SIM, tt) }));
+    MUESTRAS = tiempos.map(tt => ({ t: tt, est: conAceleracion(estadoMecanica(SIM, tt), tt) }));
     if (!arrastre) calcularEscalas();
   }
 
@@ -765,6 +765,13 @@ function iniciar() {
   function estadoEn(tt) {
     if (tt <= 0 || !SIM) return M.motor.particulas.map(p => ({ id: p.id, x: p.p[0], y: p.p[1], vx: p.v[0], vy: p.v[1] }));
     return estadoMecanica(SIM, tt);
+  }
+  /** Añade la aceleración (derivada de la salida densa del tramo) a un estado. */
+  function conAceleracion(est, tt) {
+    if (!SIM) return est;
+    const tr = tramoEn(SIM, tt), dy = derivadaInterpolada(tr.sol, Math.max(tr.t0, Math.min(tt, tr.t1)));
+    est.forEach((q, i) => { q.ax = dy[4 * i + 2]; q.ay = dy[4 * i + 3]; });
+    return est;
   }
 
   // -------------------------------------------------------------------------
@@ -1574,6 +1581,9 @@ function iniciar() {
     vx: { sim: 'v', sub: 'x', u: 'm/s', f: q => q.vx, familia: 'movimiento', nombre: 'Componente x de la velocidad' },
     vy: { sim: 'v', sub: 'y', u: 'm/s', f: q => q.vy, familia: 'movimiento', nombre: 'Componente y de la velocidad' },
     v: { sim: '|v|', u: 'm/s', f: q => Math.hypot(q.vx, q.vy), familia: 'movimiento', nombre: 'Rapidez |v|', positiva: true },
+    ax: { sim: 'a', sub: 'x', u: 'm/s²', f: q => q.ax, familia: 'cambio', nombre: 'Componente x de la aceleración', acel: true },
+    ay: { sim: 'a', sub: 'y', u: 'm/s²', f: q => q.ay, familia: 'cambio', nombre: 'Componente y de la aceleración', acel: true },
+    a: { sim: '|a|', u: 'm/s²', f: q => Math.hypot(q.ax, q.ay), familia: 'cambio', nombre: 'Módulo de la aceleración |a|', positiva: true, acel: true },
     tray: { sim: 'y', contra: 'x', u: 'm', familia: 'tinta', nombre: 'Trayectoria y contra x' },
   };
   let magGraf = ['y', 'v'];
@@ -1618,6 +1628,7 @@ function iniciar() {
     }
     const ss = idx.map((i, k) => ({ tramos: serie(m => [m.t, mg.f(m.est[i])]), familia: mg.familia, patron: PATRONES[k], etiqueta: varias ? M.particulas[i].nombre : undefined }));
     const r = rango(ss); if (mg.positiva) r.min = Math.min(0, r.min);
+    if (mg.acel) conAceleracion(s, t);
     grafica(lienzoG, { x: { min: 0, max: tf }, y: r, series: ss, cursor: t, puntoCursor: [t, mg.f(s[idx[0]])], eventos: eventosGraf() });
     lect.textContent = cantidad(mg.f(s[idx[0]]), mg.u) + nombre;
   }
