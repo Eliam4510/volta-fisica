@@ -7,6 +7,14 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Laboratorio: panel de variables, como en los demás módulos. Una variable
+  es un deslizador que fija a la vez varias propiedades (la rapidez de dos
+  pelotas, el μs de un plano); los campos ligados se ven como la variable.
+  El plano inclinado y las escenas MEXT 2008 1-(1), 2015 1-(1), 2016 P3 y
+  2018 1-(1) traen las suyas.
+
 ## [0.8.0] - 2026-11-19
 
 Mecánica con 38 escenas MEXT: movimiento impuesto por tramos, prensa

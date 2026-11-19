@@ -286,3 +286,29 @@ describe('instrumentos: regla y fotopuerta', () => {
     expect(pasosFotopuerta(sim, M, { a: [2, 1.5], b: [2, 3] })).toEqual([]);
   });
 });
+
+describe('variables de la escena', () => {
+  it('se normalizan: solo propiedades conocidas de objetos que existen, valores dentro del rango', () => {
+    const e = normalizarEscena({
+      ...escenaVacia(),
+      objetos: [{ id: 'p1', tipo: 'particula', nombre: 'P', m: 1, x: 0, y: 1, v: 2, ang: 0, radio: 0 }],
+      variables: [
+        { sim: 'v', tipo: 'velocidad', min: 0, max: 10, paso: 0.1, val: 99, liga: [['p1', 'v'], ['p9', 'v'], ['p1', 'innerHTML']] },
+        { sim: '<b>', tipo: 'masa', min: 1, max: 2, val: 1.5, liga: [['p1', 'm']] },
+        { sim: 'x', tipo: 'desconocido', min: 0, max: 1, liga: [['p1', 'x']] },
+        { sim: 'y', tipo: 'longitud', min: 0, max: 1, liga: [] },
+      ],
+    });
+    expect(e.variables).toHaveLength(2);
+    expect(e.variables[0]).toMatchObject({ sim: 'v', val: 10, liga: [['p1', 'v']] });
+    expect(e.variables[1].sim).toBe('b');
+    expect(normalizarEscena(JSON.parse(JSON.stringify(e)))).toEqual(e);
+  });
+  it('las escenas con variables las traen ligadas a sus objetos', () => {
+    for (const id of ['plano', 'mext-2018-1-1', 'mext-2008-1-1', 'mext-2016-p3', 'mext-2015-1-1']) {
+      const e = escenaDeEscenario(id);
+      expect(e.variables.length, id).toBeGreaterThan(0);
+      for (const v of e.variables) for (const [obj] of v.liga) expect(e.objetos.some(o => o.id === obj), id).toBe(true);
+    }
+  });
+});

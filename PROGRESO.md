@@ -163,7 +163,7 @@ restricciones contabilizados, actuadores con trayectoria impuesta) y PhET
 | Hecho | No había actuadores ni cuerpos que llevaran a otros | Superficies `sobre` un cuerpo, cinemáticos con perfil de aceleración por tramos (los «position actuators» de MuJoCo, en versión cinemática) |
 | Función | Sigue sin haber rotación: los discos no ruedan, la fricción disco-disco no existe y los cuerpos rígidos se arman con triángulos de varillas (sin momento de inercia propio) | Cuerpo rígido 2D con orientación y velocidad angular; rodadura sin deslizar; fricción en el contacto par |
 | Hecho | El perfil de aceleración solo se definía en las escenas | Editor de tramos en el inspector, con validación del orden |
-| Hecho en parte | El Laboratorio no tenía instrumentos; sigue sin panel de variables (los demás módulos sí) | Regla y fotopuerta hechas; falta el panel de variables y un cronómetro |
+| Hecho | El Laboratorio no tenía instrumentos ni panel de variables | Regla, fotopuerta y variables ligadas a propiedades (definidas por la escena; falta crearlas desde la interfaz) |
 | Exactitud | La prensa hidráulica no tiene peso del líquido (sin ρgh): vale para Pascal, no para vasos comunicantes con desnivel | Columna de líquido con peso cuando haga falta (Fluidos M10) |
 | Contenido | Mecánica 38 de 44 MEXT; las 6 restantes no tienen enunciado o necesitan sistemas de referencia que se mueven | — |
 

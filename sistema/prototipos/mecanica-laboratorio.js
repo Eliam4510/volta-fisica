@@ -64,6 +64,9 @@ export const NOMBRE_CLASE = {
   cuerda: 'Cuerda', resorte: 'Resorte', varilla: 'Varilla', polea: 'Polea', union: 'Unión', prensa: 'Prensa', regla: 'Regla', fotopuerta: 'Fotopuerta', clavo: 'Clavo',
 };
 export const CONECTORES = ['cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa'];
+/** Propiedades que una variable puede fijar y unidades que puede tener. */
+const PROPIEDADES_VARIABLE = ['m', 'x', 'y', 'v', 'ang', 'radio', 'F', 'angF', 'e', 'mu', 'muS', 'k', 'L0', 'L', 'amort', 'n', 'th'];
+const UNIDADES_VARIABLE = ['longitud', 'masa', 'velocidad', 'aceleracion', 'tiempo', 'angulo', 'rigidez', 'adim', 'fuerza'];
 /** Instrumentos: no son física (no van al motor); miden sobre la simulación. */
 export const INSTRUMENTOS = ['regla', 'fotopuerta'];
 
@@ -144,7 +147,7 @@ export function puntosSuperficie(s, n = 24) {
 
 /** Escena vacía: solo la gravedad. */
 export function escenaVacia(titulo = 'Escena nueva') {
-  return { version: 1, titulo, tipo: 'propio', ref: '', escenario: null, nota: null, g: 9.8, gAng: -90, b: 0, cAire: 0, eParticulas: 1, duracion: 4, objetos: [] };
+  return { version: 1, titulo, tipo: 'propio', ref: '', escenario: null, nota: null, g: 9.8, gAng: -90, b: 0, cAire: 0, eParticulas: 1, duracion: 4, objetos: [], variables: [] };
 }
 
 const num2 = (p, d) => (Array.isArray(p) && p.length === 2 ? [numero(p[0], d[0], -1e6, 1e6), numero(p[1], d[1], -1e6, 1e6)] : [...d]);
@@ -221,6 +224,17 @@ export function normalizarEscena(d) {
   for (const o of e.objetos) if (o.tipo === 'particula' && o.sobre && tipoDe[o.sobre] !== 'superficie') o.sobre = null;
   // Una superficie va sobre una partícula que existe (no sobre otra cosa)
   for (const o of e.objetos) if (o.tipo === 'superficie' && o.cuerpo && tipoDe[o.cuerpo] !== 'particula') o.cuerpo = null;
+  // Variables: un deslizador que fija a la vez varias propiedades numéricas
+  // (liga [id, propiedad]); solo propiedades conocidas de objetos que existen
+  e.variables = (Array.isArray(d.variables) ? d.variables : []).slice(0, 6).map(v => {
+    if (!v || typeof v !== 'object') return null;
+    const tipoU = UNIDADES_VARIABLE.includes(v.tipo) ? v.tipo : null;
+    const min = numero(v.min, 0, -1e6, 1e6), max = numero(v.max, 1, -1e6, 1e6);
+    if (!tipoU || !(max > min)) return null;
+    const liga = (Array.isArray(v.liga) ? v.liga : []).filter(l => Array.isArray(l) && typeof l[0] === 'string' && tipoDe[l[0]] && PROPIEDADES_VARIABLE.includes(l[1])).slice(0, 8).map(l => [l[0], l[1]]);
+    if (!liga.length) return null;
+    return { sim: texto(v.sim, 'k', 4), tipo: tipoU, min, max, paso: numero(v.paso, (max - min) / 100, 1e-9, max - min), val: numero(v.val, min, min, max), liga };
+  }).filter(Boolean);
   return e;
 }
 
@@ -664,11 +678,12 @@ export const ESCENARIOS = [
   },
   {
     id: 'plano', tipo: 'tutorial', titulo: 'Plano inclinado con fricción',
-    nota: ['Reproduce: el bloque baja porque tan θ > μs.', 'Selecciona el plano y pon μs = 0.7: ya no se mueve.', 'Activa Normal y fricción en el inspector del bloque.', 'El calor por fricción aparece como energía disipada.'],
+    nota: ['Reproduce: el bloque baja porque tan θ > μs.', 'Mueve μs en Variables: por encima de tan 30° ≈ 0.58 ya no se mueve.', 'Activa Normal y fricción en el inspector del bloque.', 'El calor por fricción aparece como energía disipada.'],
     crear: () => {
       const [a, b] = planoDesde([0, 1.5], 30, 3);
       return {
         duracion: 3,
+        variables: [{ sim: 'μs', tipo: 'adim', min: 0, max: 1, paso: 0.01, val: 0.3, liga: [['s1', 'muS']] }],
         objetos: [
           SEG('s1', 'plano', 'Plano', a, b, { mu: 0.2, muS: 0.3 }), SEG('s2', 'suelo', 'Suelo', [b[0], 0], [5.4, 0], { e: 0, mu: 0.35, muS: 0.4 }),
           P_('p1', 'Bloque', 1, 0.3 * cosd(30), 1.5 - 0.3 * sind(30), { sobre: 's1' }),
@@ -786,6 +801,7 @@ export const ESCENARIOS = [
     nota: ['Dos pelotas salen a la vez con la misma rapidez, una a 45° y otra a 30°.', 'El alcance es v²·sen 2θ/g: el de 45° es 1/sen 60° = 2/√3 ≈ 1.155 veces el de 30°.', 'Compara en la tabla de eventos dónde llega cada una al suelo.'],
     crear: () => ({
       duracion: 1.5,
+      variables: [{ sim: 'v', tipo: 'velocidad', min: 2, max: 15, paso: 0.5, val: 10, liga: [['p1', 'v'], ['p2', 'v']] }],
       objetos: [
         SEG('s1', 'suelo', 'Suelo', [-1, 0], [16, 0], { e: 0, mu: 0.8 }),
         P_('p1', 'A (45°)', 0.1, 0, 0, { v: 10, ang: 45 }),
@@ -987,6 +1003,10 @@ export const ESCENARIOS = [
     nota: ['Una partícula sale con rapidez v a un ángulo θ sobre la horizontal.', 'Llega al suelo a L = 2v²·sen θ·cos θ/g.', 'Aquí v = 8 m/s y θ = 35°: L ≈ 6.14 m.'],
     crear: () => ({
       duracion: 1,
+      variables: [
+        { sim: 'θ', tipo: 'angulo', min: 5, max: 85, paso: 1, val: 35, liga: [['p1', 'ang']] },
+        { sim: 'v', tipo: 'velocidad', min: 1, max: 15, paso: 0.5, val: 8, liga: [['p1', 'v']] },
+      ],
       objetos: [
         SEG('s1', 'suelo', 'Suelo', [-1, 0], [9, 0], { e: 0, mu: 0.8 }),
         P_('p1', 'Partícula', 0.1, 0, 0, { v: 8, ang: 35 }),
@@ -1060,6 +1080,10 @@ export const ESCENARIOS = [
     // M = 2, m = 1, v0 = 3, μ = 0.4: T = 6/(3·3.92) ≈ 0.510 s; Q se desliza Mv0²/(2(M + m)μg) ≈ 0.765 m sobre P
     crear: () => ({
       duracion: 1.2,
+      variables: [
+        { sim: 'μ', tipo: 'adim', min: 0.05, max: 1, paso: 0.01, val: 0.4, liga: [['s2', 'mu']] },
+        { sim: 'v0', tipo: 'velocidad', min: 0.5, max: 6, paso: 0.1, val: 3, liga: [['p1', 'v']] },
+      ],
       objetos: [
         SEG('s1', 'suelo', 'Suelo liso', [-1.5, 0], [4, 0], { e: 0 }),
         P_('p1', 'P', 2, 0, 0.1, { radio: 0.1, sobre: 's1', v: 3, ang: 0 }),
@@ -1107,6 +1131,10 @@ export const ESCENARIOS = [
     nota: ['El objeto sale en horizontal con rapidez v desde la altura h.', 'Llega al suelo con tan θ = √(2gh)/v: la componente vertical es √(2gh) y la horizontal sigue siendo v.', 'Aquí h = 5 m y v = 4 m/s: tan θ ≈ 2.47, θ ≈ 68°. Activa Componentes de v en el inspector.'],
     crear: () => ({
       duracion: 1.1,
+      variables: [
+        { sim: 'v', tipo: 'velocidad', min: 0.5, max: 10, paso: 0.1, val: 4, liga: [['p1', 'v']] },
+        { sim: 'h', tipo: 'longitud', min: 0.5, max: 10, paso: 0.1, val: 5, liga: [['p1', 'y']] },
+      ],
       objetos: [
         SEG('s1', 'suelo', 'Suelo', [-1, 0], [6, 0], { e: 0, mu: 0.8 }),
         P_('p1', 'Objeto', 0.5, 0, 5, { v: 4, ang: 0 }),
@@ -1286,7 +1314,14 @@ function iniciar() {
   // -------------------------------------------------------------------------
   // Simulación
   // -------------------------------------------------------------------------
+  // Cada variable fija sus propiedades ligadas con la misma validación que el
+  // inspector (un plano rehace su geometría al cambiar θ, por ejemplo)
+  function aplicarVariables() {
+    for (const v of esc.variables || []) for (const [id, prop] of v.liga) aplicar(id, prop, v.val);
+  }
+  const ligada = (id, prop) => (esc.variables || []).find(v => v.liga.some(([i, p]) => i === id && p === prop)) || null;
   function simular(rapido = false) {
+    aplicarVariables();
     M = aMotor(esc);
     avisoMotor = null; SIM = null;
     if (M.motor.particulas.length) {
@@ -1841,7 +1876,11 @@ function iniciar() {
       throw new Error(err.message.replace(/este campo espera una cantidad en [^.]+/, `este campo espera ${U.u}`));
     }
   }
-  const campo = (clave, valor, tipoU, eje, ayuda) => `<div class="campo"${ayuda ? ` data-ayuda="${ayuda}"` : ''}>${eje ? `<span class="eje">${eje}</span>` : ''}<input data-clave="${clave}" data-u="${tipoU}" value="${limpio(valor)}" spellcheck="false"><span class="u">${UNI[tipoU].u}</span></div>`;
+  const campo = (clave, valor, tipoU, eje, ayuda) => {
+    const [cid, cprop] = clave.split('.'), lv = ligada(cid, cprop);
+    if (lv) return `<div class="campo es-variable" data-ayuda="Ligado a la variable ${lv.sim}: cámbialo en el panel de variables|Bound to a variable"><span class="chip-var"><span class="sim">${lv.sim}</span></span><span class="valor-var">${limpio(valor)}</span><span class="u">${UNI[tipoU].u}</span></div>`;
+    return `<div class="campo"${ayuda ? ` data-ayuda="${ayuda}"` : ''}>${eje ? `<span class="eje">${eje}</span>` : ''}<input data-clave="${clave}" data-u="${tipoU}" value="${limpio(valor)}" spellcheck="false"><span class="u">${UNI[tipoU].u}</span></div>`;
+  };
   const fila = (etq, html) => `<div class="fila"><span class="etq">${etq}</span>${html}</div>`;
   const doble = (a, b) => `<div class="fila-doble">${a}${b}</div>`;
   const grupo = (titulo, cuerpo, id) => `<details class="grupo" open><summary>${ico('i-chevron-abajo')}<span${id ? ` id="${id}"` : ''}>${titulo}</span></summary>${cuerpo}</details>`;
@@ -2447,6 +2486,21 @@ function iniciar() {
     dibujar(); lecturas(); lt.poner(t); graficas();
     if (!$('#p-eventos').hidden || !$('#p-tabla').hidden) tablas();
   }
+  function construirVariables() {
+    const cont = $('#variables'); if (!cont) return;
+    cont.innerHTML = '';
+    for (const d of esc.variables || []) {
+      const f = document.createElement('div'); f.className = 'var';
+      f.innerHTML = `<span class="sim">${d.sim}</span><input class="deslizador" type="range" min="${d.min}" max="${d.max}" step="${d.paso}" value="${d.val}" aria-label="${d.sim}"><span class="valor"></span>`;
+      const ent = f.querySelector('input'), val = f.querySelector('.valor');
+      const pintar = () => { val.innerHTML = `${limpio(d.val)}<span class="u">${UNI[d.tipo].u ? ' ' + UNI[d.tipo].u : ''}</span>`; window.Volta.pintarDeslizador(ent); };
+      ent.addEventListener('input', () => { d.val = parseFloat(ent.value); pintar(); recalcular(true); construirInspector(); });
+      ent.addEventListener('change', () => { registrar(); recalcular(); construirArbol(); construirInspector(); });
+      pintar(); cont.appendChild(f);
+    }
+    if (!(esc.variables || []).length) cont.innerHTML = '<span class="ayuda-fila" style="margin:0">Esta escena no tiene variables: edita los valores en el inspector.</span>';
+  }
+
   function recalcular(rapido = false) {
     simular(rapido);
     lt.duracion = DUR(); lt.simulado = tFinal();
@@ -2471,7 +2525,7 @@ function iniciar() {
     simular(); encuadreHecho = false; vistaTocada = false; pintarNota();
     if (tz.w) encuadrar();
     if (historial) historial.reiniciar(copia(esc)); botonesHistorial();
-    pintarBarra(); construirArbol(); construirInspector(); recalcular();
+    pintarBarra(); construirArbol(); construirInspector(); construirVariables(); recalcular();
   }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar(area, 'Escena guardada'); }, e => avisar(area, `No se pudo guardar: ${e}`)); }
   function abrir() {
@@ -2492,7 +2546,7 @@ function iniciar() {
   function restaurar(d) {
     esc = normalizarEscena(d);
     if (!objeto(esc, sel)) sel = 'escena';
-    recalcular(); pintarBarra(); construirArbol(); construirInspector(); botonesHistorial();
+    recalcular(); pintarBarra(); construirArbol(); construirInspector(); construirVariables(); botonesHistorial();
   }
   function deshacer() { const d = historial?.deshacer(); if (d) { restaurar(d); avisar(area, 'Cambio deshecho'); } }
   function rehacer() { const d = historial?.rehacer(); if (d) { restaurar(d); avisar(area, 'Cambio rehecho'); } }
