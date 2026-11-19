@@ -38,6 +38,8 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {[number, number]} v      Velocidad (m/s)
  * @property {number} [radio=0]        Radio del disco (m): cuenta en los choques entre partículas y contra las superficies
  * @property {[number, number]} [F]    Fuerza constante aplicada (N)
+ * @property {boolean} [cinematica]    Conductor de masa infinita que se mueve con velocidad constante v
+ *   (una mano que sube despacio, una cinta): no siente fuerzas; su trabajo sale en energiaMecanica().W
  *
  * @typedef {Object} Superficie
  * @property {string} id
@@ -50,6 +52,8 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {number} [e=1]            Coeficiente de restitución
  * @property {number} [mu=0]           Fricción cinética
  * @property {number} [muS]            Fricción estática (por defecto, igual a mu)
+ * @property {string} [sobre]          Id del cuerpo que lleva la superficie: a, b o c son relativos a su
+ *   posición y la superficie se traslada con él; la reacción y la fricción lo empujan al revés
  *
  * @typedef {Object} Conector
  * @property {string} id
@@ -142,21 +146,29 @@ function preparar(e) {
   const P = e.particulas;
   const idx = Object.fromEntries(P.map((p, i) => [p.id, i]));
   const g = e.g ?? [0, -9.8];
-  const sup = (e.superficies || []).map(s => ({ ...s, geo: s.tipo === 'segmento' ? geoSegmento(s) : null }));
+  // Una superficie puede ir sobre un cuerpo (sobre: id): su geometría es
+  // relativa a la posición de ese cuerpo y se traslada con él (sin girar)
+  const sup = (e.superficies || []).map(s => ({ ...s, geo: s.tipo === 'segmento' ? geoSegmento(s) : null, j: s.sobre != null ? idx[s.sobre] : -1 }));
+  for (const s of sup) if (s.j == null) throw new Error(`La superficie ${s.id} va sobre un cuerpo que no existe.`);
   const con = (e.conectores || []).map(c => ({ ...c, ia: idx[c.a], ib: c.b != null ? idx[c.b] : -1 }));
   for (const c of con) {
     if (c.ia == null || (c.b != null && c.ib == null)) throw new Error(`El conector ${c.id} une partículas que no existen.`);
   }
-  return { P, idx, g, sup, con, n: P.length, b: e.b || 0, cAire: e.cAire || 0 };
+  // Masas inversas. Un cuerpo cinemático (cinematica: true) es un conductor de
+  // masa infinita que se mueve a velocidad constante pase lo que pase: la mano
+  // que sube un peso despacio, una cinta, un ascensor. Su masa inversa es 0.
+  const im = P.map(p => (p.cinematica ? 0 : 1 / p.m));
+  return { P, idx, g, sup, con, n: P.length, im, b: e.b || 0, cAire: e.cAire || 0 };
 }
 
 /** Estado inicial empaquetado [x, y, vx, vy] por partícula. */
 function estadoInicial(P) {
   const y = [];
   for (const p of P) y.push(p.p[0], p.p[1], p.v[0], p.v[1]);
-  // Última componente: energía disipada de forma continua (fricción,
-  // arrastre, amortiguadores y la estabilización de las restricciones)
-  y.push(0);
+  // Dos componentes más: la energía disipada de forma continua (fricción,
+  // arrastre, amortiguadores y la estabilización de las restricciones) y el
+  // trabajo hecho por los cuerpos cinemáticos (la mano, la cinta)
+  y.push(0, 0);
   return y;
 }
 
@@ -186,17 +198,31 @@ function restriccionesDelModo(S, modo) {
   return lista;
 }
 
+/** Posición de la partícula i en el marco de la superficie (relativa a su cuerpo, si va sobre uno). */
+function puntoRel(sup, y, i) {
+  return sup.j >= 0 ? [y[4 * i] - y[4 * sup.j], y[4 * i + 1] - y[4 * sup.j + 1]] : [y[4 * i], y[4 * i + 1]];
+}
+/** Velocidad de la partícula i respecto de la superficie. */
+function velocidadRel(sup, y, i) {
+  return sup.j >= 0 ? [y[4 * i + 2] - y[4 * sup.j + 2], y[4 * i + 3] - y[4 * sup.j + 3]] : [y[4 * i + 2], y[4 * i + 3]];
+}
+
 /**
- * Hueco entre la partícula i (de radio r) y una superficie: C ≥ 0 es el lado libre.
+ * Hueco entre la partícula i (de radio r) y una superficie: C ≥ 0 es el lado
+ * libre. Si la superficie va sobre un cuerpo j, el gradiente también actúa
+ * sobre j (la reacción lo empuja al revés) y todo se mide relativo a j.
  * @param {any} sup @param {number} i @param {number} [r=0]
  */
 function restriccionSuperficie(sup, i, r = 0) {
+  const j = sup.j;
   if (sup.tipo === 'segmento') {
     const { n } = sup.geo;
     return {
       evaluar(y) {
-        const p = [y[4 * i], y[4 * i + 1]], v = [y[4 * i + 2], y[4 * i + 3]];
-        return { C: dot(n, sub(p, sup.a)) - r, Cp: dot(n, v), grad: [[i, n[0], n[1]]], jdv: 0 };
+        const p = puntoRel(sup, y, i), v = velocidadRel(sup, y, i);
+        const grad = [[i, n[0], n[1]]];
+        if (j >= 0) grad.push([j, -n[0], -n[1]]);
+        return { C: dot(n, sub(p, sup.a)) - r, Cp: dot(n, v), grad, jdv: 0 };
       },
     };
   }
@@ -204,9 +230,11 @@ function restriccionSuperficie(sup, i, r = 0) {
   const sg = sup.cara === 'interior' ? -1 : 1, Rc = sup.r + sg * r;
   return {
     evaluar(y) {
-      const d = [y[4 * i] - sup.c[0], y[4 * i + 1] - sup.c[1]], v = [y[4 * i + 2], y[4 * i + 3]];
+      const q = puntoRel(sup, y, i), d = [q[0] - sup.c[0], q[1] - sup.c[1]], v = velocidadRel(sup, y, i);
       const D = norm(d), u = [d[0] / D, d[1] / D], uv = dot(u, v);
-      return { C: sg * (D - Rc), Cp: sg * uv, grad: [[i, sg * u[0], sg * u[1]]], jdv: sg * (dot(v, v) - uv * uv) / D };
+      const grad = [[i, sg * u[0], sg * u[1]]];
+      if (j >= 0) grad.push([j, -sg * u[0], -sg * u[1]]);
+      return { C: sg * (D - Rc), Cp: sg * uv, grad, jdv: sg * (dot(v, v) - uv * uv) / D };
     },
   };
 }
@@ -315,10 +343,10 @@ function resolver(A, b, tolRel = 0) {
  * una o dos partículas: se suma por partícula en vez de comparar todas las
  * filas con todas (con 40 apoyos en un montón, el doble bucle denso era la
  * mitad del cálculo).
- * @param {{grad: number[][]}[]} filas @param {number[]} m masas
+ * @param {{grad: number[][]}[]} filas @param {number[]} im masas inversas (0 en los cuerpos cinemáticos)
  * @returns {number[][]}
  */
-function matrizJMJ(filas, m) {
+function matrizJMJ(filas, im) {
   const k = filas.length, A = Array.from({ length: k }, () => new Array(k).fill(0));
   /** @type {Map<number, number[][]>} */
   const porParticula = new Map();
@@ -329,7 +357,7 @@ function matrizJMJ(filas, m) {
       l.push([r, gx, gy]);
     }
   });
-  for (const [i, l] of porParticula) for (const [r, gx, gy] of l) for (const [q, hx, hy] of l) A[r][q] += (gx * hx + gy * hy) / m[i];
+  for (const [i, l] of porParticula) for (const [r, gx, gy] of l) for (const [q, hx, hy] of l) A[r][q] += (gx * hx + gy * hy) * im[i];
   return A;
 }
 
@@ -401,6 +429,7 @@ function fuerzas(S, modo, y, lambdasPrevias) {
   const n = S.n, F = new Array(2 * n).fill(0);
   for (let i = 0; i < n; i++) {
     const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3];
+    if (p.cinematica) continue;
     F[2 * i] += p.m * S.g[0] + (p.F ? p.F[0] : 0);
     F[2 * i + 1] += p.m * S.g[1] + (p.F ? p.F[1] : 0);
     if (S.b) { F[2 * i] -= S.b * vx; F[2 * i + 1] -= S.b * vy; }
@@ -423,11 +452,13 @@ function fuerzas(S, modo, y, lambdasPrevias) {
       const sup = S.sup[s.sup], iP = s.i;
       if (!(sup.mu > 0) || s.pegado) continue;
       const N = Math.max(0, lambdasPrevias[`contacto:${clave}`] || 0);
-      const t = tangente(sup, [y[4 * iP], y[4 * iP + 1]]);
-      const vt = t[0] * y[4 * iP + 2] + t[1] * y[4 * iP + 3];
+      const t = tangente(sup, puntoRel(sup, y, iP)), vr = velocidadRel(sup, y, iP);
+      const vt = t[0] * vr[0] + t[1] * vr[1];
       if (Math.abs(vt) < 1e-15) continue;
       const f = -sup.mu * N * Math.sign(vt);
       F[2 * iP] += f * t[0]; F[2 * iP + 1] += f * t[1];
+      // La fricción empuja al cuerpo que lleva la superficie al revés
+      if (sup.j >= 0) { F[2 * sup.j] -= f * t[0]; F[2 * sup.j + 1] -= f * t[1]; }
     }
   }
   return F;
@@ -446,8 +477,10 @@ function tangente(sup, p) {
  * en 2–3 pasadas porque la fricción no cambia la dirección normal).
  */
 function dinamica(S, modo, y, restr) {
-  const n = S.n, m = S.P.map(p => p.m);
+  const n = S.n, im = S.im;
   let lambdas = null, acc = null;
+  /** @type {number[]} fuerza total (aplicadas + reacciones) sobre cada cuerpo */
+  let fuerzaTotal = [];
   /** @type {null | {A: number[][], b: number[], claves: string[], unilateral: boolean[]}} */
   let sistema = null;
   const iteraciones = Object.values(modo.contactos).some(s => S.sup[s.sup].mu > 0 && !s.pegado) ? 4 : 1;
@@ -458,19 +491,20 @@ function dinamica(S, modo, y, restr) {
     const pegadas = [];
     for (const [clave, s] of Object.entries(modo.contactos)) {
       if (!s.pegado) continue;
-      const iP = s.i, t = tangente(S.sup[s.sup], [y[4 * iP], y[4 * iP + 1]]);
-      const vt = t[0] * y[4 * iP + 2] + t[1] * y[4 * iP + 3];
-      pegadas.push({ clave: `pegado:${clave}`, evaluar: () => ({ C: 0, Cp: vt, grad: [[iP, t[0], t[1]]], jdv: 0 }) });
+      const sup = S.sup[s.sup], iP = s.i, t = tangente(sup, puntoRel(sup, y, iP)), vr = velocidadRel(sup, y, iP);
+      const vt = t[0] * vr[0] + t[1] * vr[1], grad = [[iP, t[0], t[1]]];
+      if (sup.j >= 0) grad.push([sup.j, -t[0], -t[1]]);
+      pegadas.push({ clave: `pegado:${clave}`, evaluar: () => ({ C: 0, Cp: vt, grad, jdv: 0 }) });
       ev.push(pegadas[pegadas.length - 1].evaluar());
     }
     const k = ev.length;
     const a0 = new Array(2 * n);
-    for (let i = 0; i < n; i++) { a0[2 * i] = F[2 * i] / m[i]; a0[2 * i + 1] = F[2 * i + 1] / m[i]; }
+    for (let i = 0; i < n; i++) { a0[2 * i] = F[2 * i] * im[i]; a0[2 * i + 1] = F[2 * i + 1] * im[i]; }
     let lam = [];
     if (k) {
       // (J M⁻¹ Jᵀ) λ = −J a0 − J̇v − 2α Ċ − β² C
       const alfa = ALFA_B, beta = BETA_B;
-      const A = matrizJMJ(ev, m), b = new Array(k).fill(0);
+      const A = matrizJMJ(ev, im), b = new Array(k).fill(0);
       for (let r = 0; r < k; r++) {
         let Ja0 = 0;
         for (const [i, gx, gy] of ev[r].grad) Ja0 += gx * a0[2 * i] + gy * a0[2 * i + 1];
@@ -480,12 +514,16 @@ function dinamica(S, modo, y, restr) {
       sistema = { A, b, claves: [...restr.map(r => r.clave), ...pegadas.map(r => r.clave)], unilateral: [...restr.map(r => !!r.unilateral), ...pegadas.map(() => false)] };
     }
     acc = a0.slice();
-    for (let r = 0; r < k; r++) for (const [i, gx, gy] of ev[r].grad) { acc[2 * i] += lam[r] * gx / m[i]; acc[2 * i + 1] += lam[r] * gy / m[i]; }
+    fuerzaTotal = F.slice();
+    for (let r = 0; r < k; r++) for (const [i, gx, gy] of ev[r].grad) {
+      acc[2 * i] += lam[r] * gx * im[i]; acc[2 * i + 1] += lam[r] * gy * im[i];
+      fuerzaTotal[2 * i] += lam[r] * gx; fuerzaTotal[2 * i + 1] += lam[r] * gy;
+    }
     lambdas = {};
     restr.forEach((r, j) => { lambdas[r.clave] = lam[j]; });
     pegadas.forEach((r, j) => { lambdas[r.clave] = lam[restr.length + j]; });
   }
-  return { acc, lambdas, sistema };
+  return { acc, lambdas, sistema, fuerzaTotal };
 }
 
 // ---------------------------------------------------------------------------
@@ -510,9 +548,9 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
   // rueda por el suelo puede chocar con la pared)
   for (let i = 0; i < n; i++) {
     S.sup.forEach((sup, js) => {
-      if (modo.contactos[`${i}:${js}`]) return;
+      if (modo.contactos[`${i}:${js}`] || sup.j === i) return;
       const r = restriccionSuperficie(sup, i, radio(S, i));
-      const C0 = r.evaluar(y0).C, dentro0 = margenSuperficie(sup, [y0[4 * i], y0[4 * i + 1]]) >= 0;
+      const C0 = r.evaluar(y0).C, dentro0 = margenSuperficie(sup, puntoRel(sup, y0, i)) >= 0;
       // Un hueco inicial nulo o negativo no cambiaría de signo: se mide desde él
       const off = C0 <= TOL_HUECO && C0 > -tolContacto(Math.max(radio(S, i), 1e-3)) * 100 && dentro0 ? Math.min(C0, 0) - TOL_HUECO : 0;
       ev.push({
@@ -521,7 +559,7 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
         // es continua (no salta al cruzar el borde), así que el cambio de signo
         // entre dos pasos es fiable; un cruce por el borde con C < 0 (desde
         // detrás) se descarta al tratarlo.
-        g: (t, y) => Math.max(r.evaluar(y).C - off, -margenSuperficie(sup, [y[4 * i], y[4 * i + 1]])),
+        g: (t, y) => Math.max(r.evaluar(y).C - off, -margenSuperficie(sup, puntoRel(sup, y, i))),
       });
     });
   }
@@ -533,7 +571,7 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
       g: (t, y) => (din(y).lambdas[`contacto:${clave}`] ?? 0),
     });
     if (sup.tipo === 'segmento' || sup.a0 != null) {
-      ev.push({ nombre: `fin:${clave}`, direccion: -1, terminal: true, g: (t, y) => margenSuperficie(sup, [y[4 * iP], y[4 * iP + 1]]) });
+      ev.push({ nombre: `fin:${clave}`, direccion: -1, terminal: true, g: (t, y) => margenSuperficie(sup, puntoRel(sup, y, iP)) });
     }
     if (sup.mu > 0) {
       if (s.pegado) {
@@ -545,7 +583,7 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
       } else {
         ev.push({
           nombre: `vt0:${clave}`, direccion: 0, terminal: true,
-          g: (t, y) => { const tg = tangente(sup, [y[4 * iP], y[4 * iP + 1]]); return tg[0] * y[4 * iP + 2] + tg[1] * y[4 * iP + 3]; },
+          g: (t, y) => { const tg = tangente(sup, puntoRel(sup, y, iP)), vr = velocidadRel(sup, y, iP); return tg[0] * vr[0] + tg[1] * vr[1]; },
         });
       }
     }
@@ -659,6 +697,7 @@ function energiaEstado(S, y) {
   let E = 0;
   for (let i = 0; i < S.n; i++) {
     const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3], x = y[4 * i], yy = y[4 * i + 1];
+    if (p.cinematica) continue;
     E += 0.5 * p.m * (vx * vx + vy * vy) - p.m * (S.g[0] * x + S.g[1] * yy);
     if (p.F) E -= p.F[0] * x + p.F[1] * yy;
   }
@@ -684,6 +723,7 @@ function potenciaDisipada(S, y, acc) {
   let dE = 0;
   for (let i = 0; i < S.n; i++) {
     const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3];
+    if (p.cinematica) continue;
     dE += vx * (p.m * acc[2 * i] - p.m * S.g[0] - (p.F ? p.F[0] : 0)) + vy * (p.m * acc[2 * i + 1] - p.m * S.g[1] - (p.F ? p.F[1] : 0));
   }
   for (const c of S.con) {
@@ -698,9 +738,20 @@ function potenciaDisipada(S, y, acc) {
   return -dE;
 }
 
+/**
+ * Potencia que entregan los cuerpos cinemáticos al resto: −F·v de cada uno,
+ * con F la fuerza que el sistema hace sobre él (reacciones y fricción).
+ * @param {any} S @param {number[]} y @param {number[]} fuerzaTotal
+ */
+function potenciaConductores(S, y, fuerzaTotal) {
+  let P = 0;
+  for (let j = 0; j < S.n; j++) if (S.P[j].cinematica) P -= fuerzaTotal[2 * j] * y[4 * j + 2] + fuerzaTotal[2 * j + 1] * y[4 * j + 3];
+  return P;
+}
+
 function energiaCinetica(S, y) {
   let K = 0;
-  for (let i = 0; i < S.n; i++) K += 0.5 * S.P[i].m * (y[4 * i + 2] ** 2 + y[4 * i + 3] ** 2);
+  for (let i = 0; i < S.n; i++) if (!S.P[i].cinematica) K += 0.5 * S.P[i].m * (y[4 * i + 2] ** 2 + y[4 * i + 3] ** 2);
   return K;
 }
 
@@ -722,6 +773,7 @@ function normalLibre(sup, p) {
  */
 export function simularMecanica(escena) {
   const S = preparar(escena);
+  const hayCinematicos = S.P.some(p => p.cinematica);
   const DUR = escena.duracion ?? 5, UMBRAL = escena.umbral ?? 1e-3, RTOL = escena.rtol ?? 1e-10;
   let y = estadoInicial(S.P), t = 0;
   /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean}>, pares: Record<string, boolean>, cuerdas: Record<string, any>}} */
@@ -735,8 +787,9 @@ export function simularMecanica(escena) {
   // Contactos iniciales: partícula apoyada sobre una superficie (C ≈ 0 y sin velocidad hacia fuera)
   S.sup.forEach((sup, js) => {
     for (let i = 0; i < S.n; i++) {
+      if (sup.j === i) continue;
       const { C, Cp } = restriccionSuperficie(sup, i, radio(S, i)).evaluar(y);
-      if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9 && dentroDeSuperficie(sup, [y[4 * i], y[4 * i + 1]])) modo.contactos[`${i}:${js}`] = { i, sup: js, pegado: false };
+      if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9 && dentroDeSuperficie(sup, puntoRel(sup, y, i))) modo.contactos[`${i}:${js}`] = { i, sup: js, pegado: false };
     }
   });
   // Discos que empiezan tocándose y en reposo relativo (una pila, una fila)
@@ -761,7 +814,7 @@ export function simularMecanica(escena) {
   // son filas libres. Un apoyo degenerado (λ = 0 y w = 0) se conserva; un par
   // de discos sin carga se suelta, como antes, para que el ruido de λ ≈ 0 no
   // dispare eventos de separación.
-  const masas = S.P.map(p => p.m);
+  const masas = S.im;
   const revisarDespegues = () => {
     for (let ronda = 0; ronda < 4; ronda++) {
       const restr = restriccionesDelModo(S, modo);
@@ -791,8 +844,8 @@ export function simularMecanica(escena) {
   for (const [clave, s] of Object.entries(modo.contactos)) {
     const sup = S.sup[s.sup];
     if (!(sup.mu > 0)) continue;
-    const iP = s.i, tg = tangente(sup, [y[4 * iP], y[4 * iP + 1]]);
-    if (Math.abs(tg[0] * y[4 * iP + 2] + tg[1] * y[4 * iP + 3]) > 1e-12) continue;
+    const iP = s.i, tg = tangente(sup, puntoRel(sup, y, iP)), vr = velocidadRel(sup, y, iP);
+    if (Math.abs(tg[0] * vr[0] + tg[1] * vr[1]) > 1e-12) continue;
     s.pegado = true;
     const L = dinamica(S, modo, y, restriccionesDelModo(S, modo)).lambdas;
     if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
@@ -810,38 +863,52 @@ export function simularMecanica(escena) {
     return v > 0 ? 0.25 * escalaPaso / v : Infinity;
   } : undefined;
 
+  // Trabajo de los cuerpos cinemáticos en los impulsos de un instante: el
+  // impulso sobre el conductor es −P·grad y él lo entrega a su velocidad
+  let trabajoImpulsivo = 0;
+  const impulsoFila = (grad, P) => {
+    for (const [i, gx, gy] of grad) {
+      if (S.im[i] === 0) trabajoImpulsivo -= P * (gx * y[4 * i + 2] + gy * y[4 * i + 3]);
+      else { y[4 * i + 2] += P * gx * S.im[i]; y[4 * i + 3] += P * gy * S.im[i]; }
+    }
+  };
   /** Impacto de la partícula i con la superficie js; devuelve la descripción o '' si no hay choque. */
   const impacto = (i, js, zeno) => {
     const sup = S.sup[js];
-    const n = normalLibre(sup, [y[4 * i], y[4 * i + 1]]);
-    const v = [y[4 * i + 2], y[4 * i + 3]], vn = dot(v, n);
+    const n = normalLibre(sup, puntoRel(sup, y, i));
+    const v = velocidadRel(sup, y, i), vn = dot(v, n);
     const e = sup.e ?? 1, vn2 = -e * vn;
     if (vn >= 0) return '';
-    if (vn2 < UMBRAL || zeno) {
-      y[4 * i + 2] -= vn * n[0]; y[4 * i + 3] -= vn * n[1];
+    // Impulso a lo largo de la normal repartido con las masas: si la superficie
+    // es fija o va sobre un cuerpo cinemático, solo cambia la partícula
+    const j = sup.j, wi = S.im[i], wj = j >= 0 ? S.im[j] : 0;
+    if (wi === 0) return '';
+    const contacto = vn2 < UMBRAL || zeno;
+    const J = -(1 + (contacto ? 0 : e)) * vn / (wi + wj);
+    impulsoFila(j >= 0 ? [[i, n[0], n[1]], [j, -n[0], -n[1]]] : [[i, n[0], n[1]]], J);
+    if (contacto) {
       modo.contactos[`${i}:${js}`] = { i, sup: js, pegado: false };
       return `Choque y contacto con ${sup.id}`;
     }
-    y[4 * i + 2] += (vn2 - vn) * n[0]; y[4 * i + 3] += (vn2 - vn) * n[1];
     return `Choque con ${sup.id}`;
   };
   /** Choque entre las partículas i y j; un rebote lento las deja en contacto. */
   const choque = (i, j, zeno) => {
-    const e = escena.eParticulas ?? 1, mi = S.P[i].m, mj = S.P[j].m;
+    const e = escena.eParticulas ?? 1, wi = S.im[i], wj = S.im[j];
+    if (wi + wj === 0) return '';   // dos cuerpos cinemáticos no se empujan
     const d = [y[4 * i] - y[4 * j], y[4 * i + 1] - y[4 * j + 1]], D = norm(d), n = [d[0] / D, d[1] / D];
     const vrel = (y[4 * i + 2] - y[4 * j + 2]) * n[0] + (y[4 * i + 3] - y[4 * j + 3]) * n[1];
     if (vrel >= 0) return '';
     const contacto = e * -vrel < UMBRAL || zeno;
-    const J = -(1 + (contacto ? 0 : e)) * vrel / (1 / mi + 1 / mj);
-    y[4 * i + 2] += J * n[0] / mi; y[4 * i + 3] += J * n[1] / mi;
-    y[4 * j + 2] -= J * n[0] / mj; y[4 * j + 3] -= J * n[1] / mj;
+    const J = -(1 + (contacto ? 0 : e)) * vrel / (wi + wj);
+    impulsoFila([[i, n[0], n[1]], [j, -n[0], -n[1]]], J);
     if (contacto) { modo.pares[`${i}:${j}`] = true; return `Choque y contacto entre ${S.P[i].id} y ${S.P[j].id}`; }
     return `Choque entre ${S.P[i].id} y ${S.P[j].id}`;
   };
   /** Registra un cambio instantáneo con la energía cinética que disipa. */
   let perdidaAnotada = 0;
   const anotar = (clave, aplicar) => {
-    const K0 = energiaCinetica(S, y), descripcion = aplicar(), perdida = K0 - energiaCinetica(S, y);
+    const K0 = energiaCinetica(S, y), W0 = trabajoImpulsivo, descripcion = aplicar(), perdida = K0 - energiaCinetica(S, y) + trabajoImpulsivo - W0;
     if (descripcion) { eventos.push({ t, nombre: descripcion, clave, perdida: perdida > 0 ? perdida : 0, y: y.slice() }); perdidaAnotada += perdida > 0 ? perdida : 0; }
     return descripcion;
   };
@@ -879,9 +946,10 @@ export function simularMecanica(escena) {
         }
       }
       for (let i = 0; i < S.n; i++) {
-        const ri = radio(S, i), p = [y[4 * i], y[4 * i + 1]];
+        const ri = radio(S, i);
         S.sup.forEach((sup, js) => {
-          const clave = `${i}:${js}`, actual = modo.contactos[clave];
+          if (sup.j === i) return;     // un cuerpo no choca con su propia superficie
+          const clave = `${i}:${js}`, actual = modo.contactos[clave], p = puntoRel(sup, y, i);
           const { C, Cp } = restriccionSuperficie(sup, i, ri).evaluar(y);
           if (actual) {
             // Apoyada: un impulso hacia la superficie es un choque; uno que la
@@ -924,9 +992,9 @@ export function simularMecanica(escena) {
       else if (e.C <= TOL_HUECO) cand.push({ e, alta: () => { modo.pares[clave] = true; } });
     }
     for (let i = 0; i < S.n; i++) {
-      const p = [y[4 * i], y[4 * i + 1]];
       S.sup.forEach((sup, js) => {
-        const clave = `${i}:${js}`;
+        if (sup.j === i) return;
+        const clave = `${i}:${js}`, p = puntoRel(sup, y, i);
         if (modo.contactos[clave] || excluir.has('sup:' + clave) || margenSuperficie(sup, p) < 0) return;
         const e = restriccionSuperficie(sup, i, radio(S, i)).evaluar(y);
         if (e.C <= TOL_HUECO && e.C >= -TOL_PENETRACION) cand.push({ e, alta: () => { modo.contactos[clave] = { i, sup: js, pegado: false }; } });
@@ -937,7 +1005,7 @@ export function simularMecanica(escena) {
     const P = resolverLCP(A, cand.map(c => c.e.Cp));
     for (let r = 0; r < k; r++) {
       if (!(P[r] > 0)) continue;
-      for (const [i, gx, gy] of cand[r].e.grad) { y[4 * i + 2] += P[r] * gx / S.P[i].m; y[4 * i + 3] += P[r] * gy / S.P[i].m; }
+      impulsoFila(cand[r].e.grad, P[r]);
       if (cand[r].alta) cand[r].alta();
     }
   };
@@ -962,7 +1030,7 @@ export function simularMecanica(escena) {
       if (!filas.length) return;
       const k = filas.length, A = regularizada(matrizJMJ(filas, masas)), b = filas.map(e => -e.C);
       const mu = resolver(A, b) ?? [];
-      for (let r = 0; r < k; r++) for (const [i, gx, gy] of filas[r].grad) { y[4 * i] += mu[r] * gx / S.P[i].m; y[4 * i + 1] += mu[r] * gy / S.P[i].m; }
+      for (let r = 0; r < k; r++) for (const [i, gx, gy] of filas[r].grad) { y[4 * i] += mu[r] * gx * S.im[i]; y[4 * i + 1] += mu[r] * gy * S.im[i]; }
     }
   };
   resolverSimultaneos(false);
@@ -999,10 +1067,13 @@ export function simularMecanica(escena) {
     let ultD = null;
     const din = (/** @type {number[]} */ yy) => { if (yy !== ultY) { ultD = dinamica(S, m, yy, restr); ultY = yy; } return ultD; };
     const f = (tt, yy) => {
-      const { acc } = din(yy);
+      const { acc, fuerzaTotal } = din(yy);
       const d = new Array(yy.length);
       for (let i = 0; i < S.n; i++) { d[4 * i] = yy[4 * i + 2]; d[4 * i + 1] = yy[4 * i + 3]; d[4 * i + 2] = acc[2 * i]; d[4 * i + 3] = acc[2 * i + 1]; }
-      d[4 * S.n] = potenciaDisipada(S, yy, acc);
+      // E + Qc + Qi = E0 + W: lo que entra por los conductores menos lo que sube E
+      const W = hayCinematicos ? potenciaConductores(S, yy, fuerzaTotal) : 0;
+      d[4 * S.n] = potenciaDisipada(S, yy, acc) + W;
+      d[4 * S.n + 1] = W;
       return d;
     };
     // Paso máximo acotado: un evento cuya función baja y vuelve a subir dentro de un
@@ -1038,6 +1109,7 @@ export function simularMecanica(escena) {
     // Energía mecánica entera (no solo la cinética): la proyección de las
     // posiciones del instante cambia también la potencial
     const K0 = energiaEstado(S, y);
+    trabajoImpulsivo = 0;
     const zeno = k > LIMITE - 10;
     modo = copiarModo(modo);
     const activasAntes = activas(modo);
@@ -1050,7 +1122,7 @@ export function simularMecanica(escena) {
       // Si el evento lo disparó el borde (la partícula entra en la extensión de
       // la superficie estando detrás, C < 0), o no se acerca, no hay choque.
       // Dentro de la extensión es un impacto aunque haya un solape pequeño.
-      const porBorde = margenSuperficie(S.sup[js], [y[4 * i], y[4 * i + 1]]) <= TOL_HUECO && C < -TOL_PENETRACION;
+      const porBorde = margenSuperficie(S.sup[js], puntoRel(S.sup[js], y, i)) <= TOL_HUECO && C < -TOL_PENETRACION;
       descripcion = porBorde ? '' : impacto(i, js, zeno);
       if (!descripcion) silenciar(nombre);
     } else if (partes[0] === 'despegue') {
@@ -1073,8 +1145,9 @@ export function simularMecanica(escena) {
       descripcion = s.pegado ? `Se detiene (${S.P[i].id})` : `Invierte el deslizamiento (${S.P[i].id})`;
       if (!s.pegado) {
         // Empuja un poco para que el evento no se repita en el mismo instante
-        const tg = tangente(sup, [y[4 * i], y[4 * i + 1]]), a = dinamica(S, modo, y, restr2).acc;
-        const sgn = Math.sign(tg[0] * a[2 * i] + tg[1] * a[2 * i + 1]) || 1;
+        const tg = tangente(sup, puntoRel(sup, y, i)), a = dinamica(S, modo, y, restr2).acc;
+        const aj = sup.j >= 0 ? [a[2 * sup.j], a[2 * sup.j + 1]] : [0, 0];
+        const sgn = Math.sign(tg[0] * (a[2 * i] - aj[0]) + tg[1] * (a[2 * i + 1] - aj[1])) || 1;
         y[4 * i + 2] += sgn * 1e-12 * tg[0]; y[4 * i + 3] += sgn * 1e-12 * tg[1];
       }
     } else if (partes[0] === 'desliza') {
@@ -1139,7 +1212,9 @@ export function simularMecanica(escena) {
     proyectarPosiciones();
     // Energía del instante que no registró ningún choque simultáneo: la del
     // evento principal más la de las proyecciones sin evento
-    const resto = K0 - energiaEstado(S, y) - perdidaAnotada;
+    const resto = K0 - energiaEstado(S, y) + trabajoImpulsivo - perdidaAnotada;
+    // El trabajo impulsivo de los conductores se suma al acumulado del estado
+    if (trabajoImpulsivo) y[4 * S.n + 1] += trabajoImpulsivo;
     if (resto > 0) {
       const destino = eventos[iEvento] ?? eventos[eventos.length - 1];
       if (destino) destino.perdida += resto;
@@ -1154,7 +1229,7 @@ export function simularMecanica(escena) {
       let nombreEv = '', claveEv = '';
       if (tipo === 'contacto') {
         const i = Number(resto2[0]), sup = S.sup[Number(resto2[1])];
-        const borde = margenSuperficie(sup, [y[4 * i], y[4 * i + 1]]) <= 1e-6;
+        const borde = margenSuperficie(sup, puntoRel(sup, y, i)) <= 1e-6;
         nombreEv = borde ? `Sale del borde (${S.P[i].id})` : `Se despega (${S.P[i].id})`;
         claveEv = `${borde ? 'fin' : 'despegue'}:${resto2.join(':')}`;
       } else if (tipo === 'par') {
@@ -1178,9 +1253,9 @@ function aplicarTiron(S, c, modo, y) {
   if (Cp >= 0) return;   // no se aleja: no hay tirón
   // Impulso λ en la dirección del gradiente que lleva Ċ a 0
   let den = 0;
-  for (const [i, gx, gy] of grad) den += (gx * gx + gy * gy) / S.P[i].m;
+  for (const [i, gx, gy] of grad) den += (gx * gx + gy * gy) * S.im[i];
   const L = -Cp / den;
-  for (const [i, gx, gy] of grad) { y[4 * i + 2] += L * gx / S.P[i].m; y[4 * i + 3] += L * gy / S.P[i].m; }
+  for (const [i, gx, gy] of grad) { y[4 * i + 2] += L * gx * S.im[i]; y[4 * i + 3] += L * gy * S.im[i]; }
 }
 
 /**
@@ -1213,6 +1288,9 @@ export function energiaMecanica(sim, t) {
   const e = sim.escena, g = e.g ?? [0, -9.8], est = estadoMecanica(sim, t);
   let K = 0, Ug = 0, Ue = 0, UF = 0;
   est.forEach((s, i) => {
+    // Un cuerpo cinemático es un agente externo: su energía no cuenta (lo que
+    // entrega va en W)
+    if (e.particulas[i].cinematica) return;
     const m = sim.S.m[i], F = e.particulas[i].F;
     K += 0.5 * m * (s.vx * s.vx + s.vy * s.vy);
     Ug -= m * (g[0] * s.x + g[1] * s.y);
@@ -1227,8 +1305,8 @@ export function energiaMecanica(sim, t) {
   }
   // Disipada hasta t: la continua (fricción, arrastre, amortiguadores,
   // estabilización) y la de los choques y demás cambios instantáneos
-  const Qc = vectorEn(sim, t)[4 * sim.S.n] ?? 0;
+  const vec = vectorEn(sim, t), Qc = vec[4 * sim.S.n] ?? 0, W = vec[4 * sim.S.n + 1] ?? 0;
   let Qi = 0;
   for (const ev of sim.eventos) if (ev.t <= t + 1e-12) Qi += ev.perdida;
-  return { K, Ug, Ue, UF, E: K + Ug + Ue + UF, Qc, Qi };
+  return { K, Ug, Ue, UF, E: K + Ug + Ue + UF, Qc, Qi, W };
 }

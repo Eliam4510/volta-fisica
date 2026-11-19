@@ -9,6 +9,14 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Motor de Mecánica: superficies que van sobre un cuerpo (`sobre`) y se
+  trasladan con él, con reacción y fricción sobre ese cuerpo, y cuerpos
+  cinemáticos (`cinematica`), conductores de masa infinita a velocidad
+  constante (una mano, un ascensor, una paleta). `energiaMecanica` devuelve
+  su trabajo `W` y el balance E + Qc + Qi = E0 + W cierra a 10⁻⁹. Pruebas:
+  bloque sobre una tabla libre (MEXT 2016 P3), mano que sube un peso con
+  resorte (MEXT 2006 1-(1)), ascensor y paleta. Falta llevarlo al Laboratorio.
+
 - Gravitación: seis escenas MEXT nuevas en «Órbitas» (2027 1-(2) fuerza a
   una altura, 2015 1-(2) masa de un planeta por su luna, 2014 1-(2) escape
   lanzando en horizontal, 2013 1-(2) tercera ley de Kepler alrededor del

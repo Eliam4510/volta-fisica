@@ -581,3 +581,88 @@ describe('energía disipada: continua (fricción, arrastre, amortiguadores) y en
     expect(balance(plano, 2)).toBeLessThan(1e-9);
   });
 });
+
+describe('superficies que se mueven: sobre un cuerpo o llevadas por un conductor cinemático', () => {
+  const balance = (sim, D) => {
+    const E0 = energiaMecanica(sim, 0).E;
+    let peor = 0;
+    for (let k = 0; k <= 200; k++) { const e = energiaMecanica(sim, D * k / 200); peor = Math.max(peor, Math.abs(e.E + e.Qc + e.Qi - e.W - E0)); }
+    return peor / Math.max(1, Math.abs(E0));
+  };
+
+  it('bloque que desliza sobre una tabla libre (MEXT 2016 P3): velocidad común, tiempo y calor', () => {
+    // m = 1 con v0 = 4 sobre M = 3 en reposo; fricción μ = 0.3 entre ellos y suelo liso
+    const m = 1, M = 3, v0 = 4, mu = 0.3;
+    const sim = simularMecanica({
+      duracion: 2.5,
+      particulas: [{ id: 'T', m: M, p: [0, 0], v: [0, 0] }, { id: 'B', m, p: [0, 0.1], v: [v0, 0] }],
+      superficies: [
+        { id: 'suelo', tipo: 'segmento', a: [-5, 0], b: [20, 0] },
+        { id: 'tabla', tipo: 'segmento', a: [-0.5, 0.1], b: [3, 0.1], sobre: 'T', mu },
+      ],
+    });
+    expect(sim.incompleta).toBeNull();
+    const vf = m * v0 / (m + M), tf = (v0 - vf) / (mu * g);
+    // Se pega a la tabla cuando las velocidades se igualan
+    // El instante sale de la salida densa del integrador (rtol = 10⁻¹⁰): ≈ 10⁻⁸
+    const pega = sim.eventos.find(e => e.clave.startsWith('vt0:'));
+    cerca(pega.t, tf, 1e-8);
+    for (const t of [0.3, 0.8, tf, 2.5]) {
+      const [T, B] = estadoMecanica(sim, t);
+      cerca(m * B.vx + M * T.vx, m * v0, 1e-9);      // el momento se conserva
+      cerca(B.y, 0.1, 1e-9); cerca(T.y, 0, 1e-9);
+    }
+    const [T, B] = estadoMecanica(sim, 2.5);
+    cerca(B.vx, vf, 1e-9); cerca(T.vx, vf, 1e-9);
+    // Calor: μ·m·g por el deslizamiento relativo = ½·m·v0²·M/(m + M)
+    cerca(energiaMecanica(sim, 2.5).Qc, 0.5 * m * v0 * v0 * M / (m + M), 1e-9);
+    expect(balance(sim, 2.5)).toBeLessThan(1e-9);
+  });
+
+  it('una mano sube despacio un peso colgado de un resorte hasta el largo natural (MEXT 2006 1-(1)): W = m²g²/(2k)', () => {
+    const m = 1, k = 50, v = 0.01, ext = m * g / k, y0 = 0.5 - ext;
+    const sim = simularMecanica({
+      duracion: ext / v,
+      particulas: [
+        { id: 'mano', m: 1, p: [0, y0], v: [0, v], cinematica: true },
+        { id: 'P', m, p: [0, y0], v: [0, v] },
+      ],
+      superficies: [{ id: 'palma', tipo: 'segmento', a: [-0.1, 0], b: [0.1, 0], sobre: 'mano' }],
+      conectores: [{ id: 'r', tipo: 'resorte', a: 'P', ancla: [0, 1], k, L0: 0.5 }],
+    });
+    expect(sim.incompleta).toBeNull();
+    expect(sim.eventos).toEqual([]);
+    const P = estadoMecanica(sim, ext / v)[1];
+    cerca(P.y, 0.5, 1e-9); cerca(P.vy, v, 1e-9);
+    cerca(energiaMecanica(sim, ext / v).W, m * m * g * g / (2 * k), 1e-9);
+    expect(balance(sim, ext / v)).toBeLessThan(1e-9);
+  });
+
+  it('ascensor a velocidad constante: la normal es m·g y la cabina entrega m·g·Δy', () => {
+    const sim = simularMecanica({
+      duracion: 3,
+      particulas: [{ id: 'cabina', m: 1, p: [0, 0], v: [0, 2], cinematica: true }, { id: 'B', m: 5, p: [0, 0], v: [0, 2] }],
+      superficies: [{ id: 'piso', tipo: 'segmento', a: [-1, 0], b: [1, 0], sobre: 'cabina' }],
+    });
+    expect(sim.eventos).toEqual([]);
+    cerca(estadoMecanica(sim, 3)[1].y, 6, 1e-9);
+    cerca(energiaMecanica(sim, 3).W, 5 * g * 6, 1e-9);
+    expect(balance(sim, 3)).toBeLessThan(1e-9);
+  });
+
+  it('una paleta cinemática golpea una bola: rebota con 2u más y el trabajo de la paleta es impulsivo', () => {
+    // Bola a −3 m/s contra una paleta que avanza a +1 m/s, e = 1: sale a +5 m/s
+    const sim = simularMecanica({
+      duracion: 1, g: [0, 0],
+      particulas: [{ id: 'paleta', m: 1, p: [0, 0], v: [1, 0], cinematica: true }, { id: 'bola', m: 2, p: [2, 0], v: [-3, 0] }],
+      superficies: [{ id: 'cara', tipo: 'segmento', a: [0, 1], b: [0, -1], sobre: 'paleta', e: 1 }],
+    });
+    const choque = sim.eventos.find(e => e.clave.startsWith('impacto:'));
+    cerca(choque.t, 0.5, 1e-12);
+    cerca(estadoMecanica(sim, 1)[1].vx, 5, 1e-12);
+    const e = energiaMecanica(sim, 1);
+    cerca(e.W, 0.5 * 2 * (25 - 9), 1e-12);
+    cerca(e.Qi, 0, 1e-12);
+    expect(balance(sim, 1)).toBeLessThan(1e-12);
+  });
+});
