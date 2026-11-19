@@ -11,6 +11,7 @@ import {
   resonanciasPiston, velocidadDesdeResonancias, respuestaArmonica,
   dopplerColineal, frecuenciaPulsacion, recepcion, senalObservador, frentesOnda, imagenPared, posicionEn,
 } from '../sistema/motores/ondas.js';
+import { velocidadEn } from '../sistema/motores/ondas.js';
 
 const rel = (a, b) => Math.abs(a - b) / Math.abs(b);
 const DOS_PI = 2 * Math.PI;
@@ -794,5 +795,76 @@ describe('determinismo', () => {
     expect(a.eventos).toEqual(b.eventos);
     for (const t of [0, 0.731, 2]) expect(estadoMedio(a, t)).toEqual(estadoMedio(b, t));
     expect(serieEn(a, 1.3)).toEqual(serieEn(b, 1.3));
+  });
+});
+
+describe('Doppler: fuente que va de vaivén', () => {
+  // Rejilla de un ventilador que oscila: radio R, ±Θ alrededor de +y, velocidad angular máxima Θ·Ω
+  const vaiven = (R = 0.2, Th = Math.PI / 4, wmax = 1) => ({ centro: [0, 0], radio: R, amplitud: Th, omega: wmax / Th, angulo: Math.PI / 2 });
+  it('posición y velocidad del vaivén: la velocidad es la derivada de la posición y la rapidez máxima es R·Θ·Ω', () => {
+    const F = { p: [0, 0], f: 300, vaiven: vaiven() };
+    for (const t of [0, 0.4, 1.3, 2.9]) {
+      const h = 1e-6, a = posicionEn(F, t - h), b = posicionEn(F, t + h), v = velocidadEn(F, t);
+      expect(v[0]).toBeCloseTo((b[0] - a[0]) / (2 * h), 7);
+      expect(v[1]).toBeCloseTo((b[1] - a[1]) / (2 * h), 7);
+      expect(Math.hypot(...posicionEn(F, t))).toBeCloseTo(0.2, 12);
+    }
+    expect(Math.hypot(...velocidadEn(F, 0))).toBeCloseTo(0.2, 12);
+    // Un móvil sin vaivén sigue igual que antes
+    expect(velocidadEn({ p: [1, 2], v: [3, -1] }, 5)).toEqual([3, -1]);
+    expect(posicionEn({ p: [1, 2], v: [3, -1] }, 2)).toEqual([7, 0]);
+  });
+  it('la frecuencia recibida es la derivada de la fase, por el camino directo y por el eco, con viento', () => {
+    const esc = { c: 344, viento: [0.5, 3], fuentes: [{ p: [0, 0], f: 300, vaiven: vaiven() }], observadores: [{ p: [0.3, 1], v: [0.2, 0] }], paredes: [{ punto: [0, -0.5], normal: [0, 1] }] };
+    for (const t of [1, 2.3, 4.1]) {
+      const h = 1e-5, r = recepcion(esc, 0, 0, t), ra = recepcion(esc, 0, 0, t - h), rb = recepcion(esc, 0, 0, t + h);
+      expect(r.map(c => c.camino)).toEqual(['directo', 'pared 1']);
+      r.forEach((c, i) => expect(c.f).toBeCloseTo((rb[i].fase - ra[i].fase) / (2 * h) / DOS_PI, 4));
+      // El sonido sale de donde estaba la fuente al emitir: c·(t − t_e) = distancia en el aire
+      const d = r[0], s = posicionEn(esc.fuentes[0], d.te), o = posicionEn(esc.observadores[0], t);
+      const sAire = [s[0] - esc.viento[0] * d.te, s[1] - esc.viento[1] * d.te], oAire = [o[0] - esc.viento[0] * t, o[1] - esc.viento[1] * t];
+      expect(344 * (t - d.te)).toBeCloseTo(Math.hypot(oAire[0] - sAire[0], oAire[1] - sAire[1]), 9);
+    }
+    // Los frentes nacen en la rejilla y los arrastra el viento
+    const fr = frentesOnda(esc, 0, 2, { max: 4 }).filter(x => x.pared < 0);
+    for (const x of fr) {
+      const s = posicionEn(esc.fuentes[0], x.te);
+      expect(x.centro[0]).toBeCloseTo(s[0] + 0.5 * (2 - x.te), 12);
+      expect(x.centro[1]).toBeCloseTo(s[1] + 3 * (2 - x.te), 12);
+    }
+  });
+});
+
+describe('MEXT: efecto Doppler (W3) · 2012 P5', () => {
+  // Ventilador que oscila en una habitación a 25 °C: el sonido sale de la rejilla (300 Hz), el aire
+  // sale a 3 m/s hacia delante, velocidad angular máxima del vaivén 1 rad/s, c = 344 m/s.
+  // Supuestos de la reconstrucción (sin figura): rejilla a 0.2 m del eje, vaivén de ±45°,
+  // persona a 1 m delante (dentro de la corriente) y otra a 15 m.
+  const fan = { p: [0, 0], f: 300, vaiven: { centro: [0, 0], radio: 0.2, amplitud: Math.PI / 4, omega: 1 / (Math.PI / 4), angulo: Math.PI / 2 } };
+  const extremos = esc => {
+    let lo = Infinity, hi = -Infinity;
+    for (let t = 0.5; t <= 10; t += 0.005) { const r = recepcion(esc, 0, 0, t)[0]; lo = Math.min(lo, r.f); hi = Math.max(hi, r.f); }
+    return { lo, hi, variacion: (hi - lo) / 300 };
+  };
+  it('(1) delante del ventilador la frecuencia cambia, pero menos del 1 % (c)', () => {
+    const e = extremos({ c: 344, viento: [0, 3], fuentes: [fan], observadores: [{ p: [0, 1] }] });
+    expect(e.variacion).toBeGreaterThan(1e-4);
+    expect(e.variacion).toBeLessThan(0.01);
+  });
+  it('(2) la frecuencia más alta es ≈ 300 Hz (d): el viento no cambia la frecuencia si la fuente y quien escucha no se mueven respecto del suelo', () => {
+    const con = extremos({ c: 344, viento: [0, 3], fuentes: [fan], observadores: [{ p: [0, 1] }] });
+    const sin = extremos({ c: 344, fuentes: [fan], observadores: [{ p: [0, 1] }] });
+    expect(Math.abs(con.hi - 300)).toBeLessThan(0.3);
+    expect(Math.abs(con.hi - sin.hi)).toBeLessThan(0.01);
+    // Con todo quieto, el viento de 3 m/s no cambia nada: f′ = f exactamente
+    const quieta = { c: 344, viento: [0, 3], fuentes: [{ p: [0, 0.2], f: 300 }], observadores: [{ p: [0, 1] }] };
+    expect(recepcion(quieta, 0, 0, 1)[0].f).toBeCloseTo(300, 10);
+    // Solo una fuente que se acercara a 3 m/s daría ≈ 303 Hz (la opción c)
+    expect(dopplerColineal({ f: 300, c: 344, vFuente: 3 })).toBeCloseTo(302.6, 1);
+  });
+  it('(3) lejos, la variación es del mismo orden y casi nula (≈ 0.04 %): casi constante (a)', () => {
+    const lejos = extremos({ c: 344, viento: [0, 3], fuentes: [fan], observadores: [{ p: [0, 15] }] });
+    expect(lejos.variacion).toBeLessThan(1e-3);
+    expect(Math.abs(lejos.hi - 300)).toBeLessThan(0.3);
   });
 });

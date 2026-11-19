@@ -27,7 +27,10 @@
       de la fuente y viaja con el aire. El tiempo de emisión se resuelve
       (Brent) y la frecuencia recibida es f/(dt_r/dt_e); la reflexión en una
       pared que se mueve a lo largo de su normal usa la fuente imagen exacta
-      (foco de la hipérbola de los puntos de choque).
+      (foco de la hipérbola de los puntos de choque). Una fuente también
+      puede ir de vaivén sobre un arco (la rejilla de un ventilador que
+      oscila): el mismo planteamiento con la posición y la velocidad de la
+      fuente en el instante de emisión.
    Lo usan la pantalla de Ondas y las pruebas.
    ========================================================================== */
 import { brent } from '../nucleo/integradores.js';
@@ -829,9 +832,19 @@ export function respuestaArmonica({ longitud: L, velocidad: v, rigidez: K, izq, 
 
 /** @typedef {[number, number]} V2 */
 /**
+ * @typedef {Object} Vaiven  movimiento de vaivén sobre un arco de circunferencia
+ * @property {V2} centro  eje de giro (m)
+ * @property {number} radio  m
+ * @property {number} amplitud  rad: el ángulo va de angulo − amplitud a angulo + amplitud
+ * @property {number} omega  rad/s: frecuencia angular del vaivén; la velocidad angular máxima es amplitud·omega
+ * @property {number} [angulo=π/2] rad: dirección del centro del arco
+ * @property {number} [fase=0] rad: α(t) = angulo + amplitud·sen(omega·t + fase)
+ */
+/**
  * @typedef {Object} Movil
  * @property {V2} p  posición en t = 0 (m)
  * @property {V2} [v] velocidad constante (m/s)
+ * @property {Vaiven} [vaiven] si está, manda sobre p y v (solo fuentes)
  */
 /**
  * @typedef {Movil & {f: number, amplitud?: number, fase?: number, inicio?: number}} FuenteSonora
@@ -853,8 +866,23 @@ export function respuestaArmonica({ longitud: L, velocidad: v, rigidez: K, izq, 
  * @property {Pared[]} [paredes]
  */
 
+/** Ángulo del vaivén en t. @param {Vaiven} w @param {number} t */
+const anguloVaiven = (w, t) => (w.angulo ?? Math.PI / 2) + w.amplitud * Math.sin(w.omega * t + (w.fase ?? 0));
+
 /** Posición de un móvil en t. @param {Movil} m @param {number} t @returns {V2} */
-export const posicionEn = (m, t) => [m.p[0] + (m.v ? m.v[0] : 0) * t, m.p[1] + (m.v ? m.v[1] : 0) * t];
+export const posicionEn = (m, t) => {
+  if (m.vaiven) { const w = m.vaiven, a = anguloVaiven(w, t); return [w.centro[0] + w.radio * Math.cos(a), w.centro[1] + w.radio * Math.sin(a)]; }
+  return [m.p[0] + (m.v ? m.v[0] : 0) * t, m.p[1] + (m.v ? m.v[1] : 0) * t];
+};
+
+/** Velocidad de un móvil en t (m/s). @param {Movil} m @param {number} t @returns {V2} */
+export function velocidadEn(m, t) {
+  if (m.vaiven) {
+    const w = m.vaiven, a = anguloVaiven(w, t), da = w.amplitud * w.omega * Math.cos(w.omega * t + (w.fase ?? 0));
+    return [-w.radio * da * Math.sin(a), w.radio * da * Math.cos(a)];
+  }
+  return [m.v ? m.v[0] : 0, m.v ? m.v[1] : 0];
+}
 
 /**
  * Doppler colineal: f' = f·(c + w − u_o)/(c + w − u_s), con todas las
@@ -919,6 +947,7 @@ export function imagenPared(s, te, pared, c) {
  * @returns {Array<{camino: string, te: number, f: number, fase: number, r: number, amplitud: number, n: V2, origen: V2}>}
  */
 export function recepcion(esc, iF, iO, tr) {
+  if (esc.fuentes[iF].vaiven) return recepcionVaiven(esc, iF, iO, tr);
   const c = esc.c, w = esc.viento ?? [0, 0], F = esc.fuentes[iF], O = esc.observadores[iO];
   const vs = F.v ?? [0, 0], vo = O.v ?? [0, 0];
   // Marco del aire: x' = x − w·t
@@ -956,6 +985,68 @@ export function recepcion(esc, iF, iO, tr) {
 }
 
 /**
+ * Instante de emisión con un emisor de trayectoria cualquiera (en el marco
+ * del aire): c·(t_r − t₀(t_e)) = |o − e(t_e)|. g(t_e) decrece si todo va por
+ * debajo de la rapidez del sonido, así que la raíz es única.
+ * @param {number} c @param {V2} o @param {(te: number) => V2} e @param {(te: number) => number} t0
+ * @param {number} tr @param {number} escala tiempo típico (s)
+ */
+function emisionGeneral(c, o, e, t0, tr, escala) {
+  const g = te => { const p = e(te); return c * (tr - t0(te)) - Math.hypot(o[0] - p[0], o[1] - p[1]); };
+  let hi = tr, ghi = g(hi);
+  if (ghi === 0) return hi;
+  if (ghi > 0) {
+    // La imagen de una pared «emite» antes que la fuente: se sube hasta cambiar de signo
+    let paso = Math.max(1e-9, escala);
+    for (let i = 0; i < 200 && ghi > 0; i++) { hi += paso; paso *= 2; ghi = g(hi); }
+    if (ghi > 0) return null;
+  }
+  const p0 = e(hi);
+  let paso = Math.max(1e-9, Math.hypot(o[0] - p0[0], o[1] - p0[1]) / c * 2, escala), lo = hi - paso, glo = g(lo);
+  for (let i = 0; i < 200 && glo <= 0; i++) { hi = lo; ghi = glo; paso *= 2; lo = hi - paso; glo = g(lo); }
+  if (glo <= 0) return null;
+  return brent(g, lo, hi, { tol: 1e-15 * Math.max(1, Math.abs(tr)) + 1e-15, ga: glo, gb: ghi });
+}
+
+/**
+ * recepcion() para una fuente que va de vaivén: el camino directo con la
+ * posición y la velocidad de la fuente en el instante de emisión, y el eco
+ * de cada pared con la fuente imagen de ese instante (sus derivadas, por
+ * diferencias centradas).
+ * @param {EscenaDoppler} esc @param {number} iF @param {number} iO @param {number} tr
+ */
+function recepcionVaiven(esc, iF, iO, tr) {
+  const c = esc.c, w = esc.viento ?? [0, 0], F = esc.fuentes[iF], O = esc.observadores[iO];
+  const uo = resta(O.v ?? [0, 0], w), o = posicionEn({ p: O.p, v: uo }, tr);
+  const t0 = F.inicio ?? -Infinity, A = F.amplitud ?? 1, ph0 = F.fase ?? 0;
+  // Fuente en el marco del aire
+  const s = te => { const p = posicionEn(F, te); return /** @type {V2} */ ([p[0] - w[0] * te, p[1] - w[1] * te]); };
+  const us = te => resta(velocidadEn(F, te), w);
+  const escala = 1 / F.f, out = [];
+  const te = emisionGeneral(c, o, s, x => x, tr, escala);
+  if (te != null && te >= t0) {
+    const ep = s(te), d = resta(o, ep), r = Math.hypot(d[0], d[1]);
+    const n = /** @type {V2} */ (r > 0 ? [d[0] / r, d[1] / r] : [1, 0]);
+    const dtr = (1 - punto(n, us(te)) / c) / (1 - punto(n, uo) / c);
+    out.push({ camino: 'directo', te, f: F.f / dtr, fase: DOS_PI * F.f * te + ph0, r, amplitud: A / Math.max(r, 1e-6), n, origen: /** @type {V2} */ ([ep[0] + w[0] * tr, ep[1] + w[1] * tr]) });
+  }
+  (esc.paredes || []).forEach((P, k) => {
+    const n = P.normal, d0 = punto(n, P.punto), u = (P.velocidad ?? 0) - punto(n, w);
+    const img = x => imagenPared(s(x), x, { n, d0, u }, c);
+    const tE = emisionGeneral(c, o, x => img(x).p, x => img(x).t, tr, escala);
+    if (tE == null || tE < t0) return;
+    const D = punto(n, s(tE)) - (d0 + u * tE);
+    if (D <= 0 || punto(n, o) - (d0 + u * tr) < -1e-9) return;
+    const I = img(tE), dd = resta(o, I.p), r = Math.hypot(dd[0], dd[1]), nn = /** @type {V2} */ ([dd[0] / r, dd[1] / r]);
+    const h = 1e-4 * escala, Ia = img(tE - h), Ib = img(tE + h);
+    const dI = /** @type {V2} */ ([(Ib.p[0] - Ia.p[0]) / (2 * h), (Ib.p[1] - Ia.p[1]) / (2 * h)]), dT = (Ib.t - Ia.t) / (2 * h);
+    const dtr = (dT - punto(nn, dI) / c) / (1 - punto(nn, uo) / c);
+    out.push({ camino: `pared ${k + 1}`, te: tE, f: F.f / dtr, fase: DOS_PI * F.f * tE + ph0, r, amplitud: (P.reflexion ?? 1) * A / Math.max(r, 1e-6), n: nn, origen: /** @type {V2} */ ([I.p[0] + w[0] * tr, I.p[1] + w[1] * tr]) });
+  });
+  return out;
+}
+
+/**
  * Señal que oye el observador en t_r: suma de A/r·sen(fase) de todas las
  * fuentes y caminos.
  * @param {EscenaDoppler} esc @param {number} iO @param {number} tr
@@ -984,7 +1075,7 @@ export function frentesOnda(esc, iF, t, o = {}) {
   for (let j = 0; j < max && te >= t0 - 1e-12; j++, te -= T) {
     const radio = c * (t - te);
     if (radio > rMax) break;
-    const sp = [F.p[0] + us[0] * te, F.p[1] + us[1] * te];
+    const sp = F.vaiven ? (q => [q[0] - w[0] * te, q[1] - w[1] * te])(posicionEn(F, te)) : [F.p[0] + us[0] * te, F.p[1] + us[1] * te];
     out.push({ centro: /** @type {V2} */ ([sp[0] + w[0] * t, sp[1] + w[1] * t]), radio, te, pared: -1 });
     (esc.paredes || []).forEach((P, k) => {
       const n = P.normal, d0 = punto(n, P.punto), u = (P.velocidad ?? 0) - punto(n, w);

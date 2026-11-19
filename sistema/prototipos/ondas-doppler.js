@@ -1,7 +1,9 @@
 /* ==========================================================================
    Volta · Ondas y sonido — espacio de trabajo "Doppler y acústica"
-   Fuentes sonoras y observadores que se mueven en línea recta, viento y
-   paredes reflectantes (quietas o en movimiento a lo largo de su normal).
+   Fuentes sonoras y observadores que se mueven en línea recta, fuentes que
+   van de vaivén sobre un arco (la rejilla de un ventilador que oscila),
+   viento y paredes reflectantes (quietas o en movimiento a lo largo de su
+   normal).
    Modelo cinemático exacto del motor sistema/motores/ondas.js (probado en
    pruebas/ondas.test.js): cada frente nace donde estaba la fuente y viaja
    con el aire; la frecuencia recibida sale del instante de emisión resuelto
@@ -11,7 +13,7 @@
    cada camino: las pulsaciones se oyen.
    Parámetros de URL para capturas: ?escena=…&t=…&pest=energia|eventos|tabla&obs=1
    ========================================================================== */
-import { recepcion, frentesOnda, posicionEn, frecuenciaPulsacion, velocidadSonido } from '../motores/ondas.js';
+import { recepcion, frentesOnda, posicionEn, velocidadEn, frecuenciaPulsacion, velocidadSonido } from '../motores/ondas.js';
 import { aCSV } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar as avisarLienzo } from '../componentes/exportar.js';
 import { crearEscena, numero, texto } from '../nucleo/escena.js';
@@ -85,6 +87,15 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       observadores: [{ nombre: 'O', p: [0, 4] }],
     },
     {
+      // Reconstrucción sin figura: la rejilla (de donde sale el sonido) a 0.2 m del eje del vaivén,
+      // ±45° con velocidad angular máxima 1 rad/s; el aire que sale del ventilador (3 m/s) como viento
+      // uniforme hacia las personas; una delante, a 1.2 m, y otra lejos, a 10 m
+      clave: 'mext-2012-5', titulo: 'Ventilador que oscila', tipo: 'MEXT', anio: '2012 P5', c: 344, viento: [3, 0], duracion: 10,
+      fuentes: [{ nombre: 'Rejilla', p: [0.2, 0], f: 300, inicio: null, vaiven: { centro: [0, 0], radio: 0.2, amplitud: Math.PI / 4, omegaMax: 1, angulo: 0 } }],
+      observadores: [{ nombre: 'Delante', p: [1.2, 0] }, { nombre: 'Lejos', p: [10, 0] }],
+      variables: { w: vari('ω', 1, 0, 3, 0.1, 'rad/s', ['fuentes.0.vaiven.omegaMax'], 'máx'), W: vari('w', 3, 0, 10, 0.5, 'm/s', ['viento.0']) },
+    },
+    {
       clave: 'mext-2009-5', titulo: 'Ambulancia con viento a favor', tipo: 'MEXT', anio: '2009 P5', c: 340, viento: [8, 0], duracion: 30,
       fuentes: [{ nombre: 'Ambulancia', p: [-300, 0], v: [20, 0], f: 600, inicio: null }],
       observadores: [{ nombre: 'O', p: [0, 6] }],
@@ -127,10 +138,14 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   let autoguardar = false, historial = null, SERIES = null, EVENTOS = [];
   const lienzo = $('#lienzo'), area = $('#area'), tz = new Trazo(lienzo);
 
+  // Vaivén de la pantalla (con la velocidad angular máxima) → vaivén del motor (con su frecuencia angular)
+  const vaivenMotor = w => (w ? { centro: w.centro, radio: w.radio, amplitud: w.amplitud, omega: w.amplitud > 0 ? w.omegaMax / w.amplitud : 0, angulo: w.angulo } : undefined);
+  const movil = f => (f.vaiven ? { p: f.p, v: f.v, vaiven: vaivenMotor(f.vaiven) } : f);
+  const posF = (f, tt) => posicionEn(movil(f), tt);
   function escenaMotor() {
     return {
       c: ESC.c, viento: ESC.viento,
-      fuentes: ESC.fuentes.map(f => ({ p: f.p, v: f.v, f: f.f, inicio: f.inicio == null ? -Infinity : f.inicio, amplitud: 1 })),
+      fuentes: ESC.fuentes.map(f => ({ p: f.p, v: f.v, f: f.f, inicio: f.inicio == null ? -Infinity : f.inicio, amplitud: 1, vaiven: vaivenMotor(f.vaiven) })),
       observadores: ESC.observadores.map(o => ({ p: o.p, v: o.v })),
       paredes: ESC.paredes.map(p => ({ punto: p.punto, normal: p.normal, velocidad: p.velocidad || 0 })),
     };
@@ -186,6 +201,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
           if (tr != null && tr <= dur) ev.push({ t: tr, nombre: `El primer frente de ${f.nombre} llega a ${o.nombre}` });
           ESC.paredes.forEach((p, j) => { const te = llegada(k, i, `pared ${j + 1}`, f.inicio); if (te != null && te <= dur) ev.push({ t: te, nombre: `Llega a ${o.nombre} el eco de ${p.nombre || 'la pared'}` }); });
         }
+        if (f.vaiven) return;
         const dv = [f.v[0] - o.v[0], f.v[1] - o.v[1]], dp = [f.p[0] - o.p[0], f.p[1] - o.p[1]], v2 = dv[0] ** 2 + dv[1] ** 2;
         if (v2 > 1e-12) {
           const tc = -(dp[0] * dv[0] + dp[1] * dv[1]) / v2;
@@ -206,7 +222,10 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   function caja() {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     const incl = p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); };
-    for (const m of [...ESC.fuentes, ...ESC.observadores]) { incl(m.p); incl(posicionEn(m, ESC.duracion)); }
+    for (const m of [...ESC.fuentes, ...ESC.observadores]) {
+      if (m.vaiven) { const w = m.vaiven; incl([w.centro[0] - w.radio, w.centro[1] - w.radio]); incl([w.centro[0] + w.radio, w.centro[1] + w.radio]); continue; }
+      incl(m.p); incl(posicionEn(m, ESC.duracion));
+    }
     for (const p of ESC.paredes) { incl(p.punto); incl(posPared(p, ESC.duracion)); }
     for (const m of ESC.marcas) incl(m.p);
     const w = Math.max(x1 - x0, 10), h = Math.max(y1 - y0, 10), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, m = 0.2;
@@ -238,7 +257,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const k = ESC.obs, o = posicionEn(ESC.observadores[k], t), comps = componentes(k, t);
     if (ESC.capas.emision) {
       for (const c of comps.filter(x => x.camino === 'directo')) {
-        const pe = posicionEn(ESC.fuentes[c.fuente], c.te);
+        const pe = posF(ESC.fuentes[c.fuente], c.te);
         tz.linea([pe, o], { color: 'texto-3', grosor: 1, patron: 'auxiliar' });
         tz.fantasma(pe);
       }
@@ -258,9 +277,18 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const vmax = Math.max(1, ...[...ESC.fuentes, ...ESC.observadores].map(m => Math.hypot(m.v[0], m.v[1])));
     const kV = 46 / vmax;
     ESC.fuentes.forEach((f, i) => {
-      const p = posicionEn(f, t), [X, Y] = tz.ondasFuenteSonora(p, { seleccionada: sel === 'fuente:' + i });
+      const p = posF(f, t), vf = velocidadEn(movil(f), t);
+      if (f.vaiven) {
+        // Arco que recorre (construcción), eje del vaivén y brazo hasta la rejilla
+        const w = f.vaiven, arco = [];
+        for (let k = 0; k <= 40; k++) { const a = w.angulo - w.amplitud + 2 * w.amplitud * k / 40; arco.push([w.centro[0] + w.radio * Math.cos(a), w.centro[1] + w.radio * Math.sin(a)]); }
+        tz.linea(arco, { color: 'texto-3', grosor: 1, patron: 'auxiliar' });
+        tz.linea([w.centro, p], { color: 'tinta', grosor: 1.5 });
+        tz.pivote(w.centro);
+      }
+      const [X, Y] = tz.ondasFuenteSonora(p, { seleccionada: sel === 'fuente:' + i });
       tz.texto(f.nombre, X, Y - 16, { fuente: 'ui', tam: 12, peso: 500, color: 'texto', alinear: 'center', halo: true });
-      if (ESC.capas.vectores && Math.hypot(...f.v) > 1e-9) tz.vector(p, f.v, { familia: 'movimiento', escalaPx: kV, desdeRadio: 10, simbolo: 'v', valor: ESC.capas.valores ? Math.hypot(...f.v) : null, unidad: 'm/s' });
+      if (ESC.capas.vectores && Math.hypot(...vf) > 1e-9) tz.vector(p, vf, { familia: 'movimiento', escalaPx: f.vaiven ? 46 / Math.max(1e-9, f.vaiven.radio * f.vaiven.omegaMax) : kV, desdeRadio: 10, simbolo: 'v', valor: ESC.capas.valores ? Math.hypot(...vf) : null, unidad: 'm/s' });
     });
     ESC.observadores.forEach((ob, i) => {
       const p = posicionEn(ob, t), [X, Y] = tz.ondasObservador(p, { seleccionada: sel === 'obs:' + i, grueso: i === ESC.obs });
@@ -302,9 +330,15 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const props = $('#propiedades'); let nombre = '', ico = 'o-fuente-sonora', estado = '';
     if (sel.startsWith('fuente:')) {
       const i = +sel.slice(7), f = ESC.fuentes[i], b = `fuentes.${i}`;
-      nombre = f.nombre; estado = 'Fuente sonora';
-      props.innerHTML = campo('Posición x', `${b}.p.0`, 'longitud', 'm', 'Posición en t = 0|Position') + campo('Posición y', `${b}.p.1`, 'longitud', 'm')
-        + campo('Velocidad x', `${b}.v.0`, 'velocidad', 'm/s', 'Velocidad constante: «60 km/h» también vale|Velocity') + campo('Velocidad y', `${b}.v.1`, 'velocidad', 'm/s')
+      nombre = f.nombre; estado = f.vaiven ? 'Fuente sonora · vaivén' : 'Fuente sonora';
+      props.innerHTML = fila('Movimiento', `<div class="segmentado texto" id="p-mov"><button data-v="recta" aria-pressed="${!f.vaiven}">En línea recta</button><button data-v="vaiven" aria-pressed="${!!f.vaiven}">De vaivén</button></div>`, 'De vaivén: gira de un lado a otro sobre un arco, como la rejilla de un ventilador que oscila|Motion')
+        + (f.vaiven
+          ? campo('Eje x', `${b}.vaiven.centro.0`, 'longitud', 'm', 'Eje del vaivén|Pivot') + campo('Eje y', `${b}.vaiven.centro.1`, 'longitud', 'm')
+            + campo('Radio', `${b}.vaiven.radio`, 'longitud', 'm', 'Distancia del eje a la fuente|Radius')
+            + fila('Amplitud', `<div class="campo"><input id="p-amp" value="${numCampo(f.vaiven.amplitud * 180 / Math.PI)}"><span class="u">°</span></div>`, 'El ángulo va de un lado a otro ± esta amplitud|Swing amplitude')
+            + campo('ω máx', `${b}.vaiven.omegaMax`, 'frecuencia', 'rad/s', 'Velocidad angular máxima (al pasar por el centro del arco)|Peak angular velocity')
+          : campo('Posición x', `${b}.p.0`, 'longitud', 'm', 'Posición en t = 0|Position') + campo('Posición y', `${b}.p.1`, 'longitud', 'm')
+            + campo('Velocidad x', `${b}.v.0`, 'velocidad', 'm/s', 'Velocidad constante: «60 km/h» también vale|Velocity') + campo('Velocidad y', `${b}.v.1`, 'velocidad', 'm/s'))
         + campo('Frecuencia', `${b}.f`, 'frecuencia', 'Hz', 'Frecuencia que emite la fuente|Frequency')
         + fila('Suena', `<div class="segmentado texto" id="p-inicio"><button data-v="siempre" aria-pressed="${f.inicio == null}">Desde siempre</button><button data-v="t0" aria-pressed="${f.inicio != null}">Desde t = 0</button></div>`, 'Si suena desde siempre, el sonido ya llena el aire al empezar|Emission start');
     } else if (sel.startsWith('obs:')) {
@@ -334,6 +368,24 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         ESC.temperatura = T; ESC.c = velocidadSonido(T); cambio();
       } catch (e) { avisar(e.message, false); }
     });
+    const pm = $('#p-mov');
+    if (pm) pm.addEventListener('click', ev => {
+      const bt = ev.target.closest('button'); if (!bt) return;
+      const f = ESC.fuentes[+sel.slice(7)];
+      if (bt.dataset.v === 'vaiven' && !f.vaiven) { f.vaiven = { centro: [f.p[0], f.p[1] - 1], radio: 1, amplitud: Math.PI / 4, omegaMax: 1, angulo: Math.PI / 2 }; f.v = [0, 0]; }
+      else if (bt.dataset.v === 'recta' && f.vaiven) { f.p = posF(f, 0); delete f.vaiven; }
+      else return;
+      for (const [k, d] of Object.entries(ESC.variables)) { d.liga = d.liga.filter(r => leer(r) !== undefined); if (!d.liga.length) delete ESC.variables[k]; }
+      construirVariables(); cambio();
+    });
+    const pa = $('#p-amp');
+    if (pa) pa.addEventListener('change', () => {
+      try {
+        const a = evaluar(/^[\d.]+$/.test(pa.value.trim()) ? pa.value + ' °' : pa.value, { esperada: 'adimensional', unidadPorDefecto: '°' }).valor;
+        if (!(a > 0 && a <= Math.PI)) throw new Error('La amplitud del vaivén va de 0° a 180°.');
+        ESC.fuentes[+sel.slice(7)].vaiven.amplitud = a; cambio();
+      } catch (e) { avisar(e.message, false); }
+    });
     const pi = $('#p-inicio');
     if (pi) pi.addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; ESC.fuentes[+sel.slice(7)].inicio = b.dataset.v === 'siempre' ? null : 0; cambio(); });
     const po = $('#p-obs'); if (po) po.addEventListener('click', () => { ESC.obs = +sel.slice(4); cambio(); });
@@ -352,7 +404,12 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         let txt = ent.value.trim().replace(/−/g, '-');
         if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt)) txt += ' ' + ent.dataset.u;
         const x = evaluar(txt, { esperada: ent.dataset.dim }).valor, r = ent.dataset.ruta;
-        if ((r === 'c' || r.endsWith('.f') || r === 'duracion') && !(x > 0)) throw new Error('Este valor tiene que ser positivo.');
+        if ((r === 'c' || r.endsWith('.f') || r === 'duracion' || r.endsWith('.radio')) && !(x > 0)) throw new Error('Este valor tiene que ser positivo.');
+        if (r.endsWith('.omegaMax') && !(x >= 0)) throw new Error('La velocidad angular no puede ser negativa.');
+        if (r.endsWith('.omegaMax') || r.endsWith('.radio')) {
+          const w = leer(r.replace(/\.(omegaMax|radio)$/, '')), rr = r.endsWith('.radio') ? x : w.radio, om = r.endsWith('.omegaMax') ? x : w.omegaMax;
+          if (rr * om >= 0.95 * ESC.c) throw new Error('El modelo es para movimientos por debajo de la rapidez del sonido.');
+        }
         if (r === 'duracion' && x > 120) throw new Error('La duración máxima es 120 s.');
         if (r.includes('.v.') || r.startsWith('viento') || r.endsWith('velocidad')) { if (Math.abs(x) >= 0.95 * ESC.c) throw new Error('El modelo es para movimientos por debajo de la rapidez del sonido.'); }
         if (Math.abs(x) > 1e6) throw new Error('El valor es demasiado grande.');
@@ -379,8 +436,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     filas.push(L('c', '', fmt(ESC.c, 4), 'm/s', 'Rapidez del sonido|Speed of sound'));
     if (sel.startsWith('fuente:')) {
       const f = ESC.fuentes[+sel.slice(7)];
-      filas.push(L('f', '', fmt(f.f, 4), 'Hz'), L('λ', '', fmt(ESC.c / f.f, 4), 'm', 'Longitud de onda con la fuente quieta|Wavelength'), L('|v|', '', fmt(Math.hypot(...f.v), 4), 'm/s'));
-      const s = Math.hypot(...f.v);
+      const s = Math.hypot(...velocidadEn(movil(f), t));
+      filas.push(L('f', '', fmt(f.f, 4), 'Hz'), L('λ', '', fmt(ESC.c / f.f, 4), 'm', 'Longitud de onda con la fuente quieta|Wavelength'), L('|v|', '', fmt(s, 4), 'm/s', f.vaiven ? 'Rapidez de la fuente en este instante|Speed' : ''));
       if (s > 0) filas.push(L('λ', 'delante', fmt((ESC.c - s) / f.f, 4), 'm', 'Separación de los frentes delante de la fuente|Wavelength ahead'), L('λ', 'detrás', fmt((ESC.c + s) / f.f, 4), 'm', 'Separación de los frentes detrás|Wavelength behind'));
     } else {
       cs.slice(0, 4).forEach(c => filas.push(L('f′', nombreComp(c), fmt(c.f, 5), 'Hz', 'Frecuencia recibida|Received frequency'), L('r', nombreComp(c), fmt(c.r, 4), 'm', 'Distancia recorrida por el sonido|Path length')));
@@ -508,14 +565,23 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // ---------------------------------------------------------------------
   const instantanea = () => JSON.parse(JSON.stringify(ESC));
   function escenaActual() { return crearEscena({ modulo: 'ondas', espacio: 'doppler', titulo: ESC.titulo, datos: instantanea() }); }
-  const RUTA_OK = /^((fuentes|observadores)\.[0-7]\.(p|v)\.[01]|fuentes\.[0-7]\.f|paredes\.[0-3]\.(velocidad|punto\.[01])|viento\.[01]|c|duracion)$/;
+  const RUTA_OK = /^((fuentes|observadores)\.[0-7]\.(p|v)\.[01]|fuentes\.[0-7]\.f|fuentes\.[0-7]\.vaiven\.(radio|amplitud|omegaMax|centro\.[01])|paredes\.[0-3]\.(velocidad|punto\.[01])|viento\.[01]|c|duracion)$/;
   function datosSeguros(d = {}) {
     const base = completa(ESCENAS.find(e => e.clave === d.clave) || ESCENAS[0]);
     const c = numero(d.c, base.c, 0.1, 1e4), lim = 0.95 * c;
     const vec = (v, def, m = 1e5) => (Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) ? v.map(x => Math.max(-m, Math.min(m, x))) : def);
     const nombre = (v, def) => texto(v, def, 16);
     const fuentes = (Array.isArray(d.fuentes) ? d.fuentes : base.fuentes).filter(f => f && typeof f === 'object').slice(0, 8)
-      .map((f, i) => ({ nombre: nombre(f.nombre, `S${subs(i + 1)}`), p: vec(f.p, [0, 0]), v: vec(f.v, [0, 0], lim), f: numero(f.f, 440, 1e-3, 1e5), inicio: f.inicio === null ? null : numero(f.inicio, 0, 0, 1e3) }));
+      .map((f, i) => {
+        const o = { nombre: nombre(f.nombre, `S${subs(i + 1)}`), p: vec(f.p, [0, 0]), v: vec(f.v, [0, 0], lim), f: numero(f.f, 440, 1e-3, 1e5), inicio: f.inicio === null ? null : numero(f.inicio, 0, 0, 1e3) };
+        const w = f.vaiven;
+        if (w && typeof w === 'object') {
+          const radio = numero(w.radio, 1, 1e-4, 1e4);
+          o.vaiven = { centro: vec(w.centro, [0, 0]), radio, amplitud: numero(w.amplitud, Math.PI / 4, 1e-3, Math.PI), omegaMax: numero(w.omegaMax, 1, 0, 0.95 * c / radio), angulo: numero(w.angulo, Math.PI / 2, -10, 10) };
+          o.v = [0, 0];
+        }
+        return o;
+      });
     const observadores = (Array.isArray(d.observadores) ? d.observadores : base.observadores).filter(o => o && typeof o === 'object').slice(0, 8)
       .map((o, i) => ({ nombre: nombre(o.nombre, `O${subs(i + 1)}`), p: vec(o.p, [10, 0]), v: vec(o.v, [0, 0], lim) }));
     const paredes = (Array.isArray(d.paredes) ? d.paredes : []).filter(p => p && typeof p === 'object').slice(0, 4).map(p => {
@@ -553,9 +619,18 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
   }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false)); }
+  const PAGINAS_ONDAS = { 'medio-1d': 'ondas.html', doppler: 'ondas-doppler.html', cubeta: 'ondas-cubeta.html' };
+  // Una escena de otro espacio de Ondas y sonido se abre en su pantalla
+  function aOtroEspacio(e, propio) {
+    if (!e.espacio || e.espacio === propio || !PAGINAS_ONDAS[e.espacio]) return false;
+    try { sessionStorage.setItem('volta.abrir', JSON.stringify(e)); } catch { /* sin almacenamiento */ }
+    location.href = PAGINAS_ONDAS[e.espacio];
+    return true;
+  }
   function abrir() {
     abrirEscena({ modulo: 'ondas' }).then(e => {
-      if (e.espacio !== 'doppler') throw new Error('Esta escena es del espacio Medio 1D; ábrela desde allí.');
+      if (aOtroEspacio(e, 'doppler')) return;
+      if (e.espacio && e.espacio !== 'doppler') throw new Error('Esta escena es de otro espacio de trabajo de Ondas y sonido.');
       restaurar(e.datos); t = 0; vistaTocada = false; encuadrar(); escala0 = tz.vista.escala; zoomTexto(); todo();
       if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
       avisar(`Escena abierta: ${texto(e.titulo, 'sin título', 60)}`, false);
@@ -680,7 +755,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // ---------------------------------------------------------------------
   function objetoEn(X, Y) {
     const v = tz.vista;
-    for (let i = ESC.fuentes.length - 1; i >= 0; i--) { const [a, b] = v.P(posicionEn(ESC.fuentes[i], t)); if (Math.hypot(X - a, Y - b) < 13) return 'fuente:' + i; }
+    for (let i = ESC.fuentes.length - 1; i >= 0; i--) { const [a, b] = v.P(posF(ESC.fuentes[i], t)); if (Math.hypot(X - a, Y - b) < 13) return 'fuente:' + i; }
     for (let i = ESC.observadores.length - 1; i >= 0; i--) { const [a, b] = v.P(posicionEn(ESC.observadores[i], t)); if (Math.hypot(X - a, Y - b - 2) < 15) return 'obs:' + i; }
     for (let i = 0; i < ESC.paredes.length; i++) { const p = ESC.paredes[i], c0 = posPared(p, t), [a] = v.P(c0); if (Math.abs(X - a) < 8 && Math.abs(v.my(Y) - c0[1]) < (p.largo || 40) / 2) return 'pared:' + i; }
     return null;
@@ -700,7 +775,11 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (arrastre) {
       // Se arrastra la posición actual: la inicial es la actual menos v·t
       const p = [v.mx(X), v.my(Y)], red = x => Math.round(x * (ev.shiftKey ? 10 : 1)) / (ev.shiftKey ? 10 : 1), a = arrastre.ob;
-      if (a.startsWith('fuente:') || a.startsWith('obs:')) {
+      if (a.startsWith('fuente:') && ESC.fuentes[+a.slice(7)].vaiven) {
+        // El eje se mueve con la fuente: la fuente queda bajo el puntero
+        const m = ESC.fuentes[+a.slice(7)], q = posF(m, t);
+        m.vaiven.centro = [red(m.vaiven.centro[0] + p[0] - q[0]), red(m.vaiven.centro[1] + p[1] - q[1])];
+      } else if (a.startsWith('fuente:') || a.startsWith('obs:')) {
         const m = a.startsWith('fuente:') ? ESC.fuentes[+a.slice(7)] : ESC.observadores[+a.slice(4)];
         m.p = [red(p[0] - m.v[0] * t), red(p[1] - m.v[1] * t)];
       } else { const w = ESC.paredes[+a.slice(6)]; w.punto = [red(p[0] - w.normal[0] * (w.velocidad || 0) * t), w.punto[1]]; }
@@ -791,7 +870,9 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   window.addEventListener('resize', () => { tz.ajustar(); if (!vistaTocada) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); } todo(); });
   document.fonts.ready.then(() => {
     const qp = new URLSearchParams(location.search), limpio = ![...qp.keys()].length;
-    const previa = escenaPendiente('ondas') || (limpio ? autoguardado.leer('ondas-doppler', { modulo: 'ondas' }) : null);
+    const pend = escenaPendiente('ondas');
+    if (pend && aOtroEspacio(pend, 'doppler')) return;
+    const previa = pend || (limpio ? autoguardado.leer('ondas-doppler', { modulo: 'ondas' }) : null);
     tz.ajustar();
     if (qp.has('escena') || !previa || previa.espacio !== 'doppler') ESC = completa(ESCENAS.find(e => e.clave === qp.get('escena')) || ESCENAS[0]);
     else ESC = datosSeguros(previa.datos);

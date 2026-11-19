@@ -83,7 +83,7 @@
     { nombre: 'Electrostática', icono: 'm-electrostatica', espacios: [['electrostatica.html', 'Cargas y campos', 'o-carga-positiva'], ['electrostatica-conductores.html', 'Conductores y dieléctricos', 'o-capacitor-placas']] },
     { nombre: 'Circuitos', icono: 'm-circuitos', espacios: [['circuitos.html', 'Transitorios', 'o-capacitor']] },
     { nombre: 'Magnetismo e inducción', icono: 'm-magnetismo', espacios: [['magnetismo.html', 'Campos magnéticos', 'o-hilo-corriente'], ['magnetismo-particulas.html', 'Partículas en E y B', 'o-particula-cargada'], ['magnetismo-induccion.html', 'Inducción', 'o-barra-conductora']] },
-    { nombre: 'Ondas y sonido', icono: 'm-ondas', espacios: [['ondas.html', 'Medio 1D', 'o-cuerda'], ['ondas-doppler.html', 'Doppler y acústica', 'o-fuente-sonora']] },
+    { nombre: 'Ondas y sonido', icono: 'm-ondas', espacios: [['ondas.html', 'Medio 1D', 'o-cuerda'], ['ondas-doppler.html', 'Doppler y acústica', 'o-fuente-sonora'], ['ondas-cubeta.html', 'Cubeta de ondas', 'o-fuente-puntual']] },
     { nombre: 'Óptica', icono: 'm-optica', espacios: [['optica.html', 'Óptica geométrica', 'o-lente-ideal'], ['optica-ondas.html', 'Interferencia y difracción', 'o-rendija-doble'], ['optica-peliculas.html', 'Películas e interferómetros', 'o-michelson']] },
     { nombre: 'Física moderna', icono: 'm-moderna', espacios: [['moderna.html', 'Efecto fotoeléctrico', 'o-placa-metal'], ['moderna-nucleo.html', 'Núcleo', 'o-nucleo']] },
   ];

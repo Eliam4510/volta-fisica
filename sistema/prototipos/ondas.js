@@ -1328,8 +1328,17 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
   }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false)); }
+  // Una escena de otro espacio de Ondas se abre en su pantalla
+  const PAGINAS_ONDAS = { 'medio-1d': 'ondas.html', doppler: 'ondas-doppler.html', cubeta: 'ondas-cubeta.html' };
+  function aOtroEspacio(e, propio) {
+    if (!e.espacio || e.espacio === propio || !PAGINAS_ONDAS[e.espacio]) return false;
+    try { sessionStorage.setItem('volta.abrir', JSON.stringify(e)); } catch { /* sin almacenamiento */ }
+    location.href = PAGINAS_ONDAS[e.espacio];
+    return true;
+  }
   function abrir() {
     abrirEscena({ modulo: 'ondas' }).then(e => {
+      if (aOtroEspacio(e, 'medio-1d')) return;
       restaurar(e.datos); t = 0; vistaTocada = false; encuadrar(); escala0 = tz.vista.escala; zoomTexto(); todo();
       if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
       avisar(`Escena abierta: ${texto(e.titulo, 'sin título', 60)}`, false);
@@ -1651,7 +1660,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   document.fonts.ready.then(() => {
     const q = new URLSearchParams(location.search);
     const limpio = ![...q.keys()].length;
-    const previa = escenaPendiente('ondas') || (limpio ? autoguardado.leer('ondas', { modulo: 'ondas' }) : null);
+    const pend = escenaPendiente('ondas');
+    const previa = (pend && (!pend.espacio || pend.espacio === 'medio-1d') ? pend : null) || (limpio ? autoguardado.leer('ondas', { modulo: 'ondas' }) : null);
     tz.ajustar();
     if (q.has('escena') || !previa) { ESC = completa(escenaDe(q.get('escena') || 'pulso-fijo')); sel = ESC.sel || 'medio'; }
     else { ESC = datosSeguros(previa.datos); sel = 'medio'; }

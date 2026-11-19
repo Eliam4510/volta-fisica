@@ -18,7 +18,13 @@
    - magnitudes: rapidez de la onda en la familia movimiento y aceleración
      del medio en la familia cambio;
    - Doppler: frentes de onda (1 px de tinta al 60 %, sin flecha), fuente
-     sonora, observador y pared reflectante.
+     sonora, observador y pared reflectante;
+   - cubeta de ondas (2D): el campo pintado con ImageData y tablas de color
+     hechas con los tokens (desplazamiento en escala de tinta, divergente o
+     amplitud en grises; ver ondasLut), borde de la cubeta (rayado en los
+     lados que son pared), fuente puntual y lineal, barrera (corte rayado),
+     zona de otra rapidez (tinte de medio), punto de prueba, pantalla,
+     líneas nodales (punteadas) y antinodales (raya y punto) y crestas.
    Métodos con prefijo ondas, para poder cargarse junto a otros dominios.
    Mismas convenciones que trazo.js: grosores en px de pantalla (no escalan
    con el zoom), patrones de PATRON, colores de this.t, halo en toda
@@ -458,6 +464,185 @@
     // superficie() raya a la derecha del recorrido (en pantalla, y invertida)
     const derecha = [t[1], -t[0]], atras = derecha[0] * n[0] + derecha[1] * n[1] < 0;
     this.superficie(atras ? [a, b] : [b, a]);
+  };
+
+  // ---------------------------------------------------------------------
+  // Cubeta de ondas (2D)
+  // ---------------------------------------------------------------------
+  // Tablas de 256 colores (RGBA) para pintar el campo con ImageData. Todas
+  // salen de los tokens del tema, mezclados en OKLab (perceptualmente
+  // uniforme), y se rehacen al cambiar de tema:
+  // - 'tinta': desplazamiento con signo en escala de tinta, como la sombra
+  //   de una cubeta de ondas: s ∈ [−1, 1] → mezcla de --lienzo y --tinta con
+  //   fracción u = TINTA_CERO + TINTA_PASO·s. El agua quieta (s = 0) es un
+  //   gris claro, las crestas tienen más tinta y los valles menos; los
+  //   extremos dejan margen para que la materia (fuentes, barreras, en
+  //   tinta) se siga leyendo encima. En oscuro la tinta es clara: la cresta
+  //   también es la zona de más tinta.
+  // - 'divergente': el mapa divergente del lenguaje (azul ← lienzo → bermellón).
+  // - 'grises': magnitudes positivas (amplitud promediada) de --lienzo (0) a --tinta (1).
+  const TINTA_CERO = 0.2, TINTA_PASO = 0.28;
+  function rgbOklab([L, a, b]) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+    return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s]
+      .map(x => Math.round(255 * Math.min(1, Math.max(0, gamma(x)))));
+  }
+  P.ondasLut = function (mapa) {
+    const t = this.t;
+    if (this._ondasLutDe !== t) { this._ondasLutDe = t; this._ondasLuts = {}; }
+    if (this._ondasLuts[mapa]) return this._ondasLuts[mapa];
+    const lz = aOklab(rgbDe(t.lienzo)), ti = aOklab(rgbDe(t.tinta));
+    const neg = aOklab(rgbDe(t['mapa-divergente-negativo'])), pos = aOklab(rgbDe(t['mapa-divergente-positivo']));
+    const mezcla = (a, b, u) => a.map((x, i) => x + (b[i] - x) * u);
+    const lut = new Uint8ClampedArray(256 * 4);
+    for (let k = 0; k < 256; k++) {
+      const s = k / 127.5 - 1, u = k / 255;
+      const c = mapa === 'divergente' ? mezcla(lz, s < 0 ? neg : pos, Math.abs(s))
+        : mapa === 'grises' ? mezcla(lz, ti, u)
+          : mezcla(lz, ti, TINTA_CERO + TINTA_PASO * s);
+      const [r, g, b] = rgbOklab(c);
+      lut[4 * k] = r; lut[4 * k + 1] = g; lut[4 * k + 2] = b; lut[4 * k + 3] = 255;
+    }
+    this._ondasLuts[mapa] = lut;
+    return lut;
+  };
+
+  // Campo de la cubeta: valores de los nodos de una ventana {nx, ny, x0, y0,
+  // h} (por filas desde abajo) → ImageData de nx × ny en un lienzo fuera de
+  // pantalla, que se escala con suavizado a la región de mundo que cubren los
+  // nodos. escala: valor que llega al extremo del mapa; con signo (tinta,
+  // divergente) o positivo (grises).
+  P.ondasCampo = function (valores, V, mapa, escala) {
+    const lut = this.ondasLut(mapa), signo = mapa !== 'grises';
+    if (!this._ondasOff || this._ondasOff.width !== V.nx || this._ondasOff.height !== V.ny) {
+      this._ondasOff = document.createElement('canvas'); this._ondasOff.width = V.nx; this._ondasOff.height = V.ny;
+      this._ondasImg = new ImageData(V.nx, V.ny);
+    }
+    const d = this._ondasImg.data, k = 1 / (escala || 1);
+    for (let j = 0; j < V.ny; j++) {
+      const fila = (V.ny - 1 - j) * V.nx;
+      for (let i = 0; i < V.nx; i++) {
+        const v = valores[j * V.nx + i] * k;
+        let q = signo ? Math.round((v + 1) * 127.5) : Math.round(v * 255);
+        q = q < 0 ? 0 : q > 255 ? 255 : q;
+        const o = 4 * (fila + i), c = 4 * q;
+        d[o] = lut[c]; d[o + 1] = lut[c + 1]; d[o + 2] = lut[c + 2]; d[o + 3] = 255;
+      }
+    }
+    this._ondasOff.getContext('2d').putImageData(this._ondasImg, 0, 0);
+    const v = this.vista, c = this.ctx, h = V.h;
+    const X0 = v.X(V.x0 - h / 2), Y0 = v.Y(V.y0 + (V.ny - 0.5) * h), W = V.nx * h * v.escala, H = V.ny * h * v.escala;
+    c.save(); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    c.drawImage(this._ondasOff, X0, Y0, W, H); c.restore();
+    return [X0, Y0, W, H];
+  };
+
+  // Borde de la cubeta: rectángulo de 1 px (--linea-fuerte); los lados
+  // reflectantes, como pared rayada por fuera
+  P.ondasCubeta = function (caja, bordes) {
+    const v = this.vista, { x0, x1, y0, y1 } = caja;
+    this.lineaPx([[v.X(x0), v.Y(y0)], [v.X(x1), v.Y(y0)], [v.X(x1), v.Y(y1)], [v.X(x0), v.Y(y1)]], { color: 'linea-fuerte', grosor: 1, cerrar: true, extremo: 'butt' });
+    // superficie(): rayado a la derecha del recorrido en pantalla
+    if (bordes.abajo === 'reflectante') this.superficie([[x0, y0], [x1, y0]]);
+    if (bordes.arriba === 'reflectante') this.superficie([[x1, y1], [x0, y1]]);
+    if (bordes.izq === 'reflectante') this.superficie([[x0, y1], [x0, y0]]);
+    if (bordes.der === 'reflectante') this.superficie([[x1, y0], [x1, y1]]);
+  };
+
+  // Fuente puntual (como su icono): disco de lienzo con anillo y punto de
+  // tinta; el disco hace de halo sobre el mapa
+  P.ondasFuentePuntual = function (p, o = {}) {
+    const [X, Y] = this.vista.P(p), c = this.ctx;
+    c.save(); c.setLineDash([]);
+    c.fillStyle = this.t.lienzo; c.strokeStyle = this.t.tinta; c.lineWidth = 1.5 + (o.grueso ? 0.5 : 0);
+    c.beginPath(); c.arc(X, Y, 7, 0, 2 * Math.PI); c.fill(); c.stroke();
+    c.fillStyle = this.t.tinta; c.beginPath(); c.arc(X, Y, 3, 0, 2 * Math.PI); c.fill();
+    c.restore();
+    if (o.seleccionada) this.seleccionCirculo(X, Y, 12);
+    return [X, Y];
+  };
+
+  // Fuente lineal: la barra del generador de ondas planas (cuerpo rígido
+  // delgado: relleno --campo y contorno de materia)
+  P.ondasFuenteLineal = function (a, b, o = {}) {
+    const v = this.vista, [xa, ya] = v.P(a), [xb, yb] = v.P(b), L = Math.hypot(xb - xa, yb - ya) || 1;
+    const nx = -(yb - ya) / L * 3.5, ny = (xb - xa) / L * 3.5, c = this.ctx;
+    c.save(); c.setLineDash([]); c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(xa + nx, ya + ny); c.lineTo(xb + nx, yb + ny); c.lineTo(xb - nx, yb - ny); c.lineTo(xa - nx, ya - ny); c.closePath();
+    c.fillStyle = this.t.campo; c.fill(); c.strokeStyle = this.t.tinta; c.lineWidth = 1.5 + (o.grueso ? 0.5 : 0); c.stroke();
+    c.restore();
+    if (o.seleccionada) this.seleccionCaja(Math.min(xa, xb) - 4, Math.min(ya, yb) - 4, Math.abs(xb - xa) + 8, Math.abs(yb - ya) + 8);
+  };
+
+  // Barrera: corte de un sólido (relleno --campo con rayado completo y
+  // contorno de materia) entre a y b, con su grosor de mundo (mín. 5 px)
+  P.ondasBarrera = function (a, b, grosor, o = {}) {
+    const v = this.vista, L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, g = Math.max(grosor / 2, 2.5 / v.escala);
+    const n = [-(b[1] - a[1]) / L * g, (b[0] - a[0]) / L * g];
+    const pts = [[a[0] + n[0], a[1] + n[1]], [b[0] + n[0], b[1] + n[1]], [b[0] - n[0], b[1] - n[1]], [a[0] - n[0], a[1] - n[1]]];
+    this.regionRayada(pts, { relleno: 'campo', paso: 6 });
+    this.lineaPx(pts.map(p => v.P(p)), { color: 'tinta', grosor: 1.5 + (o.grueso ? 0.5 : 0), cerrar: true });
+    return pts;
+  };
+
+  // Zona de otra rapidez (vidrio bajo el agua, aire a otra temperatura):
+  // tinte del 5 % de tinta, contorno de 1 px y tres trazos diagonales cortos
+  // en la primera esquina como marca de material
+  P.ondasZona = function (pts, o = {}) {
+    const v = this.vista, P2 = pts.map(p => v.P(p)), c = this.ctx;
+    c.save(); c.setLineDash([]);
+    c.beginPath(); P2.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath();
+    c.globalAlpha = 0.05; c.fillStyle = this.t.tinta; c.fill(); c.restore();
+    this.lineaPx(P2, { color: o.grueso ? 'tinta' : 'texto-2', grosor: 1, cerrar: true, extremo: 'butt' });
+    // Marca de material hacia dentro de la esquina
+    const [x, y] = P2[0], cx = P2.reduce((s, p) => s + p[0], 0) / P2.length, cy = P2.reduce((s, p) => s + p[1], 0) / P2.length;
+    const sx = Math.sign(cx - x) || 1, sy = Math.sign(cy - y) || 1;
+    for (let k = 0; k < 3; k++) this.lineaPx([[x + sx * (5 + 4 * k), y + sy * 5], [x + sx * (5 + 4 * k + 5), y + sy * 10]], { color: 'texto-2', grosor: 1 });
+  };
+
+  // Punto de prueba: anillo de lienzo con centro de tinta y su nombre en un chip
+  P.ondasPunto = function (p, nombre, o = {}) {
+    const [X, Y] = this.vista.P(p), c = this.ctx;
+    c.save(); c.setLineDash([]); c.fillStyle = this.t.lienzo; c.strokeStyle = this.t.tinta; c.lineWidth = 1.5 + (o.grueso ? 0.5 : 0);
+    c.beginPath(); c.arc(X, Y, 5, 0, 2 * Math.PI); c.fill(); c.stroke();
+    c.fillStyle = this.t.tinta; c.beginPath(); c.arc(X, Y, 1.5, 0, 2 * Math.PI); c.fill(); c.restore();
+    if (nombre) {
+      c.save(); c.font = this._fuente('sim', 13);
+      const w = c.measureText(nombre).width + 10;
+      c.fillStyle = this.t.tinta; c.beginPath(); c.roundRect(X + 8, Y - 22, w, 17, 4); c.fill(); c.restore();
+      this.compuesto([{ t: nombre, f: 'sim', tam: 13, color: 'sobre-tinta' }], X + 13, Y - 9, { halo: false });
+    }
+    if (o.seleccionada) this.seleccionCirculo(X, Y, 10);
+    return [X, Y];
+  };
+
+  // Pantalla (detector de línea): trazo de 1.5 px de --texto-2 con remates
+  // perpendiculares; la etiqueta va en el extremo b
+  P.ondasPantalla = function (a, b, o = {}) {
+    const v = this.vista, [xa, ya] = v.P(a), [xb, yb] = v.P(b), L = Math.hypot(xb - xa, yb - ya) || 1;
+    const nx = -(yb - ya) / L * 5, ny = (xb - xa) / L * 5;
+    this.lineaPx([[xa, ya], [xb, yb]], { color: 'lienzo', grosor: 4.5, extremo: 'butt' });
+    this.lineaPx([[xa, ya], [xb, yb]], { color: 'texto-2', grosor: 1.5, extremo: 'butt' });
+    for (const [x, y] of [[xa, ya], [xb, yb]]) this.lineaPx([[x - nx, y - ny], [x + nx, y + ny]], { color: 'texto-2', grosor: 1.5, extremo: 'butt' });
+    if (o.seleccionada) { this.asa(xa, ya); this.asa(xb, yb); }
+  };
+
+  // Línea nodal (punteada) o antinodal (raya y punto) con halo de lienzo
+  P.ondasLineaInterferencia = function (pts, tipo) {
+    const P2 = pts.map(p => this.vista.P(p));
+    this.lineaPx(P2, { color: 'lienzo', grosor: 3, opacidad: 0.7 });
+    if (tipo === 'nodal') this.lineaPx(P2, { color: 'tinta', grosor: 1.5, patron: 'auxiliar' });
+    else this.lineaPx(P2, { color: 'tinta', grosor: 1, patron: 'eje' });
+  };
+
+  // Crestas como líneas: segmentos de pantalla [x1, y1, x2, y2, …] (1 px de tinta al 60 %)
+  P.ondasCrestas = function (segs, o = {}) {
+    if (!segs.length) return;
+    const c = this.ctx;
+    c.save(); c.setLineDash([]); c.globalAlpha = o.opacidad ?? 0.6; c.strokeStyle = this.t.tinta; c.lineWidth = o.grosor ?? 1; c.lineCap = 'round';
+    c.beginPath();
+    for (let i = 0; i < segs.length; i += 4) { c.moveTo(segs[i], segs[i + 1]); c.lineTo(segs[i + 2], segs[i + 3]); }
+    c.stroke(); c.restore();
   };
 
   global.Volta.ondas = { GO };

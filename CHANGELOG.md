@@ -9,6 +9,15 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Ondas y sonido: espacio nuevo «Cubeta de ondas», con la ecuación de onda
+  2D en malla (condición CFL, bordes abiertos con capa amortiguadora y Mur)
+  y el modelo analítico de fuentes puntuales. Fuentes puntuales, lineales y
+  arreglos, barreras y rendijas, zonas de distinta rapidez (la refracción
+  sale sola), líneas nodales y antinodales con su |Δ|, punto de prueba con
+  r₁, r₂ y Δ/λ, y vistas de onda, frentes e intensidad. Escenas MEXT 2017
+  P5, 2007 1-(4), 2010 3-A y 2010 3-B; 2012 P5 en «Doppler y acústica».
+  Ondas tiene ya sus 21 escenas MEXT. 38 pruebas nuevas.
+
 - Circuitos: las 10 escenas MEXT del tema (nuevas: 2014 1-(4), 2013 P2,
   2012 1-(2), 2010 4-C, 2007 1-(2), la parte de circuito de 2007 P2 y 2006
   P2), cada una con un grupo «Examen» que muestra la medida, la fórmula del
@@ -18,6 +27,10 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   «Dos capacitores que comparten carga». 34 pruebas nuevas.
 
 ### Corregido
+
+- Ondas: abrir una escena de otro espacio del módulo desde «Medio 1D» o
+  «Doppler y acústica» la cargaba en la pantalla equivocada; ahora se abre
+  en la suya.
 
 - Circuitos: un evento «Conexión inicial» espurio en t = 0 con todo
   descargado; corrientes falsas de 10⁻⁹ A en un capacitor descargado entre

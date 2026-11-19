@@ -52,7 +52,7 @@ Principios del proyecto:
 | Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria; 8 escenas MEXT |
 | Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC, capacitores cuya capacidad cambia en el tiempo, voltímetro y amperímetro; 10 escenas MEXT |
 | Magnetismo e inducción | Utilizable | Campos de hilos, espiras, solenoides e imanes; partículas en E y B con Boris (selector, espectrómetro, ciclotrón, Hall); inducción acoplada (rieles, espiras, generador) con balance de energía; 13 escenas MEXT |
-| Ondas y sonido | Utilizable | Cuerdas y tubos (reflexión, uniones, modos, resonancia) y Doppler con audio; la cubeta 2D, en preparación |
+| Ondas y sonido | Utilizable | Cuerdas y tubos (reflexión, uniones, modos, resonancia), Doppler con audio y cubeta de ondas 2D (interferencia, refracción, difracción); 21 escenas MEXT |
 | Óptica | Utilizable | Trazado de rayos (Snell, Fresnel, reflexión total, prismas con dispersión, lentes y espejos), interferencia y difracción por suma de Huygens, películas delgadas, anillos de Newton y Michelson |
 | Física moderna | Utilizable | Efecto fotoeléctrico con curva I–V y medida de h; núcleo con cadenas en la carta N–Z, decaimiento estocástico y retroceso; 4 escenas MEXT |
 
@@ -90,6 +90,10 @@ El plan completo, con dependencias y orden de implementación, está en
 | Termodinámica: ciclos | Física moderna: núcleo |
 |---|---|
 | ![Ciclos](docs/diseno/capturas/f15_ciclos.png) | ![Núcleo](docs/diseno/capturas/f16_nucleo.png) |
+
+| Ondas: cubeta de ondas | |
+|---|---|
+| ![Cubeta](docs/diseno/capturas/f17_cubeta.png) | |
 
 ## Instalación
 
