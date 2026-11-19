@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.10.0 (publicada el 2026-11-19; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.10.0 (publicada el 2026-11-19 con instalador de 2 851 586 B y portátil de 5 255 680 B; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -167,6 +167,19 @@ restricciones contabilizados, actuadores con trayectoria impuesta) y PhET
 | Hecho | El Laboratorio no tenía instrumentos ni panel de variables | Regla, fotopuerta y variables ligadas a propiedades (también se crean con clic derecho en un campo) |
 | Exactitud | La prensa hidráulica no tiene peso del líquido (sin ρgh): vale para Pascal, no para vasos comunicantes con desnivel | Columna de líquido con peso cuando haga falta (Fluidos M10) |
 | Contenido | Mecánica 38 de 44 MEXT; las 6 restantes no tienen enunciado o necesitan sistemas de referencia que se mueven | — |
+
+## Autocrítica 6 (2026-11-19, con los nueve módulos y 155 escenas MEXT)
+
+Comparado con la visión del producto (cada módulo, una caja de arena
+completa) y con PhET, Universe Sandbox y Algodoo:
+
+| Prioridad | Hallazgo | Tarea |
+|---|---|---|
+| Función | Varias pantallas dependen de sus escenas: en Gravitación no se pueden añadir cuerpos ni impulsos (el espacio «Sistema solar» y «Maniobras» de la especificación no existen); en Termodinámica las paletas de objetos siguen como `data-pendiente` | Gravitación: espacios «Sistema solar» (N cuerpos, Kepler, datos reales) y «Maniobras» (impulsos Δv, Hohmann); Termodinámica: paletas para montar escenas propias |
+| Función | Mecánica sigue sin rotación (sin rodadura, sin vuelco) | Cuerpo rígido 2D con orientación y ω |
+| Función | Instrumentos desiguales: el Laboratorio y Magnetismo los tienen; Gravitación y Termodinámica no | Instrumentos de cada espacio según su especificación |
+| Contenido | 155 escenas MEXT; lo que falta no tiene enunciado en el banco o pide modelos fuera de alcance | — |
+| Pulido | Títulos largos cortados a 1280 px en varias barras superiores | Revisar a 1280×800 todas las pantallas |
 
 ## Problemas conocidos
 
