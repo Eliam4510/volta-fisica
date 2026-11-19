@@ -18,7 +18,7 @@
         const r = canvas.getBoundingClientRect();
         return Math.max(0, Math.min(this.simulado, (ev.clientX - r.left - this.m) / (r.width - 2 * this.m) * this.duracion));
       };
-      canvas.addEventListener('pointerdown', ev => { canvas.setPointerCapture(ev.pointerId); this.arrastrando = true; this.alCambiar(aT(ev)); });
+      canvas.addEventListener('pointerdown', ev => { try { canvas.setPointerCapture(ev.pointerId); } catch { /* puntero sintético */ } this.arrastrando = true; this.alCambiar(aT(ev)); });
       canvas.addEventListener('pointermove', ev => {
         if (this.arrastrando) { this.alCambiar(aT(ev)); return; }
         const r = canvas.getBoundingClientRect(), x = ev.clientX - r.left;

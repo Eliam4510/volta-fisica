@@ -2632,7 +2632,7 @@ function iniciar() {
       else if (ev.key === 'Enter' && lista[selCmd]) { cerrarComandos(); lista[selCmd][3](); }
       return;
     }
-    const ctrl = ev.ctrlKey || ev.metaKey, enCampo = ev.target.matches('input, textarea');
+    const ctrl = ev.ctrlKey || ev.metaKey, enCampo = ev.target instanceof Element && ev.target.matches('input, textarea');
     if (ctrl && ev.key.toLowerCase() === 'k') { ev.preventDefault(); abrirComandos(); return; }
     if (ctrl && ev.key.toLowerCase() === 's') { ev.preventDefault(); guardar(); return; }
     if (ctrl && ev.key.toLowerCase() === 'o') { ev.preventDefault(); abrir(); return; }

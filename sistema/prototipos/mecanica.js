@@ -469,10 +469,10 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); abrirComandos(); return; }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); guardar(); return; }
-    if ((ev.ctrlKey || ev.metaKey) && !ev.target.matches('input, textarea') && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
-    if ((ev.ctrlKey || ev.metaKey) && !ev.target.matches('input, textarea') && ev.key.toLowerCase() === 'z') { ev.preventDefault(); deshacer(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && !(ev.target instanceof Element && ev.target.matches('input, textarea')) && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && !(ev.target instanceof Element && ev.target.matches('input, textarea')) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); deshacer(); return; }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'o') { ev.preventDefault(); abrir(); return; }
-    if (ev.target.matches('input, textarea')) return;
+    if (ev.target instanceof Element && ev.target.matches('input, textarea')) return;
     if (ev.code === 'Space') { ev.preventDefault(); if (!ev.repeat) alternar(); espacioPulsado = true; }
     else if (ev.key === 'ArrowRight') { jugando = false; t = Math.min(DUR, t + 1 / 60); todo(); }
     else if (ev.key === 'ArrowLeft') { jugando = false; t = Math.max(0, t - 1 / 60); todo(); }

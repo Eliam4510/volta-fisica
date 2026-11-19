@@ -888,7 +888,7 @@ import { evaluar } from '../nucleo/unidades.js';
     if (ctrl && tecla === 'k') { ev.preventDefault(); abrirComandos(); return; }
     if (ctrl && tecla === 's') { ev.preventDefault(); guardar(); return; }
     if (ctrl && tecla === 'o') { ev.preventDefault(); abrir(); return; }
-    if (ev.target.matches('input:not([type="range"]), textarea')) return;
+    if (ev.target instanceof Element && ev.target.matches('input:not([type="range"]), textarea')) return;
     if (ctrl && tecla === 'z') { ev.preventDefault(); if (ev.shiftKey) rehacer(); else deshacer(); return; }
     if (ctrl && tecla === 'y') { ev.preventDefault(); rehacer(); return; }
     if (ctrl) return;
