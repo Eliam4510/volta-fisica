@@ -57,13 +57,13 @@ export function claseDe(o) { return o.tipo === 'superficie' ? o.forma : o.tipo; 
 export const ICONOS = {
   particula: 'o-particula', disco: 'o-disco', suelo: 'o-suelo', pared: 'o-pared', plano: 'o-plano-inclinado',
   segmento: 'o-trazo-libre', arco: 'o-arco', cuerda: 'o-cuerda', resorte: 'o-resorte', varilla: 'o-varilla',
-  polea: 'o-polea', union: 'o-fijacion', clavo: 'o-clavo', escena: 'o-gravedad',
+  polea: 'o-polea', union: 'o-fijacion', prensa: 'o-prensa-hidraulica', clavo: 'o-clavo', escena: 'o-gravedad',
 };
 export const NOMBRE_CLASE = {
   particula: 'Partícula', suelo: 'Suelo', pared: 'Pared', plano: 'Plano', segmento: 'Segmento', arco: 'Arco',
-  cuerda: 'Cuerda', resorte: 'Resorte', varilla: 'Varilla', polea: 'Polea', union: 'Unión', clavo: 'Clavo',
+  cuerda: 'Cuerda', resorte: 'Resorte', varilla: 'Varilla', polea: 'Polea', union: 'Unión', prensa: 'Prensa', clavo: 'Clavo',
 };
-export const CONECTORES = ['cuerda', 'resorte', 'varilla', 'polea', 'union'];
+export const CONECTORES = ['cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa'];
 
 // ---------------------------------------------------------------------------
 // Geometría de las superficies del laboratorio
@@ -198,6 +198,7 @@ export function normalizarEscena(d) {
       n = { id: o.id, tipo: o.tipo, nombre, a: o.a, b: typeof o.b === 'string' ? o.b : null };
       if (o.tipo === 'polea') { if (!n.b) continue; n.P = num2(o.P, [0, 0]); n.L = numero(o.L, 1, 1e-6, 1e5); n.r = numero(o.r, 0.1, 0.005, 10); }
       else if (o.tipo === 'union') { if (!n.b) continue; }
+      else if (o.tipo === 'prensa') { if (!n.b) continue; n.n = numero(o.n, 4, 0.01, 1000); }
       else {
         if (!n.b) n.ancla = num2(o.ancla, [0, 0]);
         if (o.tipo === 'resorte') { n.k = numero(o.k, 50, 1e-6, 1e9); n.L0 = numero(o.L0, 1, 0, 1e5); n.amort = numero(o.amort, 0, 0, 1e6); n.soloTira = o.soloTira === true; }
@@ -282,13 +283,16 @@ export function aMotor(esc) {
   for (const c of esc.objetos) {
     if (!CONECTORES.includes(c.tipo)) continue;
     if (indice[c.a] == null || (c.b != null && (indice[c.b] == null || c.b === c.a))) { avisos.push(`${mayuscula(conArticulo(c.nombre))} no une partículas que existan: no actúa.`); continue; }
-    if ((c.tipo === 'polea' || c.tipo === 'union') && c.b == null) continue;
+    if ((c.tipo === 'polea' || c.tipo === 'union' || c.tipo === 'prensa') && c.b == null) continue;
     const pa = pos(c.a), pb = c.b != null ? pos(c.b) : c.ancla;
     let m;
     if (c.tipo === 'polea') {
       const D = largo(resta(pa, c.P)) + largo(resta(pos(c.b), c.P));
       if (c.L < D - 1e-9) avisos.push(`La cuerda de ${conArticulo(c.nombre)} es más corta que sus dos ramales: se usa ${D.toPrecision(4)} m.`);
       m = { id: c.id, tipo: 'polea', a: c.a, b: c.b, polea: [...c.P], L: Math.max(c.L, D) };
+    } else if (c.tipo === 'prensa') {
+      // Prensa hidráulica: el émbolo b tiene n veces el área del a (Pascal)
+      m = { id: c.id, tipo: 'prensa', a: c.a, b: c.b, n: c.n };
     } else if (c.tipo === 'union') {
       const A = particulas[indice[c.a]], B = particulas[indice[c.b]];
       if (!((A.radio || 0) + (B.radio || 0) > 0)) avisos.push(`${mayuscula(conArticulo(c.nombre))} necesita discos con radio para que choquen.`);
@@ -471,11 +475,14 @@ export function fuerzasEn(sim, M, t) {
     else { const d = resta(p, sup.c), D = largo(d) || 1e-300, sg = sup.cara === 'interior' ? -1 : 1; nrm = [sg * d[0] / D, sg * d[1] / D]; tg = [-d[1] / D, d[0] / D]; }
     const vt = punto(tg, v), desliza = sup.mu > 0 && !k.pegado && Math.abs(vt) > 1e-15, sgn = Math.sign(vt);
     const dir = desliza ? [nrm[0] - sup.mu * sgn * tg[0], nrm[1] - sup.mu * sgn * tg[1]] : nrm;
-    cols.push({ grad: [[i, dir[0], dir[1]]], usar: L => {
+    // Si la superficie va sobre un cuerpo j, la reacción lo empuja al revés
+    const j = sup.sobre != null ? idx[sup.sobre] : -1;
+    const conJ = (gx, gy) => (j >= 0 ? [[i, gx, gy], [j, -gx, -gy]] : [[i, gx, gy]]);
+    cols.push({ grad: conJ(dir[0], dir[1]), usar: L => {
       lista[i].push({ tipo: 'normal', F: [L * nrm[0], L * nrm[1]], valor: L, id: sup.id });
       if (desliza) lista[i].push({ tipo: 'friccion', F: [-sup.mu * sgn * L * tg[0], -sup.mu * sgn * L * tg[1]], valor: Math.abs(sup.mu * L), id: sup.id });
     } });
-    if (k.pegado && sup.mu > 0) cols.push({ grad: [[i, tg[0], tg[1]]], usar: L => lista[i].push({ tipo: 'friccion', F: [L * tg[0], L * tg[1]], valor: Math.abs(L), id: sup.id }) });
+    if (k.pegado && sup.mu > 0) cols.push({ grad: conJ(tg[0], tg[1]), usar: L => lista[i].push({ tipo: 'friccion', F: [L * tg[0], L * tg[1]], valor: Math.abs(L), id: sup.id }) });
   }
   for (const par of Object.keys(modo.pares || {})) {
     const [i, j] = par.split(':').map(Number), u = unitario(resta(pos(i), pos(j)));
@@ -487,6 +494,16 @@ export function fuerzasEn(sim, M, t) {
   for (const c of mot.conectores) {
     if (c.tipo === 'resorte') continue;
     const ia = idx[c.a], ib = c.b != null ? idx[c.b] : -1;
+    if (c.tipo === 'prensa') {
+      // El líquido empuja a cada émbolo con la misma presión: L sobre a, n·L sobre b
+      cols.push({ grad: [[ia, 0, 1], [ib, 0, c.n]], usar: L => {
+        tensiones[c.id] = L;
+        lista[ia].push({ tipo: 'normal', F: [0, L], valor: L, id: c.id });
+        lista[ib].push({ tipo: 'normal', F: [0, c.n * L], valor: c.n * L, id: c.id });
+      } });
+      cols.push({ grad: [[ia, 1, 0]], usar: () => {} }, { grad: [[ib, 1, 0]], usar: () => {} });
+      continue;
+    }
     if (c.tipo === 'polea') {
       if (!modo.cuerdas?.[c.id]?.tensa) { tensiones[c.id] = 0; continue; }
       const ua = unitario(resta(pos(ia), c.polea)), ub = unitario(resta(pos(ib), c.polea));
@@ -516,9 +533,11 @@ export function fuerzasEn(sim, M, t) {
     const r = new Array(2 * n);
     for (let i = 0; i < n; i++) { const m = mot.particulas[i].m; r[2 * i] = m * dy[4 * i + 2] - F[2 * i]; r[2 * i + 1] = m * dy[4 * i + 3] - F[2 * i + 1]; }
     const k = cols.length, A = Array.from({ length: k }, () => new Array(k).fill(0)), bb = new Array(k).fill(0);
+    // Un cuerpo cinemático (masa infinita) no da ecuación: su m·a − F no dice nada
+    const w = i => (mot.particulas[i].cinematica ? 0 : 1);
     for (let a = 0; a < k; a++) {
-      for (const [i, gx, gy] of cols[a].grad) bb[a] += gx * r[2 * i] + gy * r[2 * i + 1];
-      for (let b = 0; b < k; b++) for (const [i, gx, gy] of cols[a].grad) for (const [j, hx, hy] of cols[b].grad) if (i === j) A[a][b] += gx * hx + gy * hy;
+      for (const [i, gx, gy] of cols[a].grad) bb[a] += w(i) * (gx * r[2 * i] + gy * r[2 * i + 1]);
+      for (let b = 0; b < k; b++) for (const [i, gx, gy] of cols[a].grad) for (const [j, hx, hy] of cols[b].grad) if (i === j) A[a][b] += w(i) * (gx * hx + gy * hy);
     }
     const traza = A.reduce((s, f, i) => s + f[i], 0) || 1;
     for (let a = 0; a < k; a++) A[a][a] += 1e-14 * traza;
@@ -764,6 +783,18 @@ export const ESCENARIOS = [
     crear: () => ({
       duracion: 2,
       objetos: [P_('p1', 'Bola', 0.1, 0, -1, { v: Math.sqrt((2 + 3 * Math.sqrt(3) / 2) * g0), ang: 180 }), { id: 'c1', tipo: 'cuerda', nombre: 'Cuerda', a: 'p1', b: null, ancla: [0, 0], L: 1 }],
+    }),
+  },
+  {
+    id: 'mext-2010-1a', tipo: 'mext', anio: 2010, ref: '2010 · 1-A', titulo: 'Prensa hidráulica',
+    nota: ['Dos émbolos unidos por agua: el de B tiene n = 4 veces el área del de A. Pesan en proporción a sus áreas, así que solos están en equilibrio.', 'Con F = 5 N sobre A hace falta F′ = nF = 20 N sobre B para que sigan en equilibrio: la presión es la misma (Pascal).', 'El líquido conserva el volumen: mientras A baja h, B sube h′ = h/n. Selecciona la prensa y mira Δy de cada émbolo.'],
+    crear: () => ({
+      duracion: 2,
+      objetos: [
+        PF('p1', 'A', 1, -0.6, 0, 5, -90, { v: 0.2, ang: -90 }),
+        PF('p2', 'B', 4, 0.6, 0, 20, -90, { v: 0.05, ang: 90 }),
+        { id: 'c1', tipo: 'prensa', nombre: 'Prensa', a: 'p1', b: 'p2', n: 4 },
+      ],
     }),
   },
   {
@@ -1321,6 +1352,11 @@ function iniciar() {
       if (o.tipo === 'superficie') puntosSuperficie(o).forEach(sumar);
       else if (o.tipo === 'clavo') sumar([o.x, o.y]);
       else if (o.tipo === 'polea') sumar(o.P);
+      else if (o.tipo === 'prensa') {
+        // Los cilindros: ancho ∝ √área y fondo 0.7 m por debajo del émbolo más bajo
+        const a = M.posiciones[M.indice[o.a]], b = M.posiciones[M.indice[o.b]];
+        if (a && b) { const wb = 0.125 * Math.sqrt(o.n || 1), y0 = Math.min(a[1], b[1]) - 0.7; sumar([a[0] - 0.125, y0]); sumar([b[0] - wb, y0]); sumar([a[0] + 0.125, a[1] + 0.4]); sumar([b[0] + wb, b[1] + 0.4]); }
+      }
       else if (o.ancla) sumar(o.ancla);
     }
     for (const p of M.motor.particulas) { sumar([p.p[0] - p.radio, p.p[1] - p.radio]); sumar([p.p[0] + p.radio, p.p[1] + p.radio]); }
@@ -1473,12 +1509,35 @@ function iniciar() {
           tz.mecCuerda(pts, { longitud: (est.clavos?.length ? fijo + est.Lrest : c.L), abajo: abajo(), grueso });
         }
       } else if (c.tipo === 'polea') dibujarPolea(c, s, pd, tr);
-      if (c.tipo !== 'polea' && c.tipo !== 'union' && ib < 0) tz.pivote(c.ancla);
+      else if (c.tipo === 'prensa') dibujarPrensa(c, s, grueso);
+      if (c.tipo !== 'polea' && c.tipo !== 'union' && c.tipo !== 'prensa' && ib < 0) tz.pivote(c.ancla);
       if (c.tipo === 'union' && sel === c.id) {
         const [x1, y1] = v.P(pd[ia]), [x2, y2] = v.P(pd[ib]);
         tz.lineaPx([[x1, y1], [x2, y2]], { color: 'texto-3', grosor: 1, patron: 'auxiliar' });
       }
     }
+  }
+
+  // Prensa hidráulica: dos cilindros (ancho ∝ √área) unidos abajo por un tubo,
+  // el líquido con el tinte de los fluidos (6 % de tinta) y cada émbolo como
+  // una barra gruesa a la altura de su partícula
+  function dibujarPrensa(c, s, grueso) {
+    const v = tz.vista, ctx = tz.ctx, ia = M.indice[c.a], ib = M.indice[c.b];
+    if (ia == null || ib == null) return;
+    const p0a = M.posiciones[ia], p0b = M.posiciones[ib], izqEsA = p0a[0] <= p0b[0];
+    const w = { a: 0.25, b: 0.25 * Math.sqrt(c.n || 1) };
+    const fondo = Math.min(p0a[1], p0b[1]) - 0.6, tubo = 0.1, techo = Math.max(p0a[1], p0b[1]) + 0.4;
+    const L = izqEsA ? { x: p0a[0], w: w.a, y: s[ia].y } : { x: p0b[0], w: w.b, y: s[ib].y };
+    const R = izqEsA ? { x: p0b[0], w: w.b, y: s[ib].y } : { x: p0a[0], w: w.a, y: s[ia].y };
+    const xl0 = L.x - L.w / 2, xl1 = L.x + L.w / 2, xr0 = R.x - R.w / 2, xr1 = R.x + R.w / 2;
+    const rect = (x0, x1, y0, y1) => { ctx.fillRect(v.X(x0), v.Y(y1), v.X(x1) - v.X(x0), v.Y(y0) - v.Y(y1)); };
+    ctx.save(); ctx.globalAlpha = 0.06; ctx.fillStyle = tz.t.tinta;
+    rect(xl0, xl1, fondo - tubo, L.y); rect(xr0, xr1, fondo - tubo, R.y); rect(xl1, xr0, fondo - tubo, fondo);
+    ctx.restore();
+    const g = G.materia + (grueso ? 0.5 : 0);
+    tz.lineaPx([[v.X(xl0), v.Y(techo)], [v.X(xl0), v.Y(fondo - tubo)], [v.X(xr1), v.Y(fondo - tubo)], [v.X(xr1), v.Y(techo)]], { grosor: g });
+    tz.lineaPx([[v.X(xl1), v.Y(techo)], [v.X(xl1), v.Y(fondo)], [v.X(xr0), v.Y(fondo)], [v.X(xr0), v.Y(techo)]], { grosor: g });
+    for (const q of [L, R]) tz.lineaPx([[v.X(q.x - q.w / 2) + 1.5, v.Y(q.y)], [v.X(q.x + q.w / 2) - 1.5, v.Y(q.y)]], { grosor: G.materia + 2.5 });
   }
 
   function dibujarPolea(c, s, pd, tr) {
@@ -1579,6 +1638,11 @@ function iniciar() {
     } else if (CONECTORES.includes(o.tipo)) {
       const ia = M.indice[o.a], ib = o.b != null ? M.indice[o.b] : -1;
       if (ia == null) return;
+      if (o.tipo === 'prensa') {
+        // La prensa se señala con sus dos émbolos, no con una recta entre ellos
+        for (const i of [ia, ib]) if (i >= 0) { const [x, y] = v.P(pd[i]); tz.seleccionCirculo(x, y, 9); }
+        return;
+      }
       tz.mecSeleccionSegmento(ib >= 0 ? pd[ib] : o.ancla, pd[ia], { asas: false });
       if (o.ancla) tz.asa(...v.P(o.ancla));
     }
@@ -1622,6 +1686,7 @@ function iniciar() {
   function textoPendiente(o) {
     if (o.herr === 'polea') return o.a ? 'Clic en la segunda partícula' : 'Clic en la primera partícula';
     if (o.herr === 'union') return 'Clic en el otro disco';
+    if (o.herr === 'prensa') return 'Clic en el émbolo grande';
     return o.a ? 'Clic en una partícula o en un punto fijo' : 'Clic en una partícula';
   }
 
@@ -1666,6 +1731,7 @@ function iniciar() {
       case 'polea': return cantidad(o.L, 'm', 3);
       case 'arco': return 'R ' + cantidad(o.r, 'm', 3);
       case 'clavo': case 'union': return '';
+      case 'prensa': return `n = ${fmt(o.n, 3)}`;
       default: return o.e < 1 ? 'e ' + limpio(o.e, 2) : o.mu > 0 ? 'μ ' + limpio(o.mu, 2) : '';
     }
   }
@@ -1797,7 +1863,7 @@ function iniciar() {
       h += grupo('Lecturas', '<div class="lecturas" id="lecturas"></div>', 'lect-titulo');
     } else if (CONECTORES.includes(o.tipo)) {
       const extremos = `${nombreDe(o.a)} — ${o.b != null ? nombreDe(o.b) : 'punto fijo'}`;
-      const sub = { cuerda: 'Cuerda ideal: inextensible, solo tira', resorte: 'Resorte lineal', varilla: 'Varilla rígida, sin masa', polea: 'Polea fija ideal', union: 'Unión al chocar' }[o.tipo];
+      const sub = { prensa: 'Prensa hidráulica: dos émbolos unidos por un líquido', cuerda: 'Cuerda ideal: inextensible, solo tira', resorte: 'Resorte lineal', varilla: 'Varilla rígida, sin masa', polea: 'Polea fija ideal', union: 'Unión al chocar' }[o.tipo];
       h += cab(ICONOS[o.tipo], o.nombre, sub);
       let c = fila('Extremos', `<span class="texto-dato">${extremos}</span>`);
       if (o.tipo === 'cuerda') c += fila('Longitud', campo(`${o.id}.L`, o.L, 'longitud', 'L')) + (o.b == null ? '' : '');
@@ -1807,6 +1873,8 @@ function iniciar() {
       if (o.ancla) c += fila('Punto fijo', doble(campo(`${o.id}.axx`, o.ancla[0], 'longitud', 'x'), campo(`${o.id}.axy`, o.ancla[1], 'longitud', 'y')));
       if (o.tipo === 'cuerda' || o.tipo === 'polea') c += fila('', `<button class="btn btn-secundario btn-compacto" data-accion-insp="tensar" data-ayuda="Longitud = distancia actual entre los extremos|Make taut">Tensar</button>`);
       if (o.tipo === 'cuerda' && o.b == null && M.clavos.length) c += ayudaFila('Se engancha en los clavos de la escena al pasar por ellos.');
+      if (o.tipo === 'prensa') c += fila('Razón de áreas', campo(`${o.id}.n`, o.n, 'adim', 'n', 'El émbolo de B tiene n veces el área del de A|Area ratio')) +
+        ayudaFila('Líquido incompresible y sin peso: lo que baja un émbolo lo sube el otro dividido por n, y la fuerza del líquido sobre B es n veces la de A (Pascal).');
       if (o.tipo === 'union') c += ayudaFila('Los dos discos quedan pegados después de chocar (choque perfectamente inelástico y unidos desde entonces).');
       h += grupo('Propiedades', c);
       h += grupoMostrar();
@@ -1918,6 +1986,7 @@ function iniciar() {
     }
     if (CONECTORES.includes(o.tipo)) {
       if (prop === 'k') { if (!(v > 0)) return 'La rigidez tiene que ser positiva.'; o.k = v; return; }
+      if (prop === 'n') { if (!(v > 0 && v <= 1000)) return 'La razón de áreas tiene que estar entre 0 y 1000.'; o.n = v; return; }
       if (prop === 'L0') { if (!(v >= 0)) return 'El largo natural no puede ser negativo.'; o.L0 = v; return; }
       if (prop === 'amort') { if (!(v >= 0)) return 'El amortiguamiento no puede ser negativo.'; o.amort = v; return; }
       if (prop === 'r') { if (!(v > 0)) return 'El radio tiene que ser positivo.'; o.r = v; return; }
@@ -2050,7 +2119,11 @@ function iniciar() {
       const est = $('#insp-estado'); if (est) est.textContent = `${o.radio > 0 ? 'Disco' : 'Partícula'} · ${estadoParticula(i)}`;
     } else if (CONECTORES.includes(o.tipo) && SIM) {
       const ia = M.indice[o.a], s = estadoEn(t), pa = [s[ia].x, s[ia].y];
-      if (o.tipo !== 'union') {
+      if (o.tipo === 'prensa') {
+        const ib = M.indice[o.b], p0a = M.posiciones[ia], p0b = M.posiciones[ib], L = f?.tensiones?.[o.id] ?? 0;
+        h += filaL('F', 'A', L, 'N') + filaL('F', 'B', o.n * L, 'N');
+        h += filaL('Δy', 'A', s[ia].y - p0a[1], 'm') + filaL('Δy', 'B', s[ib].y - p0b[1], 'm');
+      } else if (o.tipo !== 'union') {
         const T = f?.tensiones?.[o.id] ?? 0;
         h += filaL(o.tipo === 'resorte' ? 'F' : 'T', o.tipo === 'resorte' ? 'e' : '', o.tipo === 'resorte' ? Math.abs(T) : T, 'N');
         const D = o.tipo === 'polea' ? largo(resta(pa, o.P)) + largo(resta([s[M.indice[o.b]].x, s[M.indice[o.b]].y], o.P)) : largo(resta(pa, o.b != null ? [s[M.indice[o.b]].x, s[M.indice[o.b]].y] : o.ancla));
@@ -2376,6 +2449,7 @@ function iniciar() {
     anadir(o);
     const D = distanciaConector(o);
     if (herr === 'resorte') o.L0 = Number(D.toPrecision(6)) || 0.5;
+    else if (herr === 'prensa') o.n = 4;
     else if (herr !== 'union') o.L = D;
     terminarCreacion();
   }
@@ -2434,7 +2508,7 @@ function iniciar() {
     arco: 'Clic para un hemisferio de 1 m, o arrastra desde el centro para el radio.',
     cuerda: 'Clic en una partícula y luego en otra partícula o en un punto fijo.', resorte: 'Clic en una partícula y luego en otra o en un punto fijo.',
     varilla: 'Clic en una partícula y luego en otra o en un punto fijo.', polea: 'Clic donde va la polea y después en las dos partículas.',
-    union: 'Clic en un disco y después en el otro: quedarán pegados al chocar.', clavo: 'Clic donde va el clavo.',
+    union: 'Clic en un disco y después en el otro: quedarán pegados al chocar.', prensa: 'Clic en el émbolo pequeño y después en el grande: el líquido los une.', clavo: 'Clic donde va el clavo.',
   };
   function elegirHerramienta(h) {
     if (herramienta === h || !h) { soltarHerramienta(); return; }
@@ -2563,6 +2637,7 @@ function iniciar() {
       if (p.a) {
         if (particulaBajo === p.a) return;
         if (p.herr === 'union' && !particulaBajo) { aviso('La unión va entre dos discos: haz clic en el otro.'); return; }
+        if (p.herr === 'prensa' && !particulaBajo) { aviso('La prensa va entre dos émbolos: haz clic en la otra partícula.'); return; }
         crearConector(p.herr, p.a, particulaBajo ? { particula: particulaBajo } : { punto: wa }); return;
       }
       if (p.ancla && particulaBajo) { crearConector(p.herr, particulaBajo, { punto: p.ancla }); return; }
@@ -2580,6 +2655,7 @@ function iniciar() {
       if (CONECTORES.includes(h)) {
         if (particulaBajo) arrastre = { tipo: 'conectar', herr: h, a: particulaBajo, x, y };
         else if (h === 'union') { aviso('La unión va entre dos discos: haz clic en uno.'); }
+        else if (h === 'prensa') { aviso('La prensa va entre dos émbolos: haz clic en la partícula del émbolo pequeño.'); }
         else arrastre = { tipo: 'conectar', herr: h, ancla: wa, x, y };
         dibujar(); return;
       }
@@ -2685,6 +2761,7 @@ function iniciar() {
       if (a.a) {
         if (pb === a.a) { dibujar(); return; }
         if (a.herr === 'union' && !pb) { aviso('La unión va entre dos discos.'); dibujar(); return; }
+        if (a.herr === 'prensa' && !pb) { aviso('La prensa va entre dos émbolos.'); dibujar(); return; }
         crearConector(a.herr, a.a, pb ? { particula: pb } : { punto: w }); return;
       }
       if (pb) { crearConector(a.herr, pb, { punto: a.ancla }); return; }
@@ -2822,7 +2899,7 @@ function iniciar() {
     ['i-exportar', 'Exportar datos a CSV', '', exportarCSV],
     ['i-evento', 'Exportar eventos a CSV', '', exportarEventos],
     ['i-imagen', 'Exportar imagen del lienzo', '', exportarPNG],
-    ...['particula', 'suelo', 'pared', 'plano', 'segmento', 'arco', 'cuerda', 'resorte', 'varilla', 'polea', 'union', 'clavo'].map(h => [ICONOS[h], `Añadir ${(document.querySelector(`#paleta [data-herr="${h}"] span`)?.textContent || h).toLowerCase()}`, h === 'particula' ? 'P' : '', () => elegirHerramienta(h)]),
+    ...['particula', 'suelo', 'pared', 'plano', 'segmento', 'arco', 'cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa', 'clavo'].map(h => [ICONOS[h], `Añadir ${(document.querySelector(`#paleta [data-herr="${h}"] span`)?.textContent || h).toLowerCase()}`, h === 'particula' ? 'P' : '', () => elegirHerramienta(h)]),
     ...ESCENARIOS.map(e => [e.tipo === 'mext' ? 'i-mext' : e.tipo === 'tutorial' ? 'i-tutorial' : 'i-ejemplo', `Escenario: ${e.titulo}${e.ref ? ` (MEXT ${e.ref})` : ''}`, '', () => cargarEscenario(e.id)]),
   ];
   let selCmd = 0;

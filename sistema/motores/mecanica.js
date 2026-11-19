@@ -161,7 +161,7 @@ function preparar(e) {
     if (c.ia == null || (c.b != null && c.ib == null)) throw new Error(`El conector ${c.id} une partículas que no existen.`);
     if (c.tipo === 'prensa') {
       if (!(c.ib >= 0) || !(c.n > 0)) throw new Error(`La prensa ${c.id} necesita dos émbolos y una razón de áreas positiva.`);
-      Object.assign(c, { ya0: P[c.ia].p[1], yb0: P[c.ib].p[1] });
+      Object.assign(c, { xa0: P[c.ia].p[0], ya0: P[c.ia].p[1], xb0: P[c.ib].p[0], yb0: P[c.ib].p[1] });
     }
   }
   // Masas inversas. Un cuerpo cinemático (cinematica: true) es un conductor de
@@ -239,7 +239,12 @@ function restriccionesDelModo(S, modo) {
   }
   for (const c of S.con) {
     if (c.tipo === 'varilla') lista.push({ clave: `varilla:${c.id}`, unilateral: false, ...restriccionDistancia(c, modo, true) });
-    if (c.tipo === 'prensa') lista.push({ clave: `prensa:${c.id}`, unilateral: false, ...restriccionPrensa(c) });
+    if (c.tipo === 'prensa') {
+      lista.push({ clave: `prensa:${c.id}`, unilateral: false, ...restriccionPrensa(c) });
+      // Cada émbolo va por su cilindro: no se mueve en horizontal
+      lista.push({ clave: `prensa-guia:${c.id}:a`, unilateral: false, ...restriccionGuia(c.ia, c.xa0) });
+      lista.push({ clave: `prensa-guia:${c.id}:b`, unilateral: false, ...restriccionGuia(c.ib, c.xb0) });
+    }
     if (c.tipo === 'cuerda' && modo.cuerdas[c.id]?.tensa) lista.push({ clave: `cuerda:${c.id}`, unilateral: true, ...restriccionDistancia(c, modo, false) });
     if (c.tipo === 'polea' && modo.cuerdas[c.id]?.tensa) lista.push({ clave: `polea:${c.id}`, unilateral: true, ...restriccionPolea(c) });
   }
@@ -344,6 +349,11 @@ function restriccionPrensa(c) {
       return { C: (y[4 * ia + 1] - c.ya0) + n * (y[4 * ib + 1] - c.yb0), Cp: y[4 * ia + 3] + n * y[4 * ib + 3], grad: [[ia, 0, 1], [ib, 0, n]], jdv: 0 };
     },
   };
+}
+
+/** Guía vertical: la partícula i se queda en x = x0. @param {number} i @param {number} x0 */
+function restriccionGuia(i, x0) {
+  return { evaluar: y => ({ C: y[4 * i] - x0, Cp: y[4 * i + 2], grad: [[i, 1, 0]], jdv: 0 }) };
 }
 
 /** Polea fija: C = L − |pa − P| − |pb − P| ≥ 0 (cuerda tensa sobre la polea). */

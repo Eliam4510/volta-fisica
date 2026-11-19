@@ -462,3 +462,17 @@ describe('escenas MEXT: estática con un cuerpo rígido de varillas', () => {
     cerca(G1.x, G0.x, 1e-9); cerca(G1.y, G0.y, 1e-9);
   });
 });
+
+describe('escenas MEXT: fluidos', () => {
+  it('2010 · 1-A: si A baja h, B sube h/n, y F sobre A se equilibra con F′ = n·F sobre B', () => {
+    const { M, sim } = simular('mext-2010-1a');
+    const n = 4;
+    const dA = est(sim, 2, 0).y - est(sim, 0, 0).y, dB = est(sim, 2, 1).y - est(sim, 0, 1).y;
+    cerca(dA, -0.4, 1e-9);
+    cerca(dB, -dA / n, 1e-9);
+    // Fuerza del líquido sobre cada émbolo: misma presión, áreas en razón n
+    const L = fuerzasEn(sim, M, 1).tensiones.c1;
+    cerca(L, 1 * g + 5, 1e-6);
+    cerca(n * L, 4 * g + 20, 1e-6);
+  });
+});

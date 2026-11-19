@@ -21,8 +21,15 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   1-(1), 2019 1-(1) y 2023 1-(1) con gráficas v–t reconstruidas.
 - Laboratorio: escena MEXT 2010 1-B (palo con una caja en una cuesta), un
   cuerpo rígido hecho con un triángulo de varillas sostenido por dos apoyos
-  verticales: F_A/F_B = (1 + tan θ)/(1 − tan θ). Mecánica tiene ya 37
-  escenas MEXT.
+  verticales: F_A/F_B = (1 + tan θ)/(1 − tan θ).
+- Laboratorio: prensa hidráulica (conector entre dos émbolos con razón de
+  áreas n): el líquido conserva el volumen y la presión es la misma en los
+  dos émbolos. Escena MEXT 2010 1-A. Mecánica tiene ya 38 escenas MEXT.
+- Motor de Mecánica: las velocidades iniciales incompatibles con una varilla
+  o una prensa se proyectan como un impulso que conserva el momento.
+- Laboratorio: las fuerzas que muestra el inspector incluyen la reacción
+  sobre el cuerpo que lleva una superficie, y los cuerpos con movimiento
+  impuesto ya no distorsionan el cálculo de las demás fuerzas.
 
 ### Corregido
 
