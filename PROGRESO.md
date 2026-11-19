@@ -142,6 +142,11 @@ análisis de datos:
 4. `node herramientas/notas-release.mjs X.Y.Z > notas.md` y
    `gh release create vX.Y.Z --title "Volta X.Y.Z" --notes-file notas.md`.
 5. El flujo `release.yml` compila y adjunta instalador y portátil.
+6. Comprobar que terminó: `gh run watch <id> --exit-status` y
+   `gh release view vX.Y.Z --json assets`. Si falla, no se puede mover la
+   etiqueta (sería un push forzado): se corrige y se publica X.Y.(Z+1), y se
+   anota en las notas de la versión fallida dónde están los ejecutables
+   (pasó con la 0.5.0: una prueba superó el límite de 5 s en Windows).
 - 2026-11-19 01:20 — Unidades y expresiones, diálogos nativos, motor de gas; CI separado en pruebas y compilación.
 - 2026-11-19 01:50 — Integradores, Electrostática y motor general de Mecánica con pruebas (229). Agentes: gravitación, circuitos, caja de arena de Mecánica.
 - 2026-11-19 03:40 — Electrostática con escenas .volta saneadas y exportación con BOM. Motor de Mecánica endurecido: sin efecto túnel, choques simultáneos, contactos entre discos, varios apoyos por partícula, resultado parcial al límite de eventos (301 pruebas). CHANGELOG [Sin publicar] relleno.
