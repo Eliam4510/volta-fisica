@@ -25,6 +25,12 @@ describe('fmt: cifras significativas', () => {
   it('renormaliza la mantisa cuando el redondeo llega a 10', () => {
     expect(fmt(9.99996e5, 4)).toBe('1.000 × 10⁶');
   });
+  it('conserva las cifras significativas cuando el redondeo sube de orden', () => {
+    expect(fmt(-0.99999999999, 4)).toBe('−1.000');
+    expect(fmt(9.99999, 3)).toBe('10.0');
+    expect(fmt(0.099999, 2)).toBe('0.10');
+    expect(fmt(99999.7, 4)).toBe('1.000 × 10⁵');
+  });
   it('no devuelve NaN ni Infinity', () => {
     expect(fmt(NaN)).toBe('—');
     expect(fmt(Infinity)).toBe('—');

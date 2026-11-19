@@ -27,8 +27,16 @@ export function fmt(v, cifras = 4) {
     const sup = String(e).replace('-', '⁻').replace(/\d/g, d => SUPERINDICES[Number(d)]);
     return `${m.toFixed(Math.max(0, cifras - 1)).replace('-', '−')} × 10${sup}`;
   }
-  const dec = Math.max(0, cifras - 1 - Math.floor(Math.log10(a)));
-  return v.toFixed(Math.min(dec, 6)).replace('-', '−');
+  const orden = Math.floor(Math.log10(a));
+  const dec = Math.max(0, cifras - 1 - orden);
+  let s = v.toFixed(Math.min(dec, 6));
+  // El redondeo puede subir de orden (0.99999 → 1.0000, 9.99999 → 10.00):
+  // entonces sobra un decimal para conservar las cifras significativas.
+  if (Math.abs(Number(s)) >= Math.pow(10, orden + 1)) {
+    if (Math.abs(Number(s)) >= 1e5) return fmt(Math.sign(v) * 1e5, cifras);
+    s = v.toFixed(Math.min(Math.max(0, dec - 1), 6));
+  }
+  return s.replace('-', '−');
 }
 
 /**

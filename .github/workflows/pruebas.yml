@@ -22,3 +22,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Revisión de tipos (núcleo y motores)
+        run: npm run tipos
