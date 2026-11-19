@@ -13,6 +13,8 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   (módulo y dirección), con su vector en el lienzo y su energía potencial
   U_F = −F·r en las lecturas, las gráficas y el CSV, para que su trabajo no
   se cuente como energía disipada.
+- Laboratorio de Mecánica: duplicar la selección (Ctrl+D) para partículas,
+  superficies y clavos; una partícula apoyada sigue apoyada en la copia.
 
 ## [0.4.0] - 2026-11-19
 

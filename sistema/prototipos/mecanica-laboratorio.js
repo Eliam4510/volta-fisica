@@ -1786,6 +1786,32 @@ function iniciar() {
     avisar(area, quitar.size > 1 ? `${o.nombre} y ${quitar.size - 1} conector${quitar.size > 2 ? 'es' : ''} borrados` : `${o.nombre} borrado`);
   }
 
+  // Duplicar (Ctrl D): la copia queda desplazada medio metro a la derecha y
+  // abajo; una partícula apoyada sigue apoyada si su superficie llega hasta ahí.
+  // Los conectores no se duplican solos: unen partículas concretas.
+  function duplicar(id) {
+    const o = objeto(esc, id); if (!o) return;
+    if (t > 0) { aviso('Los objetos se editan en t = 0.', ['Ir a t = 0', () => irA(0)]); return; }
+    if (CONECTORES.includes(o.tipo)) { aviso('Un conector une partículas concretas: duplica las partículas y conéctalas de nuevo.'); return; }
+    const c = JSON.parse(JSON.stringify(o)), d = 0.5;
+    c.id = nuevoId(esc, (o.id.match(/^[a-z]+/i) || ['o'])[0]);
+    c.nombre = nuevoNombre(esc, o.tipo === 'superficie' ? o.forma : o.tipo);
+    const mover = q => [q[0] + d, q[1] - d];
+    if (o.tipo === 'particula') {
+      c.x += d;
+      const s0 = o.sobre ? objeto(esc, o.sobre) : null;
+      const q = s0 ? deslizarSobre(s0, posicionParticula(esc, o), 0, c.x, o.radio) : null;
+      if (q) { c.x = q[0]; c.y = q[1]; } else { c.y -= d; c.sobre = null; }
+    } else if (o.tipo === 'clavo') { c.x += d; c.y -= d; }
+    else if (o.tipo === 'superficie') {
+      if (o.forma === 'arco') c.c = mover(o.c);
+      else { c.a = mover(o.a); c.b = mover(o.b); }
+    } else return;
+    esc.objetos.push(c); sel = c.id;
+    registrar(); recalcular(); construirArbol(); construirInspector();
+    avisar(area, `${o.nombre} duplicado como ${c.nombre}`);
+  }
+
   // -------------------------------------------------------------------------
   // Paleta de objetos
   // -------------------------------------------------------------------------
@@ -2178,6 +2204,7 @@ function iniciar() {
     ['i-reiniciar', 'Ir a t = 0', 'Inicio', () => irA(0)],
     ['i-encuadrar', 'Encuadrar todo', 'F', () => { vistaTocada = false; encuadrar(); dibujar(); }],
     ['i-deshacer', 'Deshacer', 'Ctrl Z', deshacer],
+    ['i-duplicar', 'Duplicar la selección', 'Ctrl D', () => { if (objeto(esc, sel)) duplicar(sel); else aviso('Selecciona un objeto para duplicarlo.'); }],
     ['i-rehacer', 'Rehacer', 'Ctrl Y', rehacer],
     ['i-borrar', 'Borrar el objeto seleccionado', 'Supr', () => { if (objeto(esc, sel)) borrar(sel); }],
     ['i-tema-oscuro', 'Cambiar tema claro u oscuro', '', () => window.Volta.ponerTema(document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')],
@@ -2217,6 +2244,7 @@ function iniciar() {
     if (ctrl && ev.key.toLowerCase() === 'o') { ev.preventDefault(); abrir(); return; }
     if (ctrl && !enCampo && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
     if (ctrl && !enCampo && ev.key.toLowerCase() === 'z') { ev.preventDefault(); deshacer(); return; }
+    if (ctrl && !enCampo && ev.key.toLowerCase() === 'd') { ev.preventDefault(); if (objeto(esc, sel)) duplicar(sel); return; }
     if (enCampo) return;
     if (ev.key === 'Escape') { if (pendiente || herramienta) soltarHerramienta(); else if (sel !== 'escena') seleccionar('escena'); menu.hidden = true; dibujar(); return; }
     if (ev.key === 'Delete' || ev.key === 'Backspace') { if (objeto(esc, sel)) { ev.preventDefault(); borrar(sel); } return; }
