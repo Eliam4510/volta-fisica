@@ -11,6 +11,10 @@ física > funciones faltantes > rendimiento > pulido.
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
 - Circuitos (pantalla «Transitorios», 56 pruebas) integrado y enlazado.
 - Laboratorio de Mecánica integrado.
+- Agente en curso: Óptica (`motores/optica.js`, `pruebas/optica.test.js`,
+  `lienzo/dominios/optica.js`, `prototipos/optica*.html|js`). Al integrar:
+  añadirlo a MODULOS en `componentes/espacio.js`, a PANTALLAS y a la tarjeta
+  de Inicio (espacios por `e.espacio`), README, CHANGELOG.
 - Ondas y sonido integrado (Medio 1D y Doppler y acústica). Falta la cubeta 2D, el pistón móvil y la escena MEXT 2012 del ventilador.
 - Escenas MEXT del Laboratorio integradas: 24 escenas MEXT con prueba cada
   una. Sin representar: 2016 P3 (fricción entre dos cuerpos móviles),
