@@ -87,6 +87,26 @@ describe('conservación y balance de energía', () => {
   });
 });
 
+describe('Zeno: rebotes casi infinitos', () => {
+  it('con e cercano a 1 nunca deja la partícula congelada en el aire', () => {
+    // Con e = 0.9 y umbral mínimo hay ~214 rebotes antes del punto de Zeno (t ≈ 11.8 s):
+    // más que el límite de eventos del motor
+    const sim = simularProyectil({ h: 2, theta: grados(89.999), v0: 0.5, e: 0.9, g, duracion: 30, umbral: 1e-9 });
+    const fin = estadoEn(sim, 30);
+    expect(Number.isFinite(fin.x) && Number.isFinite(fin.y)).toBe(true);
+    // O sigue rebotando con física correcta hasta el final, o queda en reposo sobre el suelo
+    const ultimo = sim.tramos[sim.tramos.length - 1];
+    expect(ultimo.t0 + ultimo.dur).toBeCloseTo(30, 9);
+    if (fin.fase === 'rodando') expect(fin.y).toBe(0);
+  });
+  it('el balance de energía sigue cerrando cuando se declara el reposo', () => {
+    const sim = simularProyectil({ h: 2, theta: grados(89.999), v0: 0.5, e: 0.9, g, masa: 1, duracion: 30, umbral: 1e-9 });
+    const E = s => { const { K, U } = energiaEn(sim, s); return K + U; };
+    const perdido = sim.eventos.filter(x => x.perdida != null).reduce((a, x) => a + x.perdida, 0);
+    expect(Math.abs(E(estadoEn(sim, 0)) - E(estadoEn(sim, 30)) - perdido)).toBeLessThan(1e-9);
+  });
+});
+
 describe('determinismo', () => {
   it('la misma escena da exactamente el mismo resultado', () => {
     const p = { h: 3, theta: grados(35), v0: 4, e: 0.5, g, masa: 0.5, duracion: 2.4 };

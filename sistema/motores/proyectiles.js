@@ -54,7 +54,11 @@ export function simularProyectil(p) {
   /** @type {any} */
   let st = { tipo: 'vuelo', t0: 0, x: 0, y: h, vx: v0 * Math.cos(alfa), vy: v0 * Math.sin(alfa) };
   eventos.push({ t: 0, nombre: 'Sale de la plataforma', x: 0, y: h });
-  for (let k = 0; k < 200 && st.t0 < DUR; k++) {
+  // Límite de eventos. Cerca del límite se declara el contacto (regla post-Zeno):
+  // la acumulación de rebotes infinitos en tiempo finito termina en reposo.
+  const LIMITE = 400;
+  for (let k = 0; k < LIMITE && st.t0 < DUR; k++) {
+    const zeno = k >= LIMITE - 5;
     if (st.tipo === 'vuelo') {
       let mejor = Infinity, sup = null;
       // Pendiente: y = h − x·tanθ, para 0 ≤ x ≤ L
@@ -78,7 +82,7 @@ export function simularProyectil(p) {
         // Componentes normal (n = (senθ, cosθ)) y tangencial (d = (cosθ, −senθ))
         const vn = vx * sn + vy * cs, vt = vx * cs - vy * sn, vn2 = -e * vn;
         eventos.push({ t: t1, nombre: 'Choque con la pendiente', x, y, perdida: 0.5 * M * (vn * vn - vn2 * vn2) });
-        if (vn2 < UMBRAL) {
+        if (vn2 < UMBRAL || zeno) {
           eventos.push({ t: t1, nombre: 'Desliza por la pendiente', x, y, perdida: 0.5 * M * vn2 * vn2 });
           st = { tipo: 'pendiente', t0: t1, s: x / cs, u: vt, L, S, sn, cs, h };
           continue;
@@ -86,7 +90,7 @@ export function simularProyectil(p) {
         vx = vt * cs + vn2 * sn; vy = -vt * sn + vn2 * cs;
       } else {
         eventos.push({ t: t1, nombre: sup === 'suelo' ? 'Choque con el suelo' : 'Choque con la plataforma', x, y, perdida: 0.5 * M * vy * vy * (1 - e * e) });
-        if (-vy * e < UMBRAL) {
+        if (-vy * e < UMBRAL || zeno) {
           eventos.push({ t: t1, nombre: 'Queda rodando', x, y, perdida: 0.5 * M * (vy * e) ** 2 });
           st = { tipo: 'rodando', t0: t1, x, y, vx };
           continue;

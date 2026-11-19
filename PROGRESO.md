@@ -36,6 +36,25 @@ física > funciones faltantes > rendimiento > pulido.
 - [ ] Extraer motores de Electrostática y Termodinámica con pruebas.
 - [ ] Gravitación, Circuitos, Ondas, Óptica, Magnetismo, Moderna.
 
+## Autocrítica 1 (2026-11-19 01:05)
+
+Comparado con Box2D v3 (Soft Step, subpasos, CCD híbrido, sueño por islas),
+MuJoCo (integradores Euler/implicitfast/RK4, contacto blando convexo) y la
+literatura de sistemas híbridos (detección de eventos, Zeno):
+
+| Prioridad | Hallazgo | Tarea |
+|---|---|---|
+| Bug | Con e ≈ 1 el motor de proyectiles agota 200 eventos y la partícula queda congelada en el aire (Zeno) | Estado final de reposo explícito al agotar eventos, con prueba |
+| Bug | Deshacer, rehacer y la paleta de objetos de Mecánica no hacen nada | Historial de deshacer sobre la escena |
+| Exactitud | Mecánica solo resuelve una partícula con superficies fijas por fórmulas | Motor general con DOPRI5 + eventos (`nucleo/integradores.js`): resortes, cuerdas, fricción, varias partículas |
+| Exactitud | Falta validar péndulo simple (periodo exacto con integral elíptica), choques 2D elásticos (momento y energía) | Pruebas cuando exista el motor general |
+| Exactitud | Conservación del momento lineal sin pruebas | Pruebas de choques entre cuerpos |
+| Función | Sin modo multitud: no hay fase amplia de colisiones (rejilla uniforme o barrido y poda) ni fase estrecha (círculo-segmento, SAT) | Diseñar el modo multitud con paso fijo y subpasos (estilo Soft Step) |
+| Función | Campos numéricos sin unidades ni expresiones (`72 km/h`, `2*h`) | `nucleo/unidades.js` con análisis dimensional |
+| Función | Exportar CSV y guardar escenas solo en Mecánica | Llevarlo a Electrostática, Termodinámica y Gravitación |
+| Rendimiento | Sin pruebas de rendimiento | `vitest bench` de los motores |
+| Pulido | Guardado con descarga del navegador (va a Descargas) | Diálogo nativo con tauri-plugin-dialog |
+
 ## Problemas conocidos
 
 - Los botones de exportar, deshacer y paleta de objetos de algunos
