@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/Eliam4510/volta-fisica/actions/workflows/pruebas.yml"><img src="https://github.com/Eliam4510/volta-fisica/actions/workflows/pruebas.yml/badge.svg?branch=main" alt="Pruebas"></a>
-  <a href="https://github.com/Eliam4510/volta-fisica/actions/workflows/release.yml"><img src="https://github.com/Eliam4510/volta-fisica/actions/workflows/release.yml/badge.svg" alt="Compilación de release"></a>
+  <a href="https://github.com/Eliam4510/volta-fisica/actions/workflows/compilacion.yml"><img src="https://github.com/Eliam4510/volta-fisica/actions/workflows/compilacion.yml/badge.svg?branch=main" alt="Compilación para Windows"></a>
   <a href="https://github.com/Eliam4510/volta-fisica/releases/latest"><img src="https://img.shields.io/github/v/release/Eliam4510/volta-fisica?label=versi%C3%B3n" alt="Última versión"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Eliam4510/volta-fisica?label=licencia" alt="Licencia MIT"></a>
 </p>
