@@ -109,7 +109,7 @@ import { avisar } from '../componentes/exportar.js';
     ['gravitacion', 'Gravitación', 'Órbitas, satélites, velocidad de escape y leyes de Kepler.', 3, 8, 'gravitacion.html'],
     ['termodinamica', 'Termodinámica', 'Gases con émbolos y válvulas, ciclos, y el gas visto desde sus moléculas.', 4, 30, 'termodinamica.html'],
     ['electrostatica', 'Electrostática', 'Cargas, campo, potencial, conductores, dieléctricos y capacitores.', 3, 18, 'electrostatica.html'],
-    ['circuitos', 'Circuitos', 'Corriente continua, redes de capacitores y transitorios RC, RL y LC.', 2, 10, null],
+    ['circuitos', 'Circuitos', 'Corriente continua, redes de capacitores y transitorios RC, RL y LC.', 2, 10, 'circuitos.html'],
     ['magnetismo', 'Magnetismo e inducción', 'Campos de corrientes, fuerza de Lorentz e inducción electromagnética.', 3, 13, null],
     ['ondas', 'Ondas y sonido', 'Cuerdas, tubos, cubeta de ondas, efecto Doppler y pulsaciones.', 3, 21, null],
     ['optica', 'Óptica', 'Rayos, refracción, interferencia, películas delgadas y Michelson.', 3, 14, null],
@@ -245,7 +245,7 @@ import { avisar } from '../componentes/exportar.js';
 
   // ---------- Abrir y nueva escena ----------
   // La escena viaja a su pantalla por sessionStorage ("volta.abrir").
-  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html' };
+  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html' };
   function abrir() {
     abrirEscena({}).then(e => {
       const destino = PANTALLAS[e.modulo];

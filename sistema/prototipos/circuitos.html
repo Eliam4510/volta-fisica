@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volta · Circuitos</title>
+<link rel="stylesheet" href="../fuentes/fuentes.css">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="../componentes/componentes.css">
+<script src="../iconos/sprite.js"></script>
+<style>
+  /* Solo ajustes propios de esta pantalla; todo lo demás viene del sistema */
+  .escena-btn { gap: var(--e-2); min-width: 0; padding: 0 var(--e-2); color: var(--texto-3); font-weight: 400; }
+  .escena-btn b { color: var(--texto-2); font-weight: var(--peso-medio); overflow: hidden; text-overflow: ellipsis; }
+  .escena-btn .ico { color: var(--texto-3); }
+  button.modo { border: 0; background: transparent; cursor: pointer; height: var(--h-compacto); padding: 0 var(--e-2); border-radius: var(--r-control); }
+  button.modo:hover { background: var(--campo-hover); color: var(--texto); }
+  #menu-escenarios { position: fixed; z-index: 40; min-width: 300px; }
+  #menu-escenarios .menu-item .chip { margin-left: auto; }
+  .grafica-cab .leyenda .sim { font-size: 13px; }
+  .grafica-cab .leyenda sub { font-family: var(--fuente-simbolos); font-style: normal; font-size: .7em; }
+  .barra-e { grid-template-columns: 132px minmax(0, 1fr) 84px; }
+  .barras { gap: 4px; }
+  .acciones-lista { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 0 80px; }
+  .accion-prog { display: flex; align-items: center; gap: var(--e-2); height: 24px; font-size: var(--t-pequeno); color: var(--texto-2); }
+  .accion-prog .num { color: var(--texto); }
+  .accion-prog .btn { margin-left: auto; }
+  .fila .segmentado { justify-self: start; }
+  .aviso-lienzo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="espacio">
+  <!-- ============================ Barra superior ============================ -->
+  <header class="barra">
+    <a class="marca" href="inicio.html" data-ayuda="Inicio|Home">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6.5 L16 23 L26 6.5" stroke-width="2.4"/><path d="M4 23 H28" stroke-width="2.4"/><path d="M8.5 23 L5.5 26 M13.5 23 L10.5 26 M18.5 23 L15.5 26 M23.5 23 L20.5 26" stroke-width="1.4"/><circle cx="26" cy="6.5" r="2.6" fill="currentColor" stroke="none"/></svg>
+      <b>Volta</b>
+    </a>
+    <span class="separador-v"></span>
+    <nav class="migas">
+      <button class="btn btn-compacto">Circuitos<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+      <span class="sep">/</span>
+      <button class="btn btn-compacto">Transitorios<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    </nav>
+    <button class="btn btn-compacto escena-btn" id="b-escenario" data-ayuda="Escenarios|Scenarios|Ctrl K"><span class="chip" id="escena-chip">Ejemplo</span><b id="escena-nombre"></b><svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    <span class="sp"></span>
+    <div class="transporte">
+      <button class="btn btn-icono" id="b-reiniciar" data-ayuda="Reiniciar|Reset|Inicio"><svg class="ico"><use href="#i-reiniciar"/></svg></button>
+      <button class="btn btn-icono" id="b-atras" data-ayuda="Retroceder un cuadro|Step back|←"><svg class="ico"><use href="#i-paso-atras"/></svg></button>
+      <button class="btn btn-primario btn-reproducir" id="b-play" data-ayuda="Reproducir|Play|Espacio"><svg class="ico"><use href="#i-reproducir"/></svg></button>
+      <button class="btn btn-icono" id="b-adelante" data-ayuda="Avanzar un cuadro|Step forward|→"><svg class="ico"><use href="#i-paso-adelante"/></svg></button>
+    </div>
+    <div class="reloj" id="reloj"></div>
+    <div class="segmentado" data-exclusivo id="velocidades" data-ayuda="Velocidad de reproducción|Playback speed">
+      <button data-v="0.25">¼×</button><button data-v="0.5">½×</button><button data-v="1" aria-pressed="true">1×</button><button data-v="2">2×</button>
+    </div>
+    <span class="sp"></span>
+    <button class="modo" id="b-modo" data-ayuda="Conexiones ideales: la carga salta al instante y se registra la energía perdida. Realistas: cables con resistencia|Ideal / realistic wiring|M">Ideal</button>
+    <span class="separador-v"></span>
+    <button class="btn btn-icono" id="b-deshacer" disabled data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
+    <button class="btn btn-icono" id="b-rehacer" disabled data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
+    <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
+  </header>
+
+  <!-- ============================ Panel izquierdo ============================ -->
+  <aside class="panel panel-izq">
+    <div class="desplaza">
+      <div class="seccion">
+        <div class="panel-cab">Objetos</div>
+        <div class="paleta" id="paleta-objetos">
+          <button class="herr" data-herr="bateria" data-ayuda="Batería: clic en la cuadrícula para colocarla; R la gira|Battery"><svg class="ico"><use href="#o-bateria"/></svg><span>Batería</span></button>
+          <button class="herr" data-herr="fuente-corriente" data-ayuda="Fuente de corriente|Current source"><svg class="ico"><use href="#o-fuente-corriente"/></svg><span>Fuente de corriente</span></button>
+          <button class="herr" data-herr="resistencia" data-ayuda="Resistencia|Resistor"><svg class="ico"><use href="#o-resistencia"/></svg><span>Resistencia</span></button>
+          <button class="herr" data-herr="reostato" data-ayuda="Reóstato|Rheostat"><svg class="ico"><use href="#o-reostato"/></svg><span>Reóstato</span></button>
+          <button class="herr" data-herr="bombilla" data-ayuda="Bombilla|Light bulb"><svg class="ico"><use href="#o-bombilla"/></svg><span>Bombilla</span></button>
+          <button class="herr" data-herr="capacitor" data-ayuda="Capacitor|Capacitor"><svg class="ico"><use href="#o-capacitor"/></svg><span>Capacitor</span></button>
+          <button class="herr" data-herr="inductor" data-ayuda="Inductor (bobina)|Inductor"><svg class="ico"><use href="#o-inductor"/></svg><span>Inductor</span></button>
+          <button class="herr" data-herr="interruptor" data-ayuda="Interruptor|Switch"><svg class="ico"><use href="#o-interruptor"/></svg><span>Interruptor</span></button>
+          <button class="herr" data-herr="interruptor-3" data-ayuda="Interruptor de tres posiciones|Three-way switch"><svg class="ico"><use href="#o-interruptor-3"/></svg><span>Interruptor de 3 posiciones</span></button>
+          <button class="herr" data-herr="cable" data-ayuda="Cable: arrastra de un punto a otro de la cuadrícula|Wire"><svg class="ico"><use href="#o-cable"/></svg><span>Cable</span></button>
+          <button class="herr" data-herr="nodo" data-ayuda="Nombre de nodo: clic en un punto del circuito|Named node"><svg class="ico"><use href="#o-nodo"/></svg><span>Nodo</span></button>
+          <button class="herr" data-herr="tierra" data-ayuda="Tierra: referencia de potencial|Ground"><svg class="ico"><use href="#o-tierra"/></svg><span>Tierra</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Instrumentos</div>
+        <div class="paleta" id="paleta-instrumentos">
+          <button class="herr" data-herr="voltimetro" data-ayuda="Voltímetro|Voltmeter"><svg class="ico"><use href="#n-voltimetro"/></svg><span>Voltímetro</span></button>
+          <button class="herr" data-herr="amperimetro" data-ayuda="Amperímetro|Ammeter"><svg class="ico"><use href="#n-amperimetro"/></svg><span>Amperímetro</span></button>
+          <button class="herr" data-herr="osciloscopio" data-ayuda="Osciloscopio: clic en un componente para ver su voltaje y su corriente en las gráficas|Oscilloscope"><svg class="ico"><use href="#n-osciloscopio"/></svg><span>Osciloscopio</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Escena</div>
+        <div class="arbol" id="arbol"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================ Lienzo ============================ -->
+  <main class="lienzo-area" id="area">
+    <canvas id="lienzo"></canvas>
+    <div class="flotante ar-der" role="group" aria-label="Capas">
+      <svg class="ico"><use href="#i-capas"/></svg>
+      <button class="capa-btn" data-capa="corriente" aria-pressed="true">Corriente</button>
+      <button class="capa-btn" data-capa="potencial" aria-pressed="true">Potencial</button>
+      <button class="capa-btn" data-capa="cargas" aria-pressed="true">Cargas</button>
+      <button class="capa-btn" data-capa="valores" aria-pressed="true">Valores</button>
+    </div>
+    <div class="flotante ab-izq" id="coords"><span class="sim">V</span><span class="num" id="cv">—</span></div>
+    <div class="flotante ab-der">
+      <button class="btn btn-icono btn-compacto" id="b-zoom-menos" data-ayuda="Alejar|Zoom out|−"><svg class="ico"><use href="#i-zoom-menos"/></svg></button>
+      <span class="num" id="zoom">100 %</span>
+      <button class="btn btn-icono btn-compacto" id="b-zoom-mas" data-ayuda="Acercar|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button>
+      <span class="sep"></span>
+      <button class="btn btn-compacto" id="b-encuadrar" data-ayuda="Encuadrar todo|Fit to view|F"><svg class="ico"><use href="#i-encuadrar"/></svg>Encuadrar</button>
+    </div>
+    <div class="aviso-flotante aviso-lienzo" id="aviso" hidden><svg class="ico"><use href="#i-evento"/></svg><span id="aviso-texto"></span><button class="btn btn-compacto" id="aviso-deshacer">Deshacer</button></div>
+  </main>
+
+  <!-- ============================ Panel derecho ============================ -->
+  <aside class="panel panel-der">
+    <div class="desplaza">
+      <div class="panel-cab">Inspector</div>
+      <div class="insp-cab">
+        <div class="miniatura"><svg class="ico"><use id="insp-ico" href="#o-capacitor"/></svg></div>
+        <div><div class="t1" id="insp-nombre"></div><div class="t2" id="insp-estado"></div></div>
+      </div>
+      <details class="grupo" open id="grupo-props">
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg>Propiedades</summary>
+        <div id="propiedades"></div>
+      </details>
+      <details class="grupo" open id="grupo-acciones">
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="acc-titulo">Acciones</span></summary>
+        <div id="acciones"></div>
+      </details>
+      <details class="grupo" open>
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
+        <div class="lecturas" id="lecturas"></div>
+      </details>
+      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables</div>
+      <div class="variables" id="variables"></div>
+    </div>
+  </aside>
+
+  <!-- ============================ Panel inferior ============================ -->
+  <section class="panel panel-inf">
+    <div class="inf-cab">
+      <div class="pestanas" role="tablist" id="pest">
+        <button class="pestana" role="tab" aria-selected="true" aria-controls="p-graficas">Gráficas</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-energia">Energía</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-eventos">Eventos</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-tabla">Tabla</button>
+      </div>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn btn-compacto" id="b-exportar" data-ayuda="Exportar datos a CSV|Export data"><svg class="ico"><use href="#i-exportar"/></svg>Exportar datos</button>
+    </div>
+    <div class="linea-tiempo"><canvas id="tl"></canvas></div>
+    <div class="graficas" id="p-graficas" data-grupo="pest">
+      <div class="grafica"><div class="grafica-cab"><span id="t1"></span><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t2"></span><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t3"></span><span class="lect" id="l3"></span></div><canvas id="g3"></canvas></div>
+    </div>
+    <div class="energia" id="p-energia" data-grupo="pest" hidden>
+      <div class="barras" id="barras"></div>
+      <div class="grafica"><div class="grafica-cab"><span class="leyenda" id="t4"></span><span class="lect">J</span></div><canvas id="g4"></canvas></div>
+    </div>
+    <div class="lista-eventos" id="p-eventos" data-grupo="pest" hidden><table class="tabla" id="t-eventos"></table></div>
+    <div class="lista-eventos" id="p-tabla" data-grupo="pest" hidden><table class="tabla" id="t-datos"></table></div>
+  </section>
+</div>
+
+<!-- Escenarios -->
+<div class="menu" id="menu-escenarios" role="menu" hidden></div>
+
+<!-- Paleta de comandos -->
+<div class="velo comandos-velo" id="velo-comandos" hidden>
+  <div class="comandos" role="dialog" aria-label="Comandos">
+    <div class="comandos-buscar"><svg class="ico ico-20" style="color:var(--texto-3)"><use href="#i-buscar"/></svg><input id="cmd-q" placeholder="Escribe un comando o un escenario"><kbd>Esc</kbd></div>
+    <div class="comandos-lista" id="cmd-lista"></div>
+  </div>
+</div>
+
+<script type="module" src="../lienzo/trazo.js"></script>
+<script type="module" src="../lienzo/dominios/circuitos.js"></script>
+<script type="module" src="../lienzo/grafica.js"></script>
+<script type="module" src="../componentes/linea-tiempo.js"></script>
+<script type="module" src="../componentes/espacio.js"></script>
+<script type="module" src="circuitos.js"></script>
+</body>
+</html>

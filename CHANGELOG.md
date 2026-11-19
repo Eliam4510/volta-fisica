@@ -34,6 +34,13 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   áreas barridas, sistema que gira con la Tierra y cinco escenas (cañón de
   Newton, órbita circular, elíptica, geoestacionaria MEXT 2023 y velocidad
   de escape MEXT 2018).
+- Módulo Circuitos con la pantalla «Transitorios»: análisis nodal
+  modificado, transitorio trapezoidal con paso adaptativo, interruptores de
+  una y tres posiciones, conservación exacta de la carga en islas de
+  capacitores, modos ideal y realista, bombilla no lineal y registro de
+  energía por componente. Cinco escenarios: carga y descarga de un
+  capacitor, bombilla y recta de carga, MEXT 2019 P2 (RC y LC), MEXT 2023 P2
+  (red de capacitores) y MEXT 2027 1-(3) (puente de Wheatstone).
 - Motor de Electrostática (`motores/electrostatica.js`): superposición de
   Coulomb, potencial, flujo de Gauss y partículas libres con eventos.
 - Motor de gas de Termodinámica (`motores/gas.js`) con 27 pruebas analíticas
