@@ -180,7 +180,11 @@ export function normalizarEscena(d) {
     if (o.tipo === 'particula') {
       n = { id: o.id, tipo: 'particula', nombre, m: numero(o.m, 1, 1e-6, 1e6), x: numero(o.x, 0, -1e6, 1e6), y: numero(o.y, 0, -1e6, 1e6),
         v: numero(o.v, 0, 0, 1e5), ang: numero(o.ang, 0, -360, 360), radio: numero(o.radio, 0, 0, 100), sobre: typeof o.sobre === 'string' ? o.sobre : null,
-        F: numero(o.F, 0, 0, 1e9), angF: numero(o.angF, 0, -360, 360), cinematica: o.cinematica === true };
+        F: numero(o.F, 0, 0, 1e9), angF: numero(o.angF, 0, -360, 360), cinematica: o.cinematica === true,
+        // Aceleración impuesta por tramos [hasta t, ax, ay], hasta 12 tramos
+        perfil: o.cinematica === true && Array.isArray(o.perfil) && o.perfil.length
+          ? o.perfil.filter(f => Array.isArray(f) && f.length === 3).slice(0, 12).map(f => [numero(f[0], 0, 0, 1e6), numero(f[1], 0, -1e4, 1e4), numero(f[2], 0, -1e4, 1e4)])
+          : null };
     } else if (o.tipo === 'superficie' && ['suelo', 'pared', 'plano', 'segmento'].includes(o.forma)) {
       const a = num2(o.a, [0, 0]), b = num2(o.b, [1, 0]);
       if (largo(resta(b, a)) < 1e-6) continue;
@@ -308,7 +312,7 @@ export function aMotor(esc) {
     particulas: particulas.map((p, i) => ({
       id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0,
       ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)] } : {}),
-      ...(p.cinematica ? { cinematica: true } : {}),
+      ...(p.cinematica ? { cinematica: true, ...(p.perfil && p.perfil.length ? { perfil: p.perfil.map(f => [...f]) } : {}) } : {}),
     })),
     // Una superficie llevada por un cuerpo se da relativa a su posición inicial
     superficies: superficies.map(s => {
@@ -664,6 +668,18 @@ export const ESCENARIOS = [
   // fórmula de la respuesta va en el comentario y se comprueba en
   // pruebas/mecanica-laboratorio-mext.test.js.
   {
+    id: 'ascensor', tipo: 'ejemplo', titulo: 'Ascensor que arranca y frena',
+    nota: ['La cabina tiene movimiento impuesto: acelera 2 s a 2 m/s², sube 3 s a velocidad constante y frena 2 s.', 'Activa Normal y fricción en el inspector del paquete: la normal es m(g + a) al arrancar, mg a velocidad constante y m(g − a) al frenar.', 'En el panel de energía, el trabajo de la cabina es lo que sube la potencial del paquete.'],
+    crear: () => ({
+      duracion: 7,
+      objetos: [
+        { ...P_('p2', 'Cabina', 1, 0, 0), cinematica: true, perfil: [[2, 0, 2], [5, 0, 0], [7, 0, -2]] },
+        { ...SEG('s1', 'segmento', 'Piso', [-0.6, 0], [0.6, 0], { e: 0 }), cuerpo: 'p2' },
+        P_('p1', 'Paquete', 5, 0, 0, { sobre: 's1' }),
+      ],
+    }),
+  },
+  {
     id: 'mext-2006-p3', tipo: 'mext', anio: 2006, ref: '2006 · P3', titulo: 'Objeto que resbala por una esfera',
     nota: ['R = 1 m y v₀ = 1 m/s (el examen es simbólico).'],
     // Se despega Y = R/3 − v₀²/(3g) por debajo de la cima (C₁ = 1/3, C₂ = −1/3); luego, parábola acelerada
@@ -962,6 +978,17 @@ export const ESCENARIOS = [
     }),
   },
   {
+    id: 'mext-2017-1-1', tipo: 'mext', anio: 2017, ref: '2017 · 1-(1)', titulo: 'Distancia con dos tramos de aceleración',
+    nota: ['Gráfica v–t reconstruida: de 0 a t1 = 4 s acelera hasta v1 = 8 m/s y de t1 a t2 = 10 s pasa a v2 = 2 m/s, siempre en línea recta.', 'La distancia es el área bajo la gráfica: (v1·t2 − v2·t1 + v2·t2)/2 = 46 m.', 'Abre la gráfica de vx contra t (cabecera de la gráfica) para ver los dos tramos.'],
+    crear: () => ({
+      duracion: 10,
+      objetos: [
+        SEG('s1', 'suelo', 'Recta', [-2, -0.05], [52, -0.05]),
+        { ...P_('p1', 'Móvil', 1, 0, 0), cinematica: true, perfil: [[4, 2, 0], [10, -1, 0]] },
+      ],
+    }),
+  },
+  {
     id: 'mext-2017-1-3', tipo: 'mext', anio: 2017, ref: '2017 · 1-(3)', titulo: 'Velocidad de un bloque unido a un resorte',
     nota: ['m = 0.5 kg y k = 50 N/m (ω = 10 rad/s); se estira d = 0.1 m (el examen es simbólico).', 'Pon vx en una gráfica para ver la velocidad contra el tiempo.'],
     // x = d cos ωt → v = −ωd sen ωt: empieza en 0 y baja primero
@@ -1006,6 +1033,17 @@ export const ESCENARIOS = [
         objetos: [P_('p1', 'Bola', m, (1 + al) * l0, 0, { v: l0 * Math.sqrt((1 + al) * al * k / m), ang: 90, radio: 0.06 }), RESORTE('c1', 'Resorte', 'p1', [0, 0], k, l0)],
       };
     },
+  },
+  {
+    id: 'mext-2019-1-1', tipo: 'mext', anio: 2019, ref: '2019 · 1-(1)', titulo: 'Coche que arranca y frena en 80 s',
+    nota: ['Gráfica v–t reconstruida: el coche acelera 40 s hasta 50 m/s y frena 40 s hasta pararse en t = 80 s.', 'La distancia es el área del triángulo: 50·80/2 = 2000 m.', 'Mira x en las lecturas al final, o el área bajo vx contra t.'],
+    crear: () => ({
+      duracion: 80,
+      objetos: [
+        SEG('s1', 'suelo', 'Carretera', [-50, -2], [2100, -2]),
+        { ...P_('p1', 'Coche', 1000, 0, 0), cinematica: true, perfil: [[40, 1.25, 0], [80, -1.25, 0]] },
+      ],
+    }),
   },
   {
     id: 'mext-2019-1-2', tipo: 'mext', anio: 2019, ref: '2019 · 1-(2)', titulo: 'Rebotes sucesivos en el suelo',
@@ -1058,6 +1096,17 @@ export const ESCENARIOS = [
         SEG('s1', 'suelo', 'Suelo', [-1.5, 0], [1.6, 0]), SEG('s2', 'pared', 'Pared', [1.6, 0], [1.6, 0.4]),
         P_('p1', 'A', 1, -0.4, 0.1, { v: 2, radio: 0.1, sobre: 's1' }), P_('p2', 'B', 3, 0.8, 0.1, { radio: 0.1, sobre: 's1' }),
         RESORTE('c1', 'Resorte', 'p2', [1.6, 0.1], 75, 0.8),
+      ],
+    }),
+  },
+  {
+    id: 'mext-2023-1-1', tipo: 'mext', anio: 2023, ref: '2023 · 1-(1)', titulo: 'Posición a partir de la gráfica v–t',
+    nota: ['Gráfica v–t reconstruida: sale del origen, acelera a 2 m/s en 2 s, sigue 2 s así y luego frena hasta −2 m/s en t = 8 s.', 'La posición es el área con signo: 2 + 4 + 2 − 2 = 6 m.', 'Al pasar por t = 6 s se para y vuelve hacia el origen.'],
+    crear: () => ({
+      duracion: 8,
+      objetos: [
+        SEG('s1', 'suelo', 'Eje x', [-1, -0.1], [9, -0.1]),
+        { ...P_('p1', 'Objeto', 1, 0, 0), cinematica: true, perfil: [[2, 1, 0], [4, 0, 0], [8, -1, 0]] },
       ],
     }),
   },
@@ -1678,7 +1727,12 @@ function iniciar() {
       c += fila('Radio', campo(`${o.id}.radio`, o.radio, 'longitud', 'r', 'Con radio, choca con otros discos y apoya su borde en las superficies; 0 es una partícula puntual|Radius'));
       c += fila('Fuerza aplicada', doble(campo(`${o.id}.F`, o.F || 0, 'fuerza', 'F', 'Fuerza constante sobre la partícula durante toda la simulación; 0 la quita|Applied force'), campo(`${o.id}.angF`, o.angF || 0, 'angulo', 'β', 'Dirección de la fuerza desde el eje x|Direction')));
       c += fila('Movimiento', segmentado(`${o.id}.cinematica`, [['no', 'Libre'], ['si', 'Impuesto']], o.cinematica ? 'si' : 'no'));
-      if (o.cinematica) c += ayudaFila('Se mueve con su velocidad inicial pase lo que pase, como una mano, una cinta o un ascensor. Su masa no cuenta; el trabajo que hace aparece en la energía.');
+      if (o.cinematica && !(o.perfil && o.perfil.length)) c += ayudaFila('Se mueve con su velocidad inicial pase lo que pase, como una mano, una cinta o un ascensor. Su masa no cuenta; el trabajo que hace aparece en la energía.');
+      if (o.cinematica && o.perfil && o.perfil.length) {
+        let t0 = 0;
+        const tramos = o.perfil.map(([tf, ax, ay]) => { const txt = `${fmt(t0, 3)}–${fmt(tf, 3)} s: a = (${fmt(ax, 3)}, ${fmt(ay, 3)}) m/s²`; t0 = tf; return `<li>${txt}</li>`; }).join('');
+        c += ayudaFila(`Sigue un perfil de aceleración por tramos (de la escena); después, velocidad constante:<ul class="perfil">${tramos}</ul>`);
+      }
       if (o.sobre) c += fila('Apoyo', `<div class="apoyo"><span>Sobre ${conArticulo(nombreDe(o.sobre))}</span><button class="btn btn-compacto" data-accion-insp="soltar" data-ayuda="Deja de seguir a la superficie|Detach">Soltar</button></div>`);
       h += grupo('Condiciones iniciales', c);
       h += grupoMostrar();
@@ -1991,6 +2045,7 @@ function iniciar() {
   }
 
   function estadoParticula(i) {
+    if (M.particulas[i]?.cinematica) return 'movimiento impuesto';
     if (!SIM) return 'en reposo';
     const tr = tramoEn(SIM, Math.min(t, tFinal())), k = contactosDe(tr.modo).find(c => c.i === i);
     if (k) return `${k.pegado ? 'quieta sobre' : 'sobre'} ${conArticulo(M.superficies[k.sup]?.nombre ?? '')}`;

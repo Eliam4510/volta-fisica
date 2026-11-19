@@ -418,3 +418,31 @@ describe('escenas MEXT: cinemática y proyectiles (M1, M2)', () => {
     cerca(est(sim, 1).vy, 0, 1e-9);
   });
 });
+
+describe('escenas MEXT: gráficas v–t con movimiento impuesto por tramos', () => {
+  it('2017 · 1-(1): distancia (v1·t2 − v2·t1 + v2·t2)/2 con dos tramos de aceleración', () => {
+    const { sim } = simular('mext-2017-1-1');
+    const v1 = 8, t1 = 4, v2 = 2, t2 = 10;
+    cerca(est(sim, t1).vx, v1, 1e-9);
+    cerca(est(sim, t2).vx, v2, 1e-9);
+    cerca(est(sim, t2).x, (v1 * t2 - v2 * t1 + v2 * t2) / 2, 1e-9);
+  });
+  it('2019 · 1-(1): el coche que arranca y frena en 80 s recorre el área del triángulo, 2000 m', () => {
+    const { sim } = simular('mext-2019-1-1');
+    cerca(est(sim, 40).vx, 50, 1e-9);
+    cerca(est(sim, 80).vx, 0, 1e-9);
+    cerca(est(sim, 80).x, 2000, 1e-9);
+  });
+  it('2023 · 1-(1): la posición en t = 8 s es el área con signo, 6 m', () => {
+    const { sim } = simular('mext-2023-1-1');
+    cerca(est(sim, 6).vx, 0, 1e-9);
+    cerca(est(sim, 8).x, 6, 1e-9);
+  });
+  it('ejemplo del ascensor: el paquete va pegado al piso y la cabina entrega m·g·Δy', () => {
+    const { sim } = simular('ascensor');
+    expect(sim.eventos).toEqual([]);
+    const P = estadoMecanica(sim, 7).find(s => s.id === 'p1');
+    cerca(P.y, 20, 1e-9);
+    cerca(energiaMecanica(sim, 7).W, 5 * g * 20, 1e-9);
+  });
+});

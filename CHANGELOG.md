@@ -14,7 +14,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   30°), 2010 1-C (altura en un instante del vuelo), 2015 1-(1) (alcance de un
   tiro oblicuo), 2016 1-(1) (coche que acelera desde el reposo), 2018 1-(1)
   (ángulo de llegada de un tiro horizontal) y 2027 1-(1) (lanzamiento
-  vertical). Mecánica tiene ya 33 escenas MEXT.
+  vertical).
+- Mecánica: movimiento impuesto con aceleración por tramos (un ascensor que
+  arranca y frena, un móvil que sigue una gráfica v–t). En el Laboratorio,
+  ejemplo «Ascensor que arranca y frena» (peso aparente) y escenas MEXT 2017
+  1-(1), 2019 1-(1) y 2023 1-(1) con gráficas v–t reconstruidas. Mecánica
+  tiene ya 36 escenas MEXT.
 
 ### Corregido
 
