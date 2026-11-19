@@ -4,6 +4,8 @@
    espacio de trabajo. Física exacta por tramos con eventos (2019 P3).
    ========================================================================== */
 import { simularProyectil, estadoEn, energiaEn } from '../motores/proyectiles.js';
+import { aCSV, muestrear } from '../nucleo/csv.js';
+import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
 
 (function () {
   'use strict';
@@ -298,6 +300,25 @@ import { simularProyectil, estadoEn, energiaEn } from '../motores/proyectiles.js
   $('#b-encuadrar').addEventListener('click', () => { vistaTocada = false; encuadrar(); zoomTexto(); dibujar(); });
 
   // ---------------------------------------------------------------------
+  // Exportar: datos (CSV con toda la precisión) e imagen del lienzo
+  // ---------------------------------------------------------------------
+  const TITULO = 'Salto hacia una pendiente';
+  function exportarCSV() {
+    const filas = muestrear(0, DUR, 0.01, tt => {
+      const s = estado(tt), { K, U } = energia(s);
+      return [tt, s.x, s.y, s.vx, s.vy, Math.hypot(s.vx, s.vy), K, U, K + U, s.fase];
+    });
+    const csv = aCSV(['t (s)', 'x (m)', 'y (m)', 'vx (m/s)', 'vy (m/s)', '|v| (m/s)', 'Ek (J)', 'Ug (J)', 'E (J)', 'fase'], filas);
+    descargarTexto(`${nombreArchivo(TITULO)}-datos.csv`, csv);
+    avisar(area, `Datos exportados: ${filas.length} filas`);
+  }
+  function exportarPNG() {
+    descargarLienzo(lienzo, `${nombreArchivo(TITULO)}-t${fmt(t, 3)}s.png`);
+    avisar(area, 'Imagen del lienzo exportada');
+  }
+  $('#b-exportar').addEventListener('click', exportarCSV);
+
+  // ---------------------------------------------------------------------
   // Teclado y paleta de comandos
   // ---------------------------------------------------------------------
   let espacioPulsado = false;
@@ -309,8 +330,8 @@ import { simularProyectil, estadoEn, energiaEn } from '../motores/proyectiles.js
     ['o-particula', 'Añadir partícula', 'P', () => {}],
     ['o-plano-inclinado', 'Añadir plano inclinado', '', () => {}],
     ['n-regla', 'Colocar regla', 'R', () => {}],
-    ['i-exportar', 'Exportar datos a CSV', '', () => {}],
-    ['i-imagen', 'Exportar imagen del lienzo', '', () => {}],
+    ['i-exportar', 'Exportar datos a CSV', '', () => exportarCSV()],
+    ['i-imagen', 'Exportar imagen del lienzo', '', () => exportarPNG()],
   ];
   let selCmd = 0;
   function pintarComandos() {
