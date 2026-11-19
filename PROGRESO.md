@@ -10,8 +10,16 @@ física > funciones faltantes > rendimiento > pulido.
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
 - Circuitos (pantalla «Transitorios», 56 pruebas) integrado y enlazado.
-- Laboratorio de Mecánica integrado. Agente en curso: Ondas y sonido
-  (motor 1D, Doppler y pantalla «Medio 1D»).
+- Laboratorio de Mecánica integrado.
+- Agentes en curso (sus archivos quedan sin seguimiento hasta revisarlos):
+  - Ondas y sonido: `motores/ondas.js`, `pruebas/ondas.test.js`,
+    `lienzo/dominios/ondas.js`, `prototipos/ondas.html|js` (y quizá
+    `ondas-doppler.*`). Al integrar: añadirlo a MODULOS en
+    `componentes/espacio.js`, a PANTALLAS y a la tarjeta de Inicio, al README
+    y al CHANGELOG.
+  - Escenas MEXT del Laboratorio (temas M3–M7): toca solo el arreglo
+    ESCENARIOS de `mecanica-laboratorio.js` y crea
+    `pruebas/mecanica-laboratorio-mext.test.js`.
 
 ## Pendiente (ordenado)
 
@@ -139,3 +147,4 @@ análisis de datos:
 - 2026-11-19 04:40 — Gravitación y Circuitos integrados y enlazados desde Inicio; Electrostática y Gravitación con unidades y escenas; banco de rendimiento; etiquetas de ejes fuera de las barras flotantes; autocrítica 2. v0.3.0 publicada (326 pruebas).
 - 2026-11-19 05:30 — Laboratorio de Mecánica integrado (caja de arena), navegación común en las migas, ángulos sin unidad en grados, eventos de apoyos perdidos, tope de paso solo con clavos. v0.4.0 publicada (332 pruebas). Agente de Ondas y sonido en curso.
 - 2026-11-19 06:10 — Laboratorio: fuerza aplicada con U_F, duplicar, gráficas configurables (con aceleración y trayectoria). Paletas que no hacían nada ahora llevan al Laboratorio o explican qué falta. Inicio con estados «Disponible»/«En preparación». Autocrítica 3. 336 pruebas. Agente de Ondas en curso.
+- 2026-11-19 06:40 — Presupuesto de cálculo en Mecánica (pasos y reloj), experimento de conjunto activo descartado, campos muertos corregidos (cilindro, x de salida), GIF del Laboratorio en el README. Lanzado el agente de escenas MEXT del Laboratorio.
