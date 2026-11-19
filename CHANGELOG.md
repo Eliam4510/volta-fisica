@@ -7,6 +7,11 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.10.0] - 2026-11-19
+
+Cubeta de ondas 2D y Circuitos con sus 10 escenas MEXT: 155 escenas MEXT
+en total.
+
 ### Añadido
 
 - Ondas y sonido: espacio nuevo «Cubeta de ondas», con la ecuación de onda
@@ -474,7 +479,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.9.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.6.0...v0.7.0
