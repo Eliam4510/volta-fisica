@@ -60,7 +60,7 @@ literatura de sistemas híbridos (detección de eventos, Zeno):
 |---|---|---|
 | Hecho | Con e ≈ 1 el motor agotaba eventos y la partícula quedaba congelada (Zeno) | Regla post-Zeno con prueba (v0.2.0) |
 | Hecho | Deshacer y rehacer de Mecánica no hacían nada | Historial (v0.2.0) |
-| Bug | La paleta de objetos de Mecánica no coloca nada; el campo Masa no afecta la simulación | Masa editable con unidades; paleta cuando exista el motor general |
+| Hecho | La paleta de objetos de Mecánica no colocaba nada | Lleva al Laboratorio; instrumentos pendientes |
 | Hecho | Mecánica solo resolvía una partícula con fórmulas | Motor general con DOPRI5 + eventos |
 | Hecho | Péndulo con integral elíptica, choques 2D | Pruebas en `pruebas/mecanica.test.js` |
 | Hecho | Conservación del momento | Pruebas de choques 1D y 2D |
@@ -109,8 +109,8 @@ análisis de datos:
 
 ## Problemas conocidos
 
-- Los botones de exportar, deshacer y paleta de objetos de algunos
-  prototipos todavía no hacen nada.
+- Los instrumentos (regla, transportador, cronómetro, fotopuerta) de las
+  paletas todavía no existen; los botones lo avisan.
 - Pendientes del lenguaje de diseño: `docs/04_lenguaje_de_diseno.md`, sección 11.
 
 ## Bitácora

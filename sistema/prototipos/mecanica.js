@@ -402,6 +402,30 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   $('#b-exportar').addEventListener('click', exportarCSV);
 
   // ---------------------------------------------------------------------
+  // Paleta de objetos e instrumentos. Este espacio es el de proyectiles; las
+  // escenas libres se construyen en el Laboratorio, al que llevan los objetos.
+  // ---------------------------------------------------------------------
+  let relojAccion = null;
+  function avisoConAccion(texto, etiqueta, accion) {
+    let el = document.getElementById('aviso-accion');
+    if (!el) { el = document.createElement('div'); el.id = 'aviso-accion'; el.className = 'aviso-flotante aviso-lienzo'; area.appendChild(el); }
+    el.innerHTML = '<span></span><button class="btn btn-compacto"></button>';
+    /** @type {HTMLElement} */ (el.firstChild).textContent = texto;
+    const b = /** @type {HTMLButtonElement} */ (el.lastChild);
+    b.textContent = etiqueta; b.onclick = accion;
+    el.hidden = false; clearTimeout(relojAccion); relojAccion = setTimeout(() => { el.hidden = true; }, 6000);
+  }
+  const irAlLaboratorio = () => { location.href = 'mecanica-laboratorio.html'; };
+  document.querySelectorAll('.panel-izq .paleta').forEach((paleta, k) => paleta.addEventListener('click', ev => {
+    const b = ev.target.closest('.herr'); if (!b) return;
+    setTimeout(() => b.setAttribute('aria-pressed', 'false'), 0);
+    if (k === 0) avisoConAccion('Este espacio estudia proyectiles. Para construir una escena propia con estos objetos, usa el Laboratorio.', 'Abrir el Laboratorio', irAlLaboratorio);
+    else avisoConAccion('Los instrumentos llegan en una próxima versión. Mientras, el inspector y la tabla dan posición, tiempo y velocidad en cada instante.', 'Entendido', () => { document.getElementById('aviso-accion').hidden = true; });
+  }));
+  const bAnadir = document.querySelector('.panel-izq [data-ayuda^="Añadir objeto"]');
+  if (bAnadir) bAnadir.addEventListener('click', () => avisoConAccion('Para añadir objetos a una escena propia, usa el Laboratorio.', 'Abrir el Laboratorio', irAlLaboratorio));
+
+  // ---------------------------------------------------------------------
   // Teclado y paleta de comandos
   // ---------------------------------------------------------------------
   let espacioPulsado = false;

@@ -51,6 +51,9 @@ exactos.
 
 ### Corregido
 
+- La paleta de objetos de Cinemática y proyectiles no hacía nada: ahora
+  lleva al Laboratorio, donde se construyen las escenas libres, y los
+  instrumentos dicen que llegan en una próxima versión.
 - Un apoyo que se perdía en el mismo instante que otro evento (una
   partícula que pasa del plano al suelo, un impulso que separa dos cuerpos)
   no quedaba registrado como evento.
