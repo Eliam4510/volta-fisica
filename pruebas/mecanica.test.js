@@ -256,8 +256,8 @@ describe('choques robustos y contactos entre discos', () => {
     expect(sim.incompleta).toBeNull();
     const E0 = energiaMecanica(sim, 0).E, E1 = energiaMecanica(sim, 5).E;
     const disipada = sim.eventos.reduce((a, e) => a + e.perdida, 0);
-    // Lo que no cuadra es la estabilización de Baumgarte en los apoyos (≈ 10⁻⁴·E0)
-    expect(Math.abs(E0 - E1 - disipada)).toBeLessThan(1e-3 * E0);
+    // Lo que no cuadra es la estabilización de Baumgarte en los apoyos (≈ 2·10⁻⁶·E0)
+    expect(Math.abs(E0 - E1 - disipada)).toBeLessThan(1e-5 * E0);
     // Ningún disco atraviesa el suelo ni las paredes
     for (let k = 0; k <= 200; k++) for (const s of estadoMecanica(sim, 5 * k / 200)) {
       expect(s.y).toBeGreaterThanOrEqual(0.1 - 1e-3);

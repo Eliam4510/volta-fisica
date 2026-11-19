@@ -76,7 +76,7 @@ regularización):
 | Prioridad | Hallazgo | Tarea |
 |---|---|---|
 | Hecho | Efecto túnel con partículas rápidas; choques simultáneos perdidos; el radio no contaba contra superficies; una partícula apoyada atravesaba paredes | Paso acotado por rapidez, impulsos secuenciales, varios apoyos por partícula (pruebas en `mecanica.test.js`) |
-| Exactitud | La estabilización de Baumgarte deja ≈ 10⁻⁴·E0 de deriva de energía en pilas de discos | Post-estabilización (proyectar posiciones y velocidades sobre las restricciones activas al iniciar cada tramo; Cline y Pai, 2003) |
+| Exactitud | La estabilización de Baumgarte deja ≈ 2·10⁻⁶·E0 de deriva de energía en un montón de discos (era 2·10⁻³ antes de soltar los apoyos que se separan) | Post-estabilización (proyectar posiciones y velocidades sobre las restricciones activas al iniciar cada tramo; Cline y Pai, 2003) |
 | Exactitud | Las restricciones unilaterales se resuelven como igualdades: con apoyos redundantes (un disco en una esquina) J·M⁻¹·Jᵀ es singular y `resolver` reparte las reacciones de forma arbitraria | Regularizar (A + εI, como el CFM de ODE y MuJoCo) o resolver un LCP (Gauss–Seidel proyectado) |
 | Rendimiento | Un montón inelástico de 10 discos genera ≈ 5000 eventos en 5 s; los eventos de pares son O(n²) por paso | Fase amplia (rejilla uniforme) para candidatos a choque; reposo agrupado (islas que duermen); modo multitud de paso fijo |
 | Función | Los discos no giran: no hay rodadura ni fricción entre discos | Rotación con momento de inercia y fricción en el contacto disco-disco |
@@ -111,4 +111,4 @@ regularización):
 - 2026-11-19 01:50 — Integradores, Electrostática y motor general de Mecánica con pruebas (229). Agentes: gravitación, circuitos, caja de arena de Mecánica.
 - 2026-11-19 03:40 — Electrostática con escenas .volta saneadas y exportación con BOM. Motor de Mecánica endurecido: sin efecto túnel, choques simultáneos, contactos entre discos, varios apoyos por partícula, resultado parcial al límite de eventos (301 pruebas). CHANGELOG [Sin publicar] relleno.
   - Pendiente inmediato: revisar y hacer commit de Gravitación (agente terminó: 5 archivos sin seguimiento, 40 pruebas en verde); esperar a los agentes de Circuitos y del Laboratorio de Mecánica; enlazar las tres pantallas desde Inicio; publicar v0.3.0.
-  - Conocido: la estabilización de Baumgarte deja ≈ 10⁻⁴·E0 de deriva en pilas de discos; mejora posible: proyección de posiciones al iniciar cada tramo. El montón inelástico genera muchos eventos (≈ 5000 en 5 s): falta un modo de reposo agrupado.
+  - Conocido: la estabilización de Baumgarte deja ≈ 2·10⁻⁶·E0 de deriva en un montón de discos; mejora posible: proyección de posiciones al iniciar cada tramo. El montón inelástico genera muchos eventos (≈ 5000 en 5 s): falta un modo de reposo agrupado.
