@@ -54,6 +54,53 @@
 
     if (new URLSearchParams(location.search).has('captura')) document.body.classList.add('captura');
     iniciarAyudas();
+    iniciarNavegacion();
+  }
+
+  // Navegación: las migas «Módulo / Espacio de trabajo» abren menús para ir a
+  // otro módulo o a otro espacio del mismo módulo. Un módulo nuevo se añade
+  // aquí con sus espacios (la primera página es la que abre el módulo).
+  const MODULOS = [
+    { nombre: 'Mecánica', icono: 'm-mecanica', espacios: [['mecanica.html', 'Cinemática y proyectiles', 'o-lanzador'], ['mecanica-laboratorio.html', 'Laboratorio', 'i-escena']] },
+    { nombre: 'Gravitación', icono: 'm-gravitacion', espacios: [['gravitacion.html', 'Órbitas', 'o-satelite']] },
+    { nombre: 'Termodinámica', icono: 'm-termodinamica', espacios: [['termodinamica.html', 'Laboratorio de gases', 'o-cilindro']] },
+    { nombre: 'Electrostática', icono: 'm-electrostatica', espacios: [['electrostatica.html', 'Cargas y campos', 'o-carga-positiva']] },
+    { nombre: 'Circuitos', icono: 'm-circuitos', espacios: [['circuitos.html', 'Transitorios', 'o-capacitor']] },
+  ];
+  function iniciarNavegacion() {
+    const migas = document.querySelector('.migas');
+    const botones = migas ? migas.querySelectorAll(':scope > button') : [];
+    if (botones.length < 2) return;
+    const pagina = location.pathname.split('/').pop() || '';
+    const actual = MODULOS.find(m => m.espacios.some(([h]) => h === pagina));
+    if (!actual) return;
+    const menu = document.createElement('div');
+    menu.className = 'menu'; menu.id = 'menu-navegacion'; menu.setAttribute('role', 'menu'); menu.hidden = true;
+    document.body.appendChild(menu);
+    const ico = id => `<svg class="ico"><use href="#${id}"/></svg>`;
+    const item = (href, icono, texto, esActual) => `<a class="menu-item" role="menuitem" href="${href}"${esActual ? ' aria-current="true"' : ''}>${ico(icono)}${texto}${esActual ? '<span class="atajo">actual</span>' : ''}</a>`;
+    let abiertoDesde = null;
+    const abrir = (boton, html) => {
+      if (abiertoDesde === boton && !menu.hidden) { menu.hidden = true; abiertoDesde = null; return; }
+      const r = boton.getBoundingClientRect();
+      menu.innerHTML = html; menu.style.left = r.left + 'px'; menu.style.top = (r.bottom + 4) + 'px';
+      menu.hidden = false; abiertoDesde = boton;
+    };
+    const bModulo = botones[0], bEspacio = botones[botones.length - 1];
+    bModulo.setAttribute('aria-haspopup', 'menu'); bEspacio.setAttribute('aria-haspopup', 'menu');
+    bModulo.addEventListener('click', ev => {
+      ev.stopPropagation();
+      abrir(bModulo, '<div class="menu-titulo">Módulos</div>' +
+        MODULOS.map(m => item(m.espacios[0][0], m.icono, m.nombre, m === actual)).join('') +
+        '<div class="menu-sep"></div>' + item('inicio.html', 'i-inicio', 'Inicio', false));
+    });
+    bEspacio.addEventListener('click', ev => {
+      ev.stopPropagation();
+      abrir(bEspacio, `<div class="menu-titulo">Espacios de trabajo de ${actual.nombre}</div>` +
+        actual.espacios.map(([h, t, i]) => item(h, i, t, h === pagina)).join(''));
+    });
+    document.addEventListener('pointerdown', ev => { if (!ev.target.closest('#menu-navegacion, .migas')) { menu.hidden = true; abiertoDesde = null; } });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { menu.hidden = true; abiertoDesde = null; } });
   }
 
   // Ayudas emergentes: data-ayuda="Texto|Término en inglés|Atajo"

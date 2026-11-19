@@ -9,6 +9,19 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Laboratorio de Mecánica: la caja de arena donde se construye cualquier
+  situación con partículas y discos, suelos, paredes, planos, arcos,
+  cuerdas, resortes, varillas, poleas y clavos, sobre el motor general.
+  Se edita en t = 0 con ajuste a la cuadrícula, flecha de velocidad con
+  trayectoria prevista y campos con unidades; muestra fuerzas en vivo
+  (normal, fricción, tensión, peso, elástica), estroboscopio, eventos y
+  energías. Escenarios: cuatro tutoriales, cinco ejemplos (Atwood, choque
+  de discos, péndulo de Newton, péndulo doble, bola en un cuenco) y MEXT
+  2017 P3, 2014 P3, 2009 P3, 2015 P3 y 2027 P2.
+- Menús de navegación en las migas de todas las pantallas: ir a otro
+  módulo, a otro espacio de trabajo del mismo módulo o a Inicio.
+- Inicio abre las escenas del Laboratorio en su espacio y enlaza las
+  escenas de ejemplo que ya tienen pantalla.
 - Favicon con el icono de Volta en todas las pantallas.
 
 ### Cambiado

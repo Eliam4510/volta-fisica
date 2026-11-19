@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volta · Mecánica · Laboratorio</title>
+<link rel="icon" href="../marca/icono-app.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../fuentes/fuentes.css">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="../componentes/componentes.css">
+<script src="../iconos/sprite.js"></script>
+<style>
+  /* Piezas propias del Laboratorio; todo lo demás viene del sistema */
+  .escena-btn { gap: var(--e-2); color: var(--texto-3); max-width: 440px; min-width: 0; }
+  .escena-btn b { color: var(--texto-2); font-weight: var(--peso-medio); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .escena-btn .ico { color: var(--texto-3); }
+  .menu-flotante { position: fixed; z-index: 40; min-width: 280px; }
+  .menu-flotante .menu-item .chip { margin-left: auto; }
+  .menu-flotante .menu-item[aria-current="true"] { background: var(--campo); }
+  .paleta-titulo { padding: 2px var(--e-3) var(--e-1); font-size: var(--t-micro); color: var(--texto-3); }
+  .nodo .btn-borrar { border: 0; background: transparent; padding: 2px; color: var(--texto-3); cursor: pointer; border-radius: var(--r-casilla); }
+  .nodo .btn-borrar:hover { color: var(--texto); background: var(--campo-activo); }
+  .fila .segmentado { justify-self: stretch; }
+  .fila .segmentado button { flex: 1; }
+  .apoyo { display: flex; align-items: center; justify-content: space-between; gap: var(--e-2); font-size: var(--t-pequeno); color: var(--texto-2); }
+  .formas { display: flex; gap: var(--e-1); flex-wrap: wrap; }
+  .formas .btn { padding: 0 6px; }
+  .texto-dato { font-size: var(--t-pequeno); color: var(--texto-2); }
+  .lect-vacia { grid-column: 1 / -1; font-size: var(--t-pequeno); color: var(--texto-3); }
+  .lecturas .sim sub { font-size: .68em; }
+  .grafica-cab .sim sub { font-size: .68em; }
+  .barra-e { grid-template-columns: 136px minmax(0, 1fr) 92px; }
+  .tabla tr[data-t] { cursor: pointer; }
+  .tabla td.texto { font-family: var(--fuente-interfaz); }
+  /* Aviso persistente del motor: arriba al centro, texto e icono en --aviso */
+  .aviso-motor { position: absolute; top: calc(var(--e-3) + 40px); left: 50%; transform: translateX(-50%); z-index: 4; max-width: min(620px, calc(100% - 48px)); color: var(--aviso); height: auto; min-height: 30px; padding: 5px 10px; line-height: var(--t-pequeno-alto); }
+  .aviso-motor .ico { color: var(--aviso); flex: none; }
+  .aviso-motor span { color: var(--texto-2); font-size: var(--t-pequeno); }
+  /* Nota del tutorial: pasos numerados arriba a la izquierda del lienzo */
+  .nota { position: absolute; top: var(--e-3); left: var(--e-3); z-index: 3; width: 268px; padding: var(--e-2) var(--e-3) var(--e-3); border-radius: var(--r-tarjeta); border: 1px solid var(--linea); background: var(--panel); box-shadow: var(--sombra-menu); }
+  .nota-cab { display: flex; align-items: center; gap: var(--e-2); font-size: var(--t-pequeno); color: var(--texto-3); }
+  .nota-cab .sp { flex: 1; }
+  .nota h3 { margin: 2px 0 6px; font-size: var(--t-enfasis); line-height: var(--t-enfasis-alto); font-weight: var(--peso-fuerte); color: var(--texto); }
+  .nota ol { margin: 0; padding-left: 18px; color: var(--texto-2); font-size: var(--t-pequeno); line-height: var(--t-pequeno-alto); }
+  .nota li + li { margin-top: 4px; }
+  /* Estado vacío en el centro del lienzo */
+  .lienzo-area > .vacio { position: absolute; inset: 0; justify-content: center; pointer-events: none; }
+  .lienzo-area > .vacio .btn { pointer-events: auto; }
+</style>
+</head>
+<body>
+<div class="espacio">
+  <!-- ============================ Barra superior ============================ -->
+  <header class="barra">
+    <a class="marca" href="inicio.html" data-ayuda="Inicio|Home">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6.5 L16 23 L26 6.5" stroke-width="2.4"/><path d="M4 23 H28" stroke-width="2.4"/><path d="M8.5 23 L5.5 26 M13.5 23 L10.5 26 M18.5 23 L15.5 26 M23.5 23 L20.5 26" stroke-width="1.4"/><circle cx="26" cy="6.5" r="2.6" fill="currentColor" stroke="none"/></svg>
+      <b>Volta</b>
+    </a>
+    <span class="separador-v"></span>
+    <nav class="migas">
+      <button class="btn btn-compacto" id="b-modulo" aria-haspopup="menu" data-ayuda="Cambiar de módulo|Module">Mecánica<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+      <span class="sep">/</span>
+      <button class="btn btn-compacto" id="b-espacio" aria-haspopup="menu" data-ayuda="Cambiar de espacio de trabajo|Workspace">Laboratorio<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    </nav>
+    <button class="btn btn-compacto escena-btn" id="b-escenas" aria-haspopup="menu" data-ayuda="Escenarios: tutoriales, ejemplos y MEXT|Scenes"><span id="escena-chip" class="chip">MEXT</span><b id="escena-nombre">Escena</b><svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    <span class="sp"></span>
+    <div class="transporte">
+      <button class="btn btn-icono" id="b-reiniciar" data-ayuda="Ir a t = 0|Reset|Inicio"><svg class="ico"><use href="#i-reiniciar"/></svg></button>
+      <button class="btn btn-icono" id="b-atras" data-ayuda="Retroceder un cuadro|Step back|←"><svg class="ico"><use href="#i-paso-atras"/></svg></button>
+      <button class="btn btn-primario btn-reproducir" id="b-play" data-ayuda="Reproducir|Play|Espacio"><svg class="ico"><use href="#i-reproducir"/></svg></button>
+      <button class="btn btn-icono" id="b-adelante" data-ayuda="Avanzar un cuadro|Step forward|→"><svg class="ico"><use href="#i-paso-adelante"/></svg></button>
+    </div>
+    <div class="reloj" id="reloj"></div>
+    <div class="segmentado" data-exclusivo id="velocidades" data-ayuda="Velocidad de reproducción|Playback speed">
+      <button data-v="0.25">¼×</button><button data-v="0.5">½×</button><button data-v="1" aria-pressed="true">1×</button><button data-v="2">2×</button>
+    </div>
+    <span class="sp"></span>
+    <span class="modo" data-ayuda="Modo preciso: Dormand–Prince con eventos exactos (choques, despegues, cuerda floja)|Precise mode">Preciso</span>
+    <span class="separador-v"></span>
+    <button class="btn btn-icono" id="b-deshacer" disabled data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
+    <button class="btn btn-icono" id="b-rehacer" disabled data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" id="b-abrir" data-ayuda="Abrir escena|Open|Ctrl O"><svg class="ico"><use href="#i-carpeta"/></svg></button>
+    <button class="btn btn-icono" id="b-guardar" data-ayuda="Guardar escena|Save|Ctrl S"><svg class="ico"><use href="#i-guardar"/></svg></button>
+    <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
+    <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
+  </header>
+
+  <!-- ============================ Panel izquierdo ============================ -->
+  <aside class="panel panel-izq">
+    <div class="desplaza">
+      <div class="seccion" id="paleta">
+        <div class="panel-cab">Objetos</div>
+        <div class="paleta-titulo">Cuerpos</div>
+        <div class="paleta">
+          <button class="herr" data-herr="particula" data-ayuda="Partícula o disco: clic en el lienzo, o arrástrala hasta él|Particle|P"><svg class="ico"><use href="#o-particula"/></svg><span>Partícula</span></button>
+          <button class="herr" data-herr="clavo" data-ayuda="Clavo: las cuerdas atadas a un punto fijo se enganchan en él|Peg"><svg class="ico"><use href="#o-clavo"/></svg><span>Clavo</span></button>
+        </div>
+        <div class="paleta-titulo">Superficies</div>
+        <div class="paleta">
+          <button class="herr" data-herr="suelo" data-ayuda="Suelo o techo|Ground"><svg class="ico"><use href="#o-suelo"/></svg><span>Suelo</span></button>
+          <button class="herr" data-herr="pared" data-ayuda="Pared|Wall"><svg class="ico"><use href="#o-pared"/></svg><span>Pared</span></button>
+          <button class="herr" data-herr="plano" data-ayuda="Plano inclinado|Inclined plane"><svg class="ico"><use href="#o-plano-inclinado"/></svg><span>Plano inclinado</span></button>
+          <button class="herr" data-herr="segmento" data-ayuda="Segmento libre: arrastra de un extremo al otro|Line segment"><svg class="ico"><use href="#o-trazo-libre"/></svg><span>Segmento</span></button>
+          <button class="herr" data-herr="arco" data-ayuda="Arco: hemisferio, cuenco o círculo|Arc surface"><svg class="ico"><use href="#o-arco"/></svg><span>Arco</span></button>
+        </div>
+        <div class="paleta-titulo">Conectores</div>
+        <div class="paleta">
+          <button class="herr" data-herr="cuerda" data-ayuda="Cuerda ideal: solo tira; se afloja y se tensa|Rope"><svg class="ico"><use href="#o-cuerda"/></svg><span>Cuerda</span></button>
+          <button class="herr" data-herr="resorte" data-ayuda="Resorte lineal|Spring"><svg class="ico"><use href="#o-resorte"/></svg><span>Resorte</span></button>
+          <button class="herr" data-herr="varilla" data-ayuda="Varilla rígida|Rigid rod"><svg class="ico"><use href="#o-varilla"/></svg><span>Varilla</span></button>
+          <button class="herr" data-herr="polea" data-ayuda="Polea fija con una cuerda entre dos partículas|Pulley"><svg class="ico"><use href="#o-polea"/></svg><span>Polea</span></button>
+          <button class="herr" data-herr="union" data-ayuda="Unión al chocar: dos discos quedan pegados|Stick on impact"><svg class="ico"><use href="#o-fijacion"/></svg><span>Unión al chocar</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Escena</div>
+        <div class="arbol" id="arbol"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================ Lienzo ============================ -->
+  <main class="lienzo-area" id="area">
+    <canvas id="lienzo"></canvas>
+    <div class="flotante ar-der" role="group" aria-label="Capas">
+      <svg class="ico"><use href="#i-capas"/></svg>
+      <button class="capa-btn" data-capa="vectores" aria-pressed="true" data-ayuda="Velocidad|Velocity">Velocidad</button>
+      <button class="capa-btn" data-capa="fuerzas" aria-pressed="true" data-ayuda="Fuerzas y aceleración|Forces">Fuerzas</button>
+      <button class="capa-btn" data-capa="prevista" aria-pressed="true" data-ayuda="Trayectoria prevista|Predicted path">Prevista</button>
+      <button class="capa-btn" data-capa="traza" aria-pressed="true">Traza</button>
+      <button class="capa-btn" data-capa="estrobo" aria-pressed="true">Estroboscopio</button>
+      <button class="capa-btn" data-capa="cotas" aria-pressed="true">Cotas</button>
+    </div>
+    <div class="flotante aviso-motor" id="aviso-motor" role="status" hidden><svg class="ico"><use href="#i-aviso"/></svg><span id="aviso-motor-texto"></span></div>
+    <div class="nota" id="nota" hidden>
+      <div class="nota-cab"><svg class="ico"><use href="#i-tutorial"/></svg>Tutorial<span class="sp"></span><button class="btn btn-icono btn-compacto" id="nota-cerrar" data-ayuda="Cerrar la nota|Close"><svg class="ico"><use href="#i-cerrar"/></svg></button></div>
+      <h3 id="nota-titulo"></h3>
+      <ol id="nota-pasos"></ol>
+    </div>
+    <div class="vacio" id="vacio" hidden>
+      <svg class="ico"><use href="#o-particula"/></svg>
+      <b>La escena no tiene partículas</b>
+      <span>Coloca una desde la paleta, o abre un escenario.</span>
+      <button class="btn btn-secundario btn-compacto" id="vacio-escenas"><svg class="ico"><use href="#i-escena"/></svg>Ver escenarios</button>
+    </div>
+    <div class="flotante ab-izq" id="coords"><span class="sim">x</span><span class="num" id="cx">—</span><span class="sim">y</span><span class="num" id="cy">—</span></div>
+    <div class="flotante ab-der">
+      <button class="btn btn-icono btn-compacto" id="b-zoom-menos" data-ayuda="Alejar|Zoom out|−"><svg class="ico"><use href="#i-zoom-menos"/></svg></button>
+      <span class="num" id="zoom">100 %</span>
+      <button class="btn btn-icono btn-compacto" id="b-zoom-mas" data-ayuda="Acercar|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button>
+      <span class="sep"></span>
+      <button class="btn btn-compacto" id="b-encuadrar" data-ayuda="Encuadrar todo|Fit to view|F"><svg class="ico"><use href="#i-encuadrar"/></svg>Encuadrar</button>
+    </div>
+  </main>
+
+  <!-- ============================ Panel derecho ============================ -->
+  <aside class="panel panel-der">
+    <div class="desplaza">
+      <div class="panel-cab">Inspector</div>
+      <div id="inspector"></div>
+    </div>
+  </aside>
+
+  <!-- ============================ Panel inferior ============================ -->
+  <section class="panel panel-inf">
+    <div class="inf-cab">
+      <div class="pestanas" role="tablist" id="pest">
+        <button class="pestana" role="tab" aria-selected="true" aria-controls="p-graficas">Gráficas</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-energia">Energía</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-eventos">Eventos</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-tabla">Tabla</button>
+      </div>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn btn-compacto" id="b-imagen" data-ayuda="Exportar imagen del lienzo (PNG)|Export image"><svg class="ico"><use href="#i-imagen"/></svg>Imagen</button>
+      <button class="btn btn-compacto" id="b-exportar" data-ayuda="Exportar datos a CSV|Export data"><svg class="ico"><use href="#i-exportar"/></svg>Exportar datos</button>
+    </div>
+    <div class="linea-tiempo"><canvas id="tl"></canvas></div>
+    <div class="graficas" id="p-graficas" data-grupo="pest">
+      <div class="grafica"><div class="grafica-cab"><span><span class="sim">y</span> contra <span class="sim">t</span></span><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span><span class="sim">|v|</span> contra <span class="sim">t</span></span><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span class="leyenda"><span style="color:var(--f-movimiento)"><i></i><span class="sim">E<sub class="r">k</sub></span></span><span style="color:var(--f-cambio)"><i></i><span class="sim">U<sub class="r">g</sub></span></span><span style="color:var(--f-electrico)"><i></i><span class="sim">U<sub class="r">e</sub></span></span><span style="color:var(--f-termico)"><i class="discontinua"></i><span class="sim">Q</span></span></span><span class="lect" id="l3"></span></div><canvas id="g3"></canvas></div>
+    </div>
+    <div class="energia" id="p-energia" data-grupo="pest" hidden>
+      <div class="barras" id="barras"></div>
+      <div class="grafica"><div class="grafica-cab"><span class="leyenda"><span style="color:var(--f-movimiento)"><i></i>Cinética</span><span style="color:var(--f-cambio)"><i></i>Gravitatoria</span><span style="color:var(--f-electrico)"><i></i>Elástica</span><span style="color:var(--f-termico)"><i class="discontinua"></i>Disipada</span><span style="color:var(--tinta)"><i class="discontinua"></i>Total</span></span><span class="lect" id="l4"></span></div><canvas id="g4"></canvas></div>
+    </div>
+    <div class="lista-eventos" id="p-eventos" data-grupo="pest" hidden><table class="tabla" id="t-eventos"></table></div>
+    <div class="lista-eventos" id="p-tabla" data-grupo="pest" hidden><table class="tabla" id="t-datos"></table></div>
+  </section>
+</div>
+
+<!-- Menú desplegable (módulo, espacio, escenarios) -->
+<div class="menu menu-flotante" id="menu" role="menu" hidden></div>
+
+<!-- Paleta de comandos -->
+<div class="velo comandos-velo" id="velo-comandos" hidden>
+  <div class="comandos" role="dialog" aria-label="Comandos">
+    <div class="comandos-buscar"><svg class="ico ico-20" style="color:var(--texto-3)"><use href="#i-buscar"/></svg><input id="cmd-q" placeholder="Escribe un comando, un objeto o un escenario"><kbd>Esc</kbd></div>
+    <div class="comandos-lista" id="cmd-lista"></div>
+  </div>
+</div>
+
+<script type="module" src="../lienzo/trazo.js"></script>
+<script type="module" src="../lienzo/dominios/mecanica.js"></script>
+<script type="module" src="../lienzo/grafica.js"></script>
+<script type="module" src="../componentes/linea-tiempo.js"></script>
+<script type="module" src="../componentes/espacio.js"></script>
+<script type="module" src="mecanica-laboratorio.js"></script>
+</body>
+</html>

@@ -120,15 +120,15 @@ import { avisar } from '../componentes/exportar.js';
     { t: 'Salto hacia una pendiente', m: 'Mecánica', tipo: 'MEXT', ref: '2019 · P3', mini: 'proyectil', href: 'mecanica.html', reciente: 'Hace 5 min' },
     { t: 'Dos cargas iguales', m: 'Electrostática', tipo: 'MEXT', ref: '2020 · P2', mini: 'cargas', href: 'electrostatica.html', reciente: 'Hace 2 h' },
     { t: 'Émbolo con pesa', m: 'Termodinámica', tipo: 'MEXT', ref: '2019 · P4', mini: 'embolo', href: 'termodinamica.html', reciente: 'Ayer' },
-    { t: 'Péndulo con clavo', m: 'Mecánica', tipo: 'MEXT', ref: '2014 · P3', mini: 'pendulo', href: null, reciente: 'Hace 3 días' },
+    { t: 'Péndulo con clavo', m: 'Mecánica', tipo: 'MEXT', ref: '2014 · P3', mini: 'pendulo', href: 'mecanica-laboratorio.html?escena=mext-2014-p3', reciente: 'Hace 3 días' },
     { t: 'Tiro oblicuo', m: 'Mecánica', tipo: 'Tutorial', ref: 'Paso a paso', mini: 'tiro', href: null },
-    { t: 'Resorte y bloque', m: 'Mecánica', tipo: 'Ejemplo', ref: 'Oscilaciones', mini: 'resorte', href: null },
+    { t: 'Resorte y bloque', m: 'Mecánica', tipo: 'Ejemplo', ref: 'Oscilaciones', mini: 'resorte', href: 'mecanica-laboratorio.html?escena=resorte' },
     { t: 'Dipolo eléctrico', m: 'Electrostática', tipo: 'Tutorial', ref: 'Líneas de campo', mini: 'dipolo', href: null },
     { t: 'Doble rendija de Young', m: 'Óptica', tipo: 'MEXT', ref: '2023 · P5', mini: 'young', href: null },
     { t: 'Ciclo rectangular', m: 'Termodinámica', tipo: 'MEXT', ref: '2018 · P4', mini: 'ciclo', href: null },
-    { t: 'Carga de un capacitor', m: 'Circuitos', tipo: 'Ejemplo', ref: 'Transitorio RC', mini: 'rc', href: null },
+    { t: 'Carga de un capacitor', m: 'Circuitos', tipo: 'Ejemplo', ref: 'Transitorio RC', mini: 'rc', href: 'circuitos.html' },
     { t: 'Ambulancia que pasa', m: 'Ondas y sonido', tipo: 'MEXT', ref: '2007 · P5', mini: 'doppler', href: null },
-    { t: 'Mi rampa con fricción', m: 'Mecánica', tipo: 'Propio', ref: 'Editado hoy', mini: 'rampa', href: null },
+    { t: 'Mi rampa con fricción', m: 'Mecánica', tipo: 'Propio', ref: 'Editado hoy', mini: 'rampa', href: 'mecanica-laboratorio.html?escena=plano' },
   ];
 
   // ---------- Miniaturas con la gramática del lienzo ----------
@@ -249,7 +249,8 @@ import { avisar } from '../componentes/exportar.js';
   const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html' };
   function abrir() {
     abrirEscena({}).then(e => {
-      const destino = PANTALLAS[e.modulo];
+      // Mecánica tiene dos espacios: el laboratorio abre sus propias escenas
+      const destino = e.modulo === 'mecanica' && e.espacio === 'laboratorio' ? 'mecanica-laboratorio.html' : PANTALLAS[e.modulo];
       if (!destino) { avisar(document.body, `El módulo «${e.modulo}» todavía no tiene pantalla.`); return; }
       try { sessionStorage.setItem('volta.abrir', JSON.stringify(e)); } catch { /* sin almacenamiento */ }
       location.href = destino;

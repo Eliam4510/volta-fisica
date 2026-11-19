@@ -10,8 +10,8 @@ física > funciones faltantes > rendimiento > pulido.
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
 - Circuitos (pantalla «Transitorios», 56 pruebas) integrado y enlazado.
-- Agente en curso: Laboratorio de Mecánica (caja de arena). Sus archivos
-  están sin seguimiento hasta revisarlos.
+- Laboratorio de Mecánica integrado. Agente en curso: Ondas y sonido
+  (motor 1D, Doppler y pantalla «Medio 1D»).
 
 ## Pendiente (ordenado)
 
@@ -38,7 +38,8 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Motor de proyectiles extraído (`sistema/motores/proyectiles.js`) con pruebas
   contra 2019 P3, 2019 1-(2), lanzamiento oblicuo y balance de energía.
 - [x] Motor general (`motores/mecanica.js`): contactos, cuerdas, varillas, poleas, resortes, fricción, clavos, choques; 15 pruebas analíticas.
-- [ ] Caja de arena de Mecánica (`mecanica-laboratorio.html`) sobre el motor general (agente en curso).
+- [x] Laboratorio de Mecánica (`mecanica-laboratorio.html`): caja de arena sobre el motor general, 14 escenarios, 19 pruebas.
+- [ ] Laboratorio: fuerza aplicada constante, panel de variables, duplicar, instrumentos (regla, fotopuerta), cuerpos rígidos.
 
 ### Otros módulos
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
