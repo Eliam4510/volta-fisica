@@ -221,7 +221,7 @@ import { avisar } from '../componentes/exportar.js';
   const ic = (id, cls = 'ico') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
   document.getElementById('modulos').innerHTML = MODULOS.map(([id, nombre, desc, esp, mext, href]) => `
     <${href ? 'a' : 'div'} class="tarjeta-modulo${href ? '' : ' inactiva'}" ${href ? `href="${href}"` : ''}>
-      <div class="fila-emb">${ic('m-' + id, 'emblema')}${href ? '<span class="chip suave">Prototipo</span>' : ''}</div>
+      <div class="fila-emb">${ic('m-' + id, 'emblema')}${href ? '<span class="chip suave">Disponible</span>' : '<span class="chip suave">En preparación</span>'}</div>
       <div><h3>${nombre}</h3><p>${desc}</p></div>
       <div class="pie"><span class="chip">${esp} espacios de trabajo</span><span class="chip">${mext} MEXT</span></div>
     </${href ? 'a' : 'div'}>`).join('');
