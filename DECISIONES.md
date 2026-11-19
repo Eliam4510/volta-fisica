@@ -84,3 +84,10 @@ vieja.
     Sigue sin haber rotación: los cuerpos rígidos se arman con varillas.
 16. **«Continuar» muestra solo lo real.** Inicio no inventa actividad: las
     escenas recientes salen del autoguardado de cada pantalla.
+17. **N cuerpos: Yoshida 4 con Bulirsch–Stoer en los encuentros
+    (2026-11-19).** El motor de «Sistema solar» y «Maniobras» integra con
+    Yoshida de cuarto orden (simpléctico: la energía no deriva) y, en los
+    pasos con un encuentro cercano (paso > 0.05·√(d³/μ)), con
+    Bulirsch–Stoer adaptativo hasta orden 16, como MERCURY y SWIFT. La
+    especificación proponía IAS15 o Dormand–Prince 8; Bulirsch–Stoer da la
+    misma exactitud en los encuentros con menos código.
