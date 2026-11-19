@@ -112,24 +112,24 @@ import { avisar } from '../componentes/exportar.js';
   const MODULOS = [
     ['mecanica', 'Mecánica', 'Partículas y cuerpos sobre superficies, cuerdas, resortes, choques y equilibrio.', 2, 38, 'mecanica.html'],
     ['gravitacion', 'Gravitación', 'Órbitas, satélites, velocidad de escape y leyes de Kepler.', 1, 8, 'gravitacion.html'],
-    ['termodinamica', 'Termodinámica', 'Gases con émbolos y válvulas, ciclos, y el gas visto desde sus moléculas.', 1, 1, 'termodinamica.html'],
+    ['termodinamica', 'Termodinámica', 'Gases con émbolos y válvulas, ciclos en el diagrama P-V, el gas visto desde sus moléculas y calorimetría.', 4, 29, 'termodinamica.html'],
     ['electrostatica', 'Electrostática', 'Cargas, campo, potencial, Gauss, conductores, dieléctricos y capacitores.', 2, 18, 'electrostatica.html'],
     ['circuitos', 'Circuitos', 'Corriente continua, redes de capacitores y transitorios RC, RL y LC.', 1, 3, 'circuitos.html'],
     ['magnetismo', 'Magnetismo e inducción', 'Campos de corrientes, partículas en E y B, efecto Hall e inducción electromagnética.', 3, 13, 'magnetismo.html'],
     ['ondas', 'Ondas y sonido', 'Cuerdas, tubos, efecto Doppler, pulsaciones y acústica.', 2, 16, 'ondas.html'],
     ['optica', 'Óptica', 'Rayos, refracción, interferencia, películas delgadas y Michelson.', 3, 14, 'optica.html'],
-    ['moderna', 'Física moderna', 'Efecto fotoeléctrico y decaimientos nucleares.', null, null, null],
+    ['moderna', 'Física moderna', 'Efecto fotoeléctrico con medida de h, decaimientos, cadenas y retroceso nuclear.', 2, 4, 'moderna.html'],
   ];
   const ESCENAS = [
     { t: 'Salto hacia una pendiente', m: 'Mecánica', tipo: 'MEXT', ref: '2019 · P3', mini: 'proyectil', href: 'mecanica.html' },
     { t: 'Dos cargas iguales', m: 'Electrostática', tipo: 'MEXT', ref: '2020 · P2', mini: 'cargas', href: 'electrostatica.html' },
     { t: 'Émbolo con pesa', m: 'Termodinámica', tipo: 'MEXT', ref: '2019 · P4', mini: 'embolo', href: 'termodinamica.html' },
     { t: 'Péndulo con clavo', m: 'Mecánica', tipo: 'MEXT', ref: '2014 · P3', mini: 'pendulo', href: 'mecanica-laboratorio.html?escena=mext-2014-p3' },
-    { t: 'Tiro oblicuo', m: 'Mecánica', tipo: 'Tutorial', ref: 'Paso a paso', mini: 'tiro', href: null },
+    { t: 'Alcance de un tiro oblicuo', m: 'Mecánica', tipo: 'MEXT', ref: '2015 · 1-(1)', mini: 'tiro', href: 'mecanica-laboratorio.html?escena=mext-2015-1-1' },
     { t: 'Resorte y bloque', m: 'Mecánica', tipo: 'Ejemplo', ref: 'Oscilaciones', mini: 'resorte', href: 'mecanica-laboratorio.html?escena=resorte' },
     { t: 'Dipolo eléctrico', m: 'Electrostática', tipo: 'Tutorial', ref: 'Líneas de campo', mini: 'dipolo', href: 'electrostatica.html?escena=dipolo' },
     { t: 'Doble rendija de Young', m: 'Óptica', tipo: 'MEXT', ref: '2023 · P5', mini: 'young', href: 'optica-ondas.html?escena=mext-2023-5' },
-    { t: 'Ciclo rectangular', m: 'Termodinámica', tipo: 'MEXT', ref: '2018 · P4', mini: 'ciclo', href: null },
+    { t: 'Ciclo rectangular', m: 'Termodinámica', tipo: 'MEXT', ref: '2018 · P4', mini: 'ciclo', href: 'termodinamica-ciclos.html?escena=mext-2018-p4' },
     { t: 'Carga de un capacitor', m: 'Circuitos', tipo: 'Ejemplo', ref: 'Transitorio RC', mini: 'rc', href: 'circuitos.html' },
     { t: 'Ambulancia que pasa', m: 'Ondas y sonido', tipo: 'MEXT', ref: '2007 · P5', mini: 'doppler', href: 'ondas-doppler.html?escena=mext-2007-5' },
     { t: 'Mi rampa con fricción', m: 'Mecánica', tipo: 'Propio', ref: 'Editado hoy', mini: 'rampa', href: 'mecanica-laboratorio.html?escena=plano' },
@@ -238,7 +238,7 @@ import { avisar } from '../componentes/exportar.js';
   // «Continuar»: lo que de verdad se abrió en este equipo (el autoguardado de
   // cada pantalla lo registra). Al abrirla, la pantalla recupera su autoguardado.
   const NOMBRES = Object.fromEntries(MODULOS.map(([id, nombre]) => [id, nombre]));
-  const MINI = { mecanica: 'proyectil', gravitacion: 'tiro', termodinamica: 'embolo', electrostatica: 'cargas', circuitos: 'rc', ondas: 'doppler', optica: 'young', magnetismo: 'cargas' };
+  const MINI = { mecanica: 'proyectil', gravitacion: 'tiro', termodinamica: 'embolo', electrostatica: 'cargas', circuitos: 'rc', ondas: 'doppler', optica: 'young', magnetismo: 'cargas', moderna: 'young' };
   const PAGINA_DE_CLAVE = clave => /^[a-z-]+$/.test(clave) && clave !== 'inicio' ? `${clave === 'mecanica-laboratorio' || clave === 'laboratorio' ? 'mecanica-laboratorio' : clave}.html` : null;
   const hace = ms => {
     const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
@@ -268,9 +268,9 @@ import { avisar } from '../componentes/exportar.js';
 
   // ---------- Abrir y nueva escena ----------
   // La escena viaja a su pantalla por sessionStorage ("volta.abrir").
-  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html', optica: 'optica.html', magnetismo: 'magnetismo.html' };
+  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html', optica: 'optica.html', magnetismo: 'magnetismo.html', moderna: 'moderna.html' };
   // Espacios con pantalla propia dentro de un módulo
-  const ESPACIOS = { 'mecanica:laboratorio': 'mecanica-laboratorio.html', 'electrostatica:conductores': 'electrostatica-conductores.html', 'ondas:doppler': 'ondas-doppler.html', 'optica:interferencia': 'optica-ondas.html', 'optica:peliculas': 'optica-peliculas.html', 'magnetismo:particulas': 'magnetismo-particulas.html', 'magnetismo:induccion': 'magnetismo-induccion.html' };
+  const ESPACIOS = { 'mecanica:laboratorio': 'mecanica-laboratorio.html', 'termodinamica:ciclos': 'termodinamica-ciclos.html', 'termodinamica:molecular': 'termodinamica-molecular.html', 'termodinamica:calor': 'termodinamica-calor.html', 'electrostatica:conductores': 'electrostatica-conductores.html', 'ondas:doppler': 'ondas-doppler.html', 'optica:interferencia': 'optica-ondas.html', 'optica:peliculas': 'optica-peliculas.html', 'magnetismo:particulas': 'magnetismo-particulas.html', 'magnetismo:induccion': 'magnetismo-induccion.html', 'moderna:nucleo': 'moderna-nucleo.html' };
   function abrir() {
     abrirEscena({}).then(e => {
       // Algunos módulos tienen varios espacios, cada uno con su pantalla

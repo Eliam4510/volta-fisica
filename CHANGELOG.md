@@ -27,6 +27,23 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   «Conductores y dieléctricos»: capacitores de placas, esféricos y
   coaxiales con dieléctricos y conductores, batería conectada o no, y las
   8 escenas MEXT de conductores y capacitores. 66 pruebas nuevas.
+- Termodinámica: menú de escenas en el «Laboratorio de gases» (cilindro
+  inclinado o que gira, recipientes con válvulas y mezcla, globos, burbujas)
+  y tres espacios nuevos: «Ciclos y diagrama P-V» (el lienzo es el propio
+  diagrama; dibujar ciclos con clics; Q, W y ΔU por tramo y rendimiento),
+  «Gas molecular» (discos con choques por eventos; presión por impulso en
+  las paredes, Maxwell–Boltzmann, efusión de Graham) y «Calor y
+  calorimetría». Motores nuevos de ciclos, gas molecular, recipientes y
+  calor; 29 de los 30 problemas MEXT del tema (2025 T7 solo tiene el tema
+  en el banco). 127 pruebas nuevas.
+- Módulo Física moderna con dos espacios: «Efecto fotoeléctrico» (fototubo
+  con lámparas de λ o f, placa de metal, colector y fuente; curva I–V,
+  K_max contra f y medida de h por la pendiente de V₀) y «Núcleo» (carta
+  N–Z con cadenas y valle de estabilidad, muestra que decae con T½ medido,
+  decaimiento puntual con retroceso). Constantes CODATA, masas AME2020 y
+  periodos NUBASE; 44 pruebas y las 4 escenas MEXT del tema.
+- Con los nueve módulos disponibles, Inicio ya no tiene ninguno «En
+  preparación».
 
 - Laboratorio: panel de variables, como en los demás módulos. Una variable
   es un deslizador que fija a la vez varias propiedades (la rapidez de dos

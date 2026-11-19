@@ -191,8 +191,10 @@ describe('choques robustos y contactos entre discos', () => {
   const pared = (id, a, b, e = 1) => ({ id, tipo: 'segmento', a, b, e });
   // Caja de 6 m × 4 m; los segmentos dejan el sólido por fuera
   const caja = e => [pared('s', [-3, -2], [3, -2], e), pared('n', [3, 2], [-3, 2], e), pared('o', [-3, 2], [-3, -2], e), pared('e', [3, -2], [3, 2], e)];
+  // tiempoMax: el límite de reloj protege la interfaz, no la física; con la
+  // suite entera en paralelo (o en la compilación de Windows) 5 s no bastaban
   const gas = (n, v, g = [0, 0]) => ({
-    duracion: 5, g, particulas: Array.from({ length: n }, (_, i) => ({
+    duracion: 5, g, tiempoMax: 60000, particulas: Array.from({ length: n }, (_, i) => ({
       id: 'p' + i, m: 1 + (i % 3), radio: 0.1,
       p: [-2.5 + (i % 6), -1.5 + Math.floor(i / 6) * 0.75], v: [v * Math.cos(i * 1.7), v * Math.sin(i * 2.3)],
     })),

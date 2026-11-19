@@ -48,13 +48,13 @@ Principios del proyecto:
 |---|---|---|
 | Mecánica | Utilizable | Proyectiles y Laboratorio (caja de arena): superficies fijas o llevadas por un cuerpo, cuerdas, poleas, resortes, varillas, clavos, prensa hidráulica, fricción, choques entre discos y movimiento impuesto (ascensor, gráficas v–t); contactos como problema de complementariedad y energía disipada contabilizada; 38 escenas MEXT |
 | Electrostática | Utilizable | Cargas, hilos, anillos, láminas y esferas; campo, potencial, Gauss y cargas en movimiento; capacitores con dieléctricos, conductores y batería conectada o no; 18 escenas MEXT |
-| Termodinámica | Utilizable | Gas en cilindro con émbolo, calor, trabajo, diagrama P-V |
+| Termodinámica | Utilizable | Laboratorio de gases (cilindros, recipientes con válvulas, globos, burbujas), ciclos en el diagrama P-V con Q, W y ΔU por tramo, gas molecular de discos con Maxwell–Boltzmann, y calor y calorimetría; 29 escenas MEXT |
 | Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria; 8 escenas MEXT |
 | Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC |
 | Magnetismo e inducción | Utilizable | Campos de hilos, espiras, solenoides e imanes; partículas en E y B con Boris (selector, espectrómetro, ciclotrón, Hall); inducción acoplada (rieles, espiras, generador) con balance de energía; 13 escenas MEXT |
 | Ondas y sonido | Utilizable | Cuerdas y tubos (reflexión, uniones, modos, resonancia) y Doppler con audio; la cubeta 2D, en preparación |
 | Óptica | Utilizable | Trazado de rayos (Snell, Fresnel, reflexión total, prismas con dispersión, lentes y espejos), interferencia y difracción por suma de Huygens, películas delgadas, anillos de Newton y Michelson |
-| Física moderna | Planeado | Efecto fotoeléctrico, núcleo |
+| Física moderna | Utilizable | Efecto fotoeléctrico con curva I–V y medida de h; núcleo con cadenas en la carta N–Z, decaimiento estocástico y retroceso; 4 escenas MEXT |
 
 El plan completo, con dependencias y orden de implementación, está en
 [PLAN.md](PLAN.md).
@@ -86,6 +86,10 @@ El plan completo, con dependencias y orden de implementación, está en
 | Películas e interferómetros | Magnetismo: inducción |
 |---|---|
 | ![Michelson](docs/diseno/capturas/f13_peliculas.png) | ![Inducción](docs/diseno/capturas/f14_magnetismo.png) |
+
+| Termodinámica: ciclos | Física moderna: núcleo |
+|---|---|
+| ![Ciclos](docs/diseno/capturas/f15_ciclos.png) | ![Núcleo](docs/diseno/capturas/f16_nucleo.png) |
 
 ## Instalación
 

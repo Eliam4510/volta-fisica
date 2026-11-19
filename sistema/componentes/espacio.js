@@ -79,12 +79,13 @@
   const MODULOS = [
     { nombre: 'Mecánica', icono: 'm-mecanica', espacios: [['mecanica.html', 'Cinemática y proyectiles', 'o-lanzador'], ['mecanica-laboratorio.html', 'Laboratorio', 'i-escena']] },
     { nombre: 'Gravitación', icono: 'm-gravitacion', espacios: [['gravitacion.html', 'Órbitas', 'o-satelite']] },
-    { nombre: 'Termodinámica', icono: 'm-termodinamica', espacios: [['termodinamica.html', 'Laboratorio de gases', 'o-cilindro']] },
+    { nombre: 'Termodinámica', icono: 'm-termodinamica', espacios: [['termodinamica.html', 'Laboratorio de gases', 'o-cilindro'], ['termodinamica-ciclos.html', 'Ciclos y diagrama P-V', 'o-embolo'], ['termodinamica-molecular.html', 'Gas molecular', 'o-caja-molecular'], ['termodinamica-calor.html', 'Calor y calorimetría', 'o-calorimetro']] },
     { nombre: 'Electrostática', icono: 'm-electrostatica', espacios: [['electrostatica.html', 'Cargas y campos', 'o-carga-positiva'], ['electrostatica-conductores.html', 'Conductores y dieléctricos', 'o-capacitor-placas']] },
     { nombre: 'Circuitos', icono: 'm-circuitos', espacios: [['circuitos.html', 'Transitorios', 'o-capacitor']] },
     { nombre: 'Magnetismo e inducción', icono: 'm-magnetismo', espacios: [['magnetismo.html', 'Campos magnéticos', 'o-hilo-corriente'], ['magnetismo-particulas.html', 'Partículas en E y B', 'o-particula-cargada'], ['magnetismo-induccion.html', 'Inducción', 'o-barra-conductora']] },
     { nombre: 'Ondas y sonido', icono: 'm-ondas', espacios: [['ondas.html', 'Medio 1D', 'o-cuerda'], ['ondas-doppler.html', 'Doppler y acústica', 'o-fuente-sonora']] },
     { nombre: 'Óptica', icono: 'm-optica', espacios: [['optica.html', 'Óptica geométrica', 'o-lente-ideal'], ['optica-ondas.html', 'Interferencia y difracción', 'o-rendija-doble'], ['optica-peliculas.html', 'Películas e interferómetros', 'o-michelson']] },
+    { nombre: 'Física moderna', icono: 'm-moderna', espacios: [['moderna.html', 'Efecto fotoeléctrico', 'o-placa-metal'], ['moderna-nucleo.html', 'Núcleo', 'o-nucleo']] },
   ];
   function iniciarNavegacion() {
     const migas = document.querySelector('.migas');
