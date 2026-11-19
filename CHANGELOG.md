@@ -7,6 +7,23 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Circuitos: las 10 escenas MEXT del tema (nuevas: 2014 1-(4), 2013 P2,
+  2012 1-(2), 2010 4-C, 2007 1-(2), la parte de circuito de 2007 P2 y 2006
+  P2), cada una con un grupo «Examen» que muestra la medida, la fórmula del
+  enunciado y la opción. Capacitor cuya capacidad cambia en el tiempo (una
+  placa que entra o sale), con el trabajo de la fuerza en el balance de
+  energía. Tutorial «Ley de Ohm con voltímetro y amperímetro» y ejemplo
+  «Dos capacitores que comparten carga». 34 pruebas nuevas.
+
+### Corregido
+
+- Circuitos: un evento «Conexión inicial» espurio en t = 0 con todo
+  descargado; corrientes falsas de 10⁻⁹ A en un capacitor descargado entre
+  dos nodos al mismo potencial; el menú decía «Ejemploes»; error con el
+  lienzo sin tamaño; el voltímetro aparecía como «0 A».
+
 ## [0.9.0] - 2026-11-19
 
 Los nueve módulos disponibles: Magnetismo e inducción y Física moderna

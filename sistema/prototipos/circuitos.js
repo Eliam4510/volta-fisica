@@ -9,8 +9,15 @@
    como eventos, islas con carga conservada, modo ideal con la energía
    perdida al conectar y registro de energía que cierra.
    Misma estructura que mecanica.js: motor → estado(t) → lienzo → paneles.
+   Escenas MEXT: cada una lleva su nota (qué se reconstruyó y cómo) y una
+   función examen que lee de la simulación la magnitud que contesta cada
+   apartado; el grupo «Examen» del inspector la muestra junto a la fórmula
+   del enunciado y la opción, que solo aparece si la medida coincide. Las
+   mismas situaciones se comprueban en pruebas/circuitos-mext.test.js.
+   La unidad de tiempo se elige con la duración (s, ms o µs) y las escenas
+   de menos de un segundo se reproducen a cámara lenta.
    ========================================================================== */
-import { simularCircuito, puntoOperacion, estadoEn, balance, curvaBombilla } from '../motores/circuitos.js';
+import { simularCircuito, puntoOperacion, estadoEn, balance, curvaBombilla, capacidadEn } from '../motores/circuitos.js';
 import { aCSV } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar as avisarLienzo } from '../componentes/exportar.js';
 import { crearEscena, numero, texto } from '../nucleo/escena.js';
@@ -20,7 +27,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
 
 (function () {
   'use strict';
-  const { Trazo, fmt, cantidad, grafica, LineaTiempo } = Volta;
+  const { Trazo, fmt, cantidad, grafica, LineaTiempo, leerTokens, fmtMarca, pasoAgradable, rombo, ESP } = Volta;
   const $ = s => document.querySelector(s);
 
   // ---------------------------------------------------------------------
@@ -44,7 +51,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   const ES_INTERRUPTOR = tipo => tipo === 'interruptor' || tipo === 'interruptor-3';
 
   // Prefijos SI que entiende nucleo/unidades.js para cada unidad
-  const PREF = { V: ['k', '', 'm'], A: ['', 'm', 'µ'], 'Ω': ['M', 'k', ''], F: ['', 'm', 'µ', 'n', 'p'], H: ['', 'm', 'µ'], C: ['', 'm', 'µ', 'n', 'p'], W: ['k', '', 'm'], J: ['k', '', 'm', 'µ'] };
+  const PREF = { V: ['k', '', 'm'], A: ['', 'm', 'µ'], 'Ω': ['M', 'k', ''], F: ['', 'm', 'µ', 'n', 'p'], H: ['', 'm', 'µ'], C: ['', 'm', 'µ', 'n', 'p'], W: ['k', '', 'm'], J: ['k', '', 'm', 'µ'], s: ['', 'm', 'µ'] };
   const FAC = { M: 1e6, k: 1e3, '': 1, m: 1e-3, 'µ': 1e-6, n: 1e-9, p: 1e-12 };
   // Valor SI → [número, unidad con el prefijo que le corresponde]
   function enUnidad(v, u) {
@@ -54,6 +61,13 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (a > 0) for (const q of lista) if (a >= FAC[q] * 0.99995) { p = q; break; }
     return [v / FAC[p], p + u];
   }
+  // Unidad de tiempo de la escena: la que deja la duración entre 1 y 1000
+  const UT = () => [[1, 's'], [1e-3, 'ms'], [1e-6, 'µs']].find(([f]) => ESC.duracion >= f * 0.999) || [1e-6, 'µs'];
+  // Tiempo simulado por segundo de pantalla a 1×: tiempo real si la escena dura
+  // un segundo o más; si no, cámara lenta (la escena entera en unos 10 s)
+  const ritmo = () => (ESC.duracion >= 1 ? 1 : ESC.duracion / 10);
+  // Instante con la unidad de la escena: 4.000 s, 110.0 µs
+  const Tf = (v, cifras = 4) => { const [f, u] = UT(); return cantidad(v / f, u, cifras); };
   // Número de un campo editable: sin ceros de relleno (2.2, 500, 0.05)
   const numCampo = x => String(Number(Number(x).toPrecision(6)));
   const valorCon = (v, u, cifras = 4) => { const [x, uu] = enUnidad(v, u); return cantidad(x, uu, cifras); };
@@ -62,10 +76,26 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   const nombreHTML = id => { const m = /^(\D+?)(\d+)$/.exec(id); return m ? `${m[1]}<sub>${m[2]}</sub>` : id; };
 
   // ---------------------------------------------------------------------
+  // Examen: ayudantes para las filas de las escenas MEXT
+  // ---------------------------------------------------------------------
+  // Símbolo en cursiva con subíndice en redonda: S('q', 'C1') → q con C1 abajo
+  const S = (s, sub) => `<span class="sim">${s}</span>${sub ? `<sub class="r">${sub}</sub>` : ''}`;
+  // Opciones numéricas del examen, en orden: [['(a)', v₁·factor], ['(b)', v₂·factor], …]
+  const LETRAS = 'abcdefghijklmnopqrstuvwxyz';
+  const listaOpc = (valores, factor = 1) => valores.map((v, i) => [`(${LETRAS[i]})`, v * factor]);
+  // Las respuestas de 2013 P2: 2, 4, 8, 16, 32 y sus tercios y novenos
+  const OPC_2013 = listaOpc([2, 4, 8, 16, 32, 2 / 3, 4 / 3, 8 / 3, 16 / 3, 32 / 3, 2 / 9, 4 / 9, 8 / 9, 16 / 9, 32 / 9]);
+
+  // ---------------------------------------------------------------------
   // Escenarios. Coordenadas en unidades de la cuadrícula (y hacia arriba).
   // rot: giro en grados (0 = de a a la izquierda a b a la derecha).
   // Variables: valor en su unidad de pantalla; factor la pasa a SI; liga:
   // [componente, parámetro] que toman ese valor.
+  // MEXT: nota (reconstrucción y situación) y examen(X) → filas
+  // {n, etq, valor, esperado, u, formula, t, opcion | opciones, tol, escala}:
+  // valor medido en la simulación, esperado según la fórmula del enunciado
+  // con los parámetros actuales, t desde el que se conoce. X da acceso a los
+  // componentes (el), índices (k), estados (en, despues) y acciones.
   // ---------------------------------------------------------------------
   const ESCENARIOS = [
     {
@@ -109,6 +139,19 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       },
       graficas: [{ m: 'V', series: [{ id: 'C' }] }, { m: 'I', series: [{ id: 'L' }, { id: 'R' }] }, { m: 'U', series: [{ id: 'C' }, { id: 'L' }] }],
       sel: 'L',
+      nota: 'Figura redibujada: en a, la batería V carga C a través de R; en c, C se descarga por la bobina L y el circuito LC oscila sin pérdidas. El examen es simbólico; la escena fija V = 10 V, R = 1 kΩ, C = 1 mF y L = 100 H para que la oscilación dure unos segundos.',
+      examen: X => {
+        const V = X.el('V').E, R = X.el('R').R, C = X.el('C').C, L = X.el('L').L, ta = X.accion('S', 'a'), tc = X.accion('S', 'c');
+        const kR = X.k('R'), kC = X.k('C'), kL = X.k('L'), sc = X.en(tc), osc = X.oscilacion(kL, tc);
+        return [
+          { n: '(1)', etq: S('I', '0'), valor: Math.abs(X.despues(ta).I[kR]), esperado: V / R, u: 'A', formula: 'V/R, por R justo al pasar a a', opcion: '(e)', t: ta },
+          { n: '(2)', etq: S('q', 'C'), valor: sc.q[kC], esperado: C * V, u: 'C', formula: 'CV', opcion: '(f)', t: tc },
+          { n: '(3)', etq: S('Q', 'R'), valor: sc.Q[kR], esperado: C * V * V / 2, u: 'J', formula: 'CV²/2', opcion: '(b)', t: tc },
+          { n: '(4)', etq: `${S('I', 'L')}(${S('t')})`, texto: 'seno desde 0', formula: 'V·√(C/L)·sen(t/√(LC)): parte de cero y oscila', t: tc + osc.T / 4 },
+          { n: '(5)', etq: `${S('I', 'L')}<sub class="r">máx</sub>`, valor: osc.max, esperado: V * Math.sqrt(C / L), u: 'A', formula: 'V·√(C/L)', opcion: '(a)', t: tc + osc.T / 4 },
+          { n: '', etq: S('T'), valor: osc.T, esperado: 2 * Math.PI * Math.sqrt(L * C), u: 's', formula: '2π·√(LC)', t: tc + osc.T, tol: 2e-3 },
+        ];
+      },
     },
     {
       clave: 'red', titulo: 'Red de capacitores con dos interruptores', tipo: 'MEXT', anio: '2023 P2', duracion: 8, dt: 0.01,
@@ -133,21 +176,35 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       },
       graficas: [{ m: 'V', series: [{ nodo: 'A' }, { nodo: 'B' }] }, { m: 'q', series: [{ id: 'C1' }, { id: 'C2' }, { id: 'C3' }] }, { m: 'U', series: [{ id: 'C1' }, { id: 'C2' }, { id: 'C3' }] }],
       sel: 'C2',
+      nota: 'Figura redibujada: C₁ y C₂ en serie con la batería por S₁; C₃ se une al punto A por S₂. Tres capacitores iguales; el examen es simbólico y la escena fija V = 12 V y C = 1 mF. Sin resistencias: en modo ideal la carga salta al instante y la energía que se pierde en cada conexión queda en la tabla de eventos.',
+      examen: X => {
+        const V = X.el('V').E, C = X.el('C1').C, k1 = X.k('C1'), k2 = X.k('C2');
+        const [c1, c5] = X.acciones('S1', true), t1 = X.accion('S1', false), [t3] = X.acciones('S2', true), t3f = X.accion('S2', false);
+        const s1 = X.en(t1), s3 = X.en(t3f), s5 = X.en(X.dur);
+        return [
+          { n: '(1)', etq: S('q', 'C2'), valor: s1.q[k2], esperado: C * V / 2, u: 'C', formula: 'CV/2', opcion: '(e)', t: c1 },
+          { n: '(2)', etq: `${S('U', 'C1')} + ${S('U', 'C2')}`, valor: s1.U[k1] + s1.U[k2], esperado: C * V * V / 4, u: 'J', formula: 'CV²/4', opcion: '(d)', t: c1 },
+          { n: '(3)', etq: S('q', 'C2'), valor: s3.q[k2], esperado: C * V / 4, u: 'C', formula: 'CV/4', opcion: '(d)', t: t3 },
+          { n: '(4)', etq: S('V', 'A'), valor: X.nodo(s3, 'A'), esperado: V / 4, u: 'V', formula: 'V/4; en B, 3V/4', opcion: '(e)', t: t3 },
+          { n: '', etq: S('V', 'B'), valor: X.nodo(s3, 'B'), esperado: 3 * V / 4, u: 'V', formula: '3V/4', t: t3 },
+          { n: '(5)', etq: S('q', 'C2'), valor: s5.q[k2], esperado: 3 * C * V / 8, u: 'C', formula: '3CV/8', opcion: '(b)', t: c5 },
+        ];
+      },
     },
     {
       clave: 'puente', titulo: 'Puente de Wheatstone equilibrado', tipo: 'MEXT', anio: '2027 1-(3)', duracion: 4, dt: 0.01,
       elementos: [
         { id: 'R1', tipo: 'resistencia', p: [2, 6], rot: 0, R: 10, etq: 'arr' },
-        { id: 'R', tipo: 'resistencia', p: [6, 6], rot: 0, R: 15, etq: 'arr' },
-        { id: 'R3', tipo: 'resistencia', p: [2, 2], rot: 0, R: 20, etq: 'aba' },
-        { id: 'R4', tipo: 'resistencia', p: [6, 2], rot: 0, R: 30, etq: 'aba' },
-        { id: 'S', tipo: 'interruptor', p: [4, 5], rot: 270, cerrado: false, etq: 'der' },
-        { id: 'G', tipo: 'amperimetro', p: [4, 3], rot: 270, etq: 'der' },
-        { id: 'E', tipo: 'bateria', p: [4, -1], rot: 180, E: 6, r: 0, etq: 'aba' },
+        { id: 'R', tipo: 'resistencia', p: [8, 6], rot: 0, R: 15, etq: 'arr' },
+        { id: 'R3', tipo: 'resistencia', p: [2, 2], rot: 0, R: 20, etq: 'arr' },
+        { id: 'R4', tipo: 'resistencia', p: [8, 2], rot: 0, R: 30, etq: 'arr' },
+        { id: 'S', tipo: 'interruptor', p: [5, 5], rot: 270, cerrado: false, etq: 'der' },
+        { id: 'G', tipo: 'amperimetro', p: [5, 3], rot: 270, etq: 'der' },
+        { id: 'E', tipo: 'bateria', p: [5, -1], rot: 180, E: 6, r: 0, etq: 'aba' },
         { id: 'T', tipo: 'tierra', p: [0, -1], rot: 0 },
       ],
-      cables: [[[1, 6], [0, 6], [0, 2], [1, 2]], [[3, 6], [5, 6]], [[3, 2], [5, 2]], [[7, 6], [8, 6], [8, 2], [7, 2]], [[0, 2], [0, -1], [3, -1]], [[5, -1], [8, -1], [8, 2]]],
-      nodos: { P: [4, 6], Q: [4, 2] },
+      cables: [[[1, 6], [0, 6], [0, 2], [1, 2]], [[3, 6], [7, 6]], [[3, 2], [7, 2]], [[9, 6], [10, 6], [10, 2], [9, 2]], [[0, 2], [0, -1], [4, -1]], [[6, -1], [10, -1], [10, 2]]],
+      nodos: { P: [5, 6], Q: [5, 2] },
       acciones: [{ t: 1, id: 'S', estado: true }],
       variables: {
         E: { sim: 'E', val: 6, min: 1, max: 12, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
@@ -155,6 +212,17 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       },
       graficas: [{ m: 'V', series: [{ nodo: 'P' }, { nodo: 'Q' }] }, { m: 'I', series: [{ id: 'G' }, { id: 'R' }] }, { m: 'barrido', id: 'G', interruptor: 'S', variable: 'R' }],
       sel: 'G',
+      nota: 'Pregunta corta reconstruida de memoria (el banco no trae opciones): por S no pasa corriente al cerrarlo, así que el puente está equilibrado. El galvanómetro G en serie con S lo comprueba; la gráfica de barrido muestra su corriente contra R con S cerrado.',
+      examen: X => {
+        const R1 = X.el('R1').R, R3 = X.el('R3').R, R4 = X.el('R4').R, tS = X.accion('S', true), kG = X.k('G');
+        // R de equilibrio: la que anula la corriente de G con S cerrado (bisección sobre el motor)
+        const Ig = R => { const c = X.circuito(); c.componentes.find(e => e.id === 'R').R = R; const op = puntoOperacion(c, { estados: { S: true } }); return op.I[op.ids.indexOf('G')]; };
+        const Req = X.cero(Ig, 1e-3 * R1 * R4 / R3, 1e3 * R1 * R4 / R3);
+        return [
+          { n: '(3)', etq: `${S('R')}<sub class="r">equilibrio</sub>`, valor: Req, esperado: R1 * R4 / R3, u: 'Ω', formula: 'R₁R₄/R₃: 10/20 = R/30', t: 0, tol: 1e-9 },
+          { n: '', etq: S('I', 'G'), valor: X.en(X.dur).I[kG], esperado: Ig(X.el('R').R), u: 'A', formula: 'nula si R = R₁R₄/R₃', t: tS },
+        ];
+      },
     },
     {
       clave: 'bombilla', titulo: 'Bombilla no lineal y recta de carga', tipo: 'Ejemplo', duracion: 6, dt: 0.01,
@@ -176,6 +244,275 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       },
       graficas: [{ m: 'V', series: [{ id: 'B' }] }, { m: 'I', series: [{ id: 'B' }, { id: 'C' }, { id: 'R' }] }, { m: 'iv', id: 'B', fuente: 'E', serie: 'R' }],
       sel: 'B',
+    },
+    {
+      clave: 'ohm', titulo: 'Ley de Ohm con voltímetro y amperímetro', tipo: 'Tutorial', duracion: 4, dt: 0.01,
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 3], rot: 270, E: 6, r: 0, etq: 'izq' },
+        { id: 'A', tipo: 'amperimetro', p: [2, 6], rot: 0, etq: 'arr' },
+        { id: 'R', tipo: 'resistencia', p: [5, 3], rot: 270, R: 100, etq: 'izq' },
+        { id: 'V', tipo: 'voltimetro', p: [8, 3], rot: 270, etq: 'der' },
+        { id: 'S', tipo: 'interruptor', p: [2, 0], rot: 0, cerrado: false, etq: 'aba' },
+        { id: 'T', tipo: 'tierra', p: [0, 0], rot: 0 },
+      ],
+      cables: [[[0, 4], [0, 6], [1, 6]], [[3, 6], [8, 6], [8, 4]], [[5, 6], [5, 4]], [[5, 2], [5, 0], [3, 0]], [[8, 2], [8, 0], [5, 0]], [[1, 0], [0, 0], [0, 2]]],
+      nodos: {},
+      acciones: [{ t: 0.5, id: 'S', estado: true }],
+      variables: {
+        E: { sim: 'E', val: 6, min: 1, max: 12, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
+        R: { sim: 'R', val: 100, min: 10, max: 500, paso: 10, u: 'Ω', factor: 1, liga: [['R', 'R']] },
+      },
+      graficas: [{ m: 'I', series: [{ id: 'A' }] }, { m: 'V', series: [{ id: 'V' }] }, { m: 'barrido', id: 'A', interruptor: 'S', variable: 'R' }],
+      nota: 'El amperímetro A va en serie y mide la corriente que atraviesa R; el voltímetro V, en paralelo con R, mide su voltaje. Los dos son ideales: no cambian el circuito. Al cerrar S, V/I es R; mueve R y la corriente sigue la hipérbola E/R.',
+    },
+    {
+      clave: 'comparten', titulo: 'Dos capacitores que comparten carga', tipo: 'Ejemplo', duracion: 4, dt: 0.01,
+      elementos: [
+        { id: 'C1', tipo: 'capacitor', p: [2, 3], rot: 270, C: 1e-3, q0: 12e-3, etq: 'izq' },
+        { id: 'S', tipo: 'interruptor', p: [4, 5], rot: 0, cerrado: false, etq: 'arr' },
+        { id: 'C2', tipo: 'capacitor', p: [6, 3], rot: 270, C: 2e-3, q0: 0, etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [4, 1], rot: 0 },
+      ],
+      cables: [[[2, 4], [2, 5], [3, 5]], [[5, 5], [6, 5], [6, 4]], [[2, 2], [2, 1], [6, 1], [6, 2]]],
+      nodos: {},
+      acciones: [{ t: 1, id: 'S', estado: true }],
+      variables: {
+        q0: { sim: 'q', sub: '0', val: 12, min: 1, max: 30, paso: 0.5, u: 'mC', factor: 1e-3, liga: [['C1', 'q0']] },
+        C1: { sim: 'C', sub: '1', val: 1, min: 0.2, max: 5, paso: 0.1, u: 'mF', factor: 1e-3, liga: [['C1', 'C']] },
+        C2: { sim: 'C', sub: '2', val: 2, min: 0.2, max: 5, paso: 0.1, u: 'mF', factor: 1e-3, liga: [['C2', 'C']] },
+      },
+      graficas: [{ m: 'V', series: [{ id: 'C1' }, { id: 'C2' }] }, { m: 'q', series: [{ id: 'C1' }, { id: 'C2' }] }, { m: 'U', series: [{ id: 'C1' }, { id: 'C2' }] }],
+      nota: 'C₁ empieza con la carga q₀ y C₂ descargado. Al cerrar S la carga total se conserva y los dos quedan al voltaje q₀/(C₁ + C₂). La energía no: en modo ideal se pierden ½·C₁C₂/(C₁ + C₂)·V₀² de golpe (la tabla de eventos lo registra); en modo realista, la misma energía se va como calor en los cables.',
+    },
+    // ---------------------------------------------------- MEXT · E3 redes de capacitores
+    {
+      clave: 'mext-2014-1-4', titulo: 'Capacitores en paralelo y en serie', tipo: 'MEXT', anio: '2014 1-(4)', duracion: 4, dt: 0.01,
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 3], rot: 270, E: 12, r: 0, etq: 'izq' },
+        { id: 'C1', tipo: 'capacitor', p: [3, 5], rot: 270, C: 1e-3, q0: 0, etq: 'izq' },
+        { id: 'C2', tipo: 'capacitor', p: [7, 5], rot: 270, C: 2e-3, q0: 0, etq: 'der' },
+        { id: 'C3', tipo: 'capacitor', p: [5, 2], rot: 270, C: 3e-3, q0: 0, etq: 'der' },
+        { id: 'S', tipo: 'interruptor', p: [2, 0], rot: 0, cerrado: false, etq: 'aba' },
+        { id: 'T', tipo: 'tierra', p: [0, 0], rot: 0 },
+      ],
+      cables: [[[0, 4], [0, 7], [5, 7], [5, 6]], [[3, 6], [7, 6]], [[3, 4], [7, 4]], [[5, 4], [5, 3]], [[5, 1], [5, 0], [3, 0]], [[1, 0], [0, 0], [0, 2]]],
+      nodos: { A: [5, 4] },
+      acciones: [{ t: 1, id: 'S', estado: true }],
+      variables: {
+        E: { sim: 'E', val: 12, min: 1, max: 24, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
+        C1: { sim: 'C', sub: '1', val: 1, min: 0.5, max: 5, paso: 0.1, u: 'mF', factor: 1e-3, liga: [['C1', 'C']] },
+        C2: { sim: 'C', sub: '2', val: 2, min: 0.5, max: 5, paso: 0.1, u: 'mF', factor: 1e-3, liga: [['C2', 'C']] },
+        C3: { sim: 'C', sub: '3', val: 3, min: 0.5, max: 5, paso: 0.1, u: 'mF', factor: 1e-3, liga: [['C3', 'C']] },
+      },
+      graficas: [{ m: 'q', series: [{ id: 'C1' }, { id: 'C2' }, { id: 'C3' }] }, { m: 'V', series: [{ id: 'C1' }, { id: 'C3' }] }, { m: 'U', series: [{ id: 'C1' }, { id: 'C2' }, { id: 'C3' }] }],
+      sel: 'C1',
+      nota: 'Figura redibujada: C₁ ∥ C₂ en serie con C₃, la batería E y el interruptor S, todos descargados al principio. El examen es simbólico; la escena fija valores. La carga que atraviesa C₃ se reparte entre C₁ y C₂, que quedan al mismo voltaje. Sin resistencias, en modo ideal la carga llega al instante y se pierde la mitad del trabajo de la batería.',
+      examen: X => {
+        const E = X.el('E').E, C1 = X.el('C1').C, C2 = X.el('C2').C, C3 = X.el('C3').C, Ct = C1 + C2 + C3, tS = X.accion('S', true), s = X.en(X.dur);
+        return [
+          { n: '', etq: S('V', 'C1'), valor: s.v[X.k('C1')], esperado: C3 * E / Ct, u: 'V', formula: 'C₃E/(C₁ + C₂ + C₃), igual en C₁ y C₂', t: tS },
+          { n: '', etq: S('q', 'C3'), valor: s.q[X.k('C3')], esperado: (C1 + C2) * C3 * E / Ct, u: 'C', formula: '(C₁ + C₂)C₃E/(C₁ + C₂ + C₃)', t: tS },
+          { n: '(4)', etq: S('q', 'C1'), valor: s.q[X.k('C1')], esperado: C1 * C3 * E / Ct, u: 'C', formula: 'C₁C₃E/(C₁ + C₂ + C₃)', opcion: '(b)', t: tS },
+        ];
+      },
+    },
+    {
+      clave: 'mext-2013-p2', titulo: 'Tres capacitores y dos interruptores', tipo: 'MEXT', anio: '2013 P2', duracion: 12, dt: 0.01,
+      elementos: [
+        { id: 'V', tipo: 'bateria', p: [0, 2], rot: 270, E: 6, r: 0, etq: 'izq' },
+        { id: 'S1', tipo: 'interruptor', p: [0, 5], rot: 90, cerrado: false, etq: 'izq' },
+        { id: 'R1', tipo: 'resistencia', p: [2, 7], rot: 0, R: 2e5, etq: 'arr' },
+        { id: 'R2', tipo: 'resistencia', p: [6, 7], rot: 0, R: 2e5, etq: 'arr' },
+        { id: 'S2', tipo: 'interruptor', p: [8, 5], rot: 270, cerrado: false, etq: 'der' },
+        { id: 'C2', tipo: 'capacitor', p: [4, 4], rot: 270, C: 4e-6, q0: 0, etq: 'der' },
+        { id: 'C1', tipo: 'capacitor', p: [2, 0], rot: 180, C: 2e-6, q0: 0, etq: 'aba' },
+        { id: 'C3', tipo: 'capacitor', p: [6, 0], rot: 180, C: 2e-6, q0: 0, etq: 'aba' },
+        { id: 'T', tipo: 'tierra', p: [0, 0], rot: 0 },
+      ],
+      cables: [[[0, 3], [0, 4]], [[0, 6], [0, 7], [1, 7]], [[3, 7], [5, 7]], [[7, 7], [8, 7], [8, 6]], [[4, 7], [4, 5]], [[4, 3], [4, 0]], [[0, 1], [0, 0], [1, 0]], [[3, 0], [5, 0]], [[8, 4], [8, 0], [7, 0]]],
+      nodos: {},
+      acciones: [{ t: 0.5, id: 'S1', estado: true }, { t: 6, id: 'S1', estado: false }, { t: 6, id: 'S2', estado: true }],
+      variables: {
+        V: { sim: 'V', val: 6, min: 1, max: 12, paso: 0.5, u: 'V', factor: 1, liga: [['V', 'E']] },
+        C1: { sim: 'C', sub: '1', val: 2, min: 0.5, max: 5, paso: 0.1, u: 'µF', factor: 1e-6, liga: [['C1', 'C']] },
+        C2: { sim: 'C', sub: '2', val: 4, min: 0.5, max: 5, paso: 0.1, u: 'µF', factor: 1e-6, liga: [['C2', 'C']] },
+        C3: { sim: 'C', sub: '3', val: 2, min: 0.5, max: 5, paso: 0.1, u: 'µF', factor: 1e-6, liga: [['C3', 'C']] },
+        R: { sim: 'R', val: 200, min: 50, max: 300, paso: 10, u: 'kΩ', factor: 1e3, liga: [['R1', 'R'], ['R2', 'R']] },
+      },
+      graficas: [{ m: 'q', series: [{ id: 'C1' }, { id: 'C2' }, { id: 'C3' }] }, { m: 'I', series: [{ id: 'R1' }, { id: 'R2' }] }, { m: 'U', series: [{ id: 'C2' }, { id: 'C3' }] }],
+      sel: 'C3',
+      nota: 'Figura redibujada con los datos del examen: C₁ = C₃ = 2 µF, C₂ = 4 µF y V = 6 V. El enunciado no da R₁ ni R₂ (aquí 200 kΩ): solo fijan la rapidez de los transitorios, no las cargas ni las energías. S₁ carga C₂ y C₁ en serie; en t = 6 s, S₁ se abre y S₂ cierra el lazo C₂, R₂, C₃. C₁ queda aislado con su carga.',
+      examen: X => {
+        const V = X.el('V').E, C1 = X.el('C1').C, C2 = X.el('C2').C, C3 = X.el('C3').C, kR2 = X.k('R2');
+        const t1 = X.accion('S1', true), tA = X.accion('S1', false), t2 = X.accion('S2', true), s1 = X.en(tA), s = X.en(X.dur), sB = X.en(t2);
+        const q = V * C1 * C2 / (C1 + C2), qC = OPC_2013.map(([l, v]) => [l, v * 1e-6]);
+        return [
+          { n: '(1)', etq: S('q', 'C1'), valor: s1.q[X.k('C1')], esperado: q, u: 'C', formula: 'V·C₁C₂/(C₁ + C₂)', opciones: qC, t: t1 },
+          { n: '(2)', etq: S('V', 'C1'), valor: s1.v[X.k('C1')], esperado: q / C1, u: 'V', formula: 'q₁/C₁', opciones: OPC_2013, t: t1 },
+          { n: '(3)', etq: S('q', 'C3'), valor: s.q[X.k('C3')], esperado: q * C3 / (C2 + C3), u: 'C', formula: 'q₂·C₃/(C₂ + C₃): C₂ reparte su carga q₂ = q₁', opciones: qC, t: t2 },
+          { n: '(4)', etq: `${S('U', 'C2')} + ${S('U', 'C3')}`, valor: s.U[X.k('C2')] + s.U[X.k('C3')], esperado: q * q / (2 * (C2 + C3)), u: 'J', formula: 'q₂²/(2(C₂ + C₃))', opciones: qC, t: t2 },
+          { n: '(5)', etq: S('Q', 'R2'), valor: s.Q[kR2] - sB.Q[kR2], esperado: q * q / (2 * C2) - q * q / (2 * (C2 + C3)), u: 'J', formula: 'q₂²/2C₂ − q₂²/(2(C₂ + C₃))', opciones: qC, t: t2 },
+        ];
+      },
+    },
+    {
+      clave: 'mext-2007-p2', titulo: 'Placa conductora en un capacitor', tipo: 'MEXT', anio: '2007 P2', duracion: 10, dt: 0.01,
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 3], rot: 270, E: 10, r: 0, etq: 'izq' },
+        { id: 'S', tipo: 'interruptor', p: [2, 6], rot: 0, cerrado: false, etq: 'arr' },
+        { id: 'C', tipo: 'capacitor', p: [5, 3], rot: 270, C: 1e-3, q0: 0, etq: 'izq', placa: { e: 1 / 3, f: [[1.5, 0], [4.5, 1], [6.5, 1], [9.5, 0]] } },
+        { id: 'T', tipo: 'tierra', p: [0, 0], rot: 0 },
+      ],
+      cables: [[[0, 4], [0, 6], [1, 6]], [[3, 6], [5, 6], [5, 4]], [[5, 2], [5, 0], [0, 0], [0, 2]]],
+      nodos: {},
+      acciones: [{ t: 0.5, id: 'S', estado: true }, { t: 5.5, id: 'S', estado: false }],
+      variables: {
+        E: { sim: 'E', val: 10, min: 1, max: 20, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
+        C: { sim: 'C', val: 1, min: 0.2, max: 5, paso: 0.1, u: 'mF', factor: 1e-3, liga: [['C', 'C']] },
+      },
+      graficas: [{ m: 'q', series: [{ id: 'C' }] }, { m: 'V', series: [{ id: 'C' }] }, { m: 'U', series: [{ id: 'C' }] }],
+      sel: 'C',
+      nota: 'La parte de circuito del problema (el campo entre las placas está en Electrostática · Conductores y dieléctricos). Con S cerrado entra despacio una placa conductora de espesor d/3 y la capacidad pasa de C a 3C/2; después S se abre y la placa sale. El trabajo de la fuerza que mueve la placa queda en el registro de energía. El examen es simbólico; la escena fija E = 10 V y C = 1 mF.',
+      examen: X => {
+        const E = X.el('E').E, el = X.el('C'), C = el.C, kC = X.k('C'), kE = X.k('E'), k = 1 / (1 - el.placa.e);
+        const [ent, sal] = X.tramosPlaca(el.placa), a = X.en(ent[0]), b = X.en(ent[1]), c = X.en(sal[0]), d = X.en(sal[1]);
+        return [
+          { n: '(1)', etq: `${S('C')}′`, valor: b.q[kC] / b.v[kC], esperado: k * C, u: 'F', formula: 'C·d/(d − d/3) = 3C/2', opcion: '(e)', t: ent[1] },
+          { n: '(2)', etq: `Δ${S('q')}`, valor: b.q[kC] - a.q[kC], esperado: (k - 1) * C * E, u: 'C', formula: 'CE/2', opcion: '(i)', t: ent[1] },
+          { n: '(3)', etq: `Δ${S('U')}`, valor: b.U[kC] - a.U[kC], esperado: (k - 1) * C * E * E / 2, u: 'J', formula: 'CE²/4', opcion: '(u)', t: ent[1] },
+          { n: '(4)', etq: S('W', 'E'), valor: b.W[kE] - a.W[kE], esperado: (k - 1) * C * E * E, u: 'J', formula: 'E·Δq = CE²/2', opcion: '(w)', t: ent[1] },
+          { n: '(5)', etq: S('W', 'F'), valor: b.W[kC] - a.W[kC], esperado: -(k - 1) * C * E * E / 2, u: 'J', formula: 'ΔU menos el trabajo de la batería = −CE²/4: la placa es atraída', opcion: '(n)', t: ent[1] },
+          { n: '(6)', etq: S('W', 'F'), valor: d.W[kC] - c.W[kC], esperado: k * (k - 1) * C * E * E / 2, u: 'J', formula: 'carga fija 3CE/2: ΔU = 3CE²/8', opcion: '(v)', t: sal[1] },
+        ];
+      },
+    },
+    // ---------------------------------------------------- MEXT · E4 corriente continua y RC
+    {
+      clave: 'mext-2012-1-2', titulo: 'Capacitor en paralelo con R₂', tipo: 'MEXT', anio: '2012 1-(2)', duracion: 8, dt: 0.01,
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 3], rot: 270, E: 6, r: 0, etq: 'izq' },
+        { id: 'R1', tipo: 'resistencia', p: [2, 6], rot: 0, R: 1000, etq: 'arr' },
+        { id: 'R2', tipo: 'resistencia', p: [5, 3], rot: 270, R: 2000, etq: 'izq' },
+        { id: 'C', tipo: 'capacitor', p: [8, 3], rot: 270, C: 500e-6, q0: 0, etq: 'der' },
+        { id: 'S', tipo: 'interruptor', p: [2, 0], rot: 0, cerrado: false, etq: 'aba' },
+        { id: 'T', tipo: 'tierra', p: [0, 0], rot: 0 },
+      ],
+      cables: [[[0, 4], [0, 6], [1, 6]], [[3, 6], [8, 6], [8, 4]], [[5, 6], [5, 4]], [[5, 2], [5, 0]], [[8, 2], [8, 0], [3, 0]], [[1, 0], [0, 0], [0, 2]]],
+      nodos: {},
+      acciones: [{ t: 0.5, id: 'S', estado: true }],
+      variables: {
+        E: { sim: 'E', val: 6, min: 1, max: 12, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
+        R1: { sim: 'R', sub: '1', val: 1, min: 0.2, max: 5, paso: 0.1, u: 'kΩ', factor: 1e3, liga: [['R1', 'R']] },
+        R2: { sim: 'R', sub: '2', val: 2, min: 0.2, max: 5, paso: 0.1, u: 'kΩ', factor: 1e3, liga: [['R2', 'R']] },
+        C: { sim: 'C', val: 500, min: 100, max: 500, paso: 10, u: 'µF', factor: 1e-6, liga: [['C', 'C']] },
+      },
+      graficas: [{ m: 'q', series: [{ id: 'C' }] }, { m: 'I', series: [{ id: 'R1' }, { id: 'R2' }, { id: 'C' }] }, { m: 'V', series: [{ id: 'C' }, { id: 'R1' }] }],
+      sel: 'C',
+      nota: 'Figura redibujada: R₁ en serie con R₂ ∥ C, la batería E y el interruptor S. El examen es simbólico; la escena fija valores. Al cerrar S, C empieza descargado y se lleva casi toda la corriente; en el estacionario ya no deja pasar corriente y su voltaje es el de R₂.',
+      examen: X => {
+        const E = X.el('E').E, R1 = X.el('R1').R, R2 = X.el('R2').R, C = X.el('C').C, tS = X.accion('S', true), s = X.en(X.dur);
+        return [
+          { n: '', etq: S('I', 'R1'), valor: s.I[X.k('R1')], esperado: E / (R1 + R2), u: 'A', formula: 'E/(R₁ + R₂), la misma en R₂', t: tS },
+          { n: '', etq: S('V', 'C'), valor: s.v[X.k('C')], esperado: R2 * E / (R1 + R2), u: 'V', formula: 'R₂E/(R₁ + R₂)', t: tS },
+          { n: '(2)', etq: S('q', 'C'), valor: s.q[X.k('C')], esperado: R2 * C * E / (R1 + R2), u: 'C', formula: 'R₂CE/(R₁ + R₂)', opcion: '(f)', t: tS },
+        ];
+      },
+    },
+    {
+      clave: 'mext-2010-4c', titulo: 'Bombilla y resistencia de 5 Ω', tipo: 'MEXT', anio: '2010 4-C', duracion: 2, dt: 0.01,
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 3], rot: 270, E: 12, r: 0, etq: 'izq' },
+        { id: 'B', tipo: 'bombilla', p: [4, 5], rot: 270, Vn: 6, Pn: 18, frio: 4, etq: 'der' },
+        { id: 'R', tipo: 'resistencia', p: [4, 2], rot: 270, R: 5, etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [0, 0], rot: 0 },
+      ],
+      cables: [[[0, 4], [0, 7], [4, 7], [4, 6]], [[4, 4], [4, 3]], [[4, 1], [4, 0], [0, 0], [0, 2]]],
+      nodos: {},
+      acciones: [],
+      variables: {
+        E: { sim: 'E', val: 12, min: 2, max: 24, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
+        R: { sim: 'R', val: 5, min: 1, max: 20, paso: 0.5, u: 'Ω', factor: 1, liga: [['R', 'R']] },
+      },
+      graficas: [{ m: 'iv', id: 'B', fuente: 'E', serie: 'R' }, { m: 'V', series: [{ id: 'B' }, { id: 'R' }] }, { m: 'I', series: [{ id: 'B' }] }],
+      sel: 'B',
+      nota: 'La curva I-V de la figura del examen pasa por (1 V, 1.33 A), (2 V, 2 A), (6 V, 3 A) y (12 V, 3.43 A): es I = 4V/(V + 2) A, el modelo de filamento de la bombilla con 0.5 Ω en frío (6 V y 18 W nominales). La recta de carga 12 V = V + 5 Ω·I la corta en el punto de operación.',
+      examen: X => {
+        const E = X.el('E').E, R = X.el('R').R, curva = curvaBombilla(X.el('B')), kB = X.k('B'), s = X.en(X.dur);
+        const Vop = X.cero(V => V + R * curva.I(V) - E, 0, E), Iop = curva.I(Vop);
+        return [
+          { n: '', etq: S('V', 'B'), valor: s.v[kB], esperado: Vop, u: 'V', formula: 'corte de la recta de carga E = V + R·I con la curva', t: 0 },
+          { n: '', etq: S('I'), valor: s.I[kB], esperado: Iop, u: 'A', formula: 'I(V) de la curva en ese punto', t: 0 },
+          { n: 'Q3', etq: S('P', 'B'), valor: s.v[kB] * s.I[kB], esperado: Vop * Iop, u: 'W', formula: 'V·I en el punto de operación', opciones: listaOpc([1, 4, 10, 18, 34, 42]), t: 0 },
+        ];
+      },
+    },
+    {
+      clave: 'mext-2007-1-2', titulo: 'Puente de resistencias con voltímetro', tipo: 'MEXT', anio: '2007 1-(2)', duracion: 2, dt: 0.01,
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 4], rot: 270, E: 6, r: 0, etq: 'izq' },
+        { id: 'R1', tipo: 'resistencia', p: [3, 6], rot: 270, R: 20, etq: 'izq' },
+        { id: 'R3', tipo: 'resistencia', p: [3, 2], rot: 270, R: 10, etq: 'izq' },
+        { id: 'R2', tipo: 'resistencia', p: [7, 6], rot: 270, R: 10, etq: 'der' },
+        { id: 'R4', tipo: 'resistencia', p: [7, 2], rot: 270, R: 20, etq: 'der' },
+        { id: 'Vm', tipo: 'voltimetro', p: [5, 4], rot: 180, etq: 'aba' },
+        { id: 'T', tipo: 'tierra', p: [5, 0], rot: 0 },
+      ],
+      cables: [[[0, 5], [0, 8], [7, 8], [7, 7]], [[3, 8], [3, 7]], [[3, 5], [3, 3]], [[7, 5], [7, 3]], [[3, 4], [4, 4]], [[6, 4], [7, 4]], [[3, 1], [3, 0]], [[7, 1], [7, 0], [0, 0], [0, 3]]],
+      nodos: { P: [3, 4], Q: [7, 4] },
+      acciones: [],
+      variables: {
+        E: { sim: 'E', val: 6, min: 1, max: 12, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
+        R1: { sim: 'R', sub: '1', val: 20, min: 1, max: 50, paso: 0.5, u: 'Ω', factor: 1, liga: [['R1', 'R']] },
+        R2: { sim: 'R', sub: '2', val: 10, min: 1, max: 50, paso: 0.5, u: 'Ω', factor: 1, liga: [['R2', 'R']] },
+        R3: { sim: 'R', sub: '3', val: 10, min: 1, max: 50, paso: 0.5, u: 'Ω', factor: 1, liga: [['R3', 'R']] },
+        R4: { sim: 'R', sub: '4', val: 20, min: 1, max: 50, paso: 0.5, u: 'Ω', factor: 1, liga: [['R4', 'R']] },
+      },
+      graficas: [{ m: 'barrido', id: 'Vm', variable: 'R1' }, { m: 'V', series: [{ nodo: 'P' }, { nodo: 'Q' }] }, { m: 'I', series: [{ id: 'R1' }, { id: 'R2' }] }],
+      sel: 'Vm',
+      nota: 'Figura redibujada como rectángulo: R₁ y R₃ a la izquierda, R₂ y R₄ a la derecha y el voltímetro, ideal (de resistencia muy grande), entre los puntos medios P y Q: marca el potencial de Q menos el de P. El examen es simbólico; la escena fija valores. La lectura se anula cuando R₁R₄ = R₂R₃: el puente queda equilibrado.',
+      examen: X => {
+        const E = X.el('E').E, R1 = X.el('R1').R, R2 = X.el('R2').R, R3 = X.el('R3').R, R4 = X.el('R4').R, s = X.en(X.dur);
+        return [
+          { n: '', etq: S('V', 'P'), valor: X.nodo(s, 'P'), esperado: R3 * E / (R1 + R3), u: 'V', formula: 'R₃E/(R₁ + R₃)', t: 0 },
+          { n: '', etq: S('V', 'Q'), valor: X.nodo(s, 'Q'), esperado: R4 * E / (R2 + R4), u: 'V', formula: 'R₄E/(R₂ + R₄)', t: 0 },
+          { n: '(2)', etq: S('V'), valor: s.v[X.k('Vm')], esperado: (R1 * R4 - R2 * R3) / ((R1 + R3) * (R2 + R4)) * E, u: 'V', formula: '(R₁R₄ − R₂R₃)E/((R₁ + R₃)(R₂ + R₄))', opcion: '(b)', t: 0, escala: E },
+        ];
+      },
+    },
+    {
+      clave: 'mext-2006-p2', titulo: 'Carga de C y un segundo camino', tipo: 'MEXT', anio: '2006 P2', duracion: 2e-4, dt: 2e-7,
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 3], rot: 270, E: 6, r: 0, etq: 'izq' },
+        { id: 'R1', tipo: 'resistencia', p: [2, 6], rot: 0, R: 4, etq: 'arr' },
+        { id: 'C', tipo: 'capacitor', p: [5, 3], rot: 270, C: 2e-6, q0: 0, etq: 'izq' },
+        { id: 'R2', tipo: 'resistencia', p: [8, 4], rot: 270, R: 2, etq: 'der' },
+        { id: 'S1', tipo: 'interruptor', p: [2, 0], rot: 0, cerrado: false, etq: 'aba' },
+        { id: 'S2', tipo: 'interruptor', p: [7, 0], rot: 0, cerrado: false, etq: 'aba' },
+        { id: 'T', tipo: 'tierra', p: [0, 0], rot: 0 },
+      ],
+      cables: [[[0, 4], [0, 6], [1, 6]], [[3, 6], [8, 6], [8, 5]], [[5, 6], [5, 4]], [[5, 2], [5, 0]], [[3, 0], [6, 0]], [[8, 0], [8, 3]], [[1, 0], [0, 0], [0, 2]]],
+      nodos: {},
+      acciones: [{ t: 1e-5, id: 'S1', estado: true }, { t: 1.1e-4, id: 'S2', estado: true }],
+      variables: {
+        E: { sim: 'E', val: 6, min: 1, max: 12, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
+        R1: { sim: 'R', sub: '1', val: 4, min: 2, max: 5, paso: 0.5, u: 'Ω', factor: 1, liga: [['R1', 'R']] },
+        R2: { sim: 'R', sub: '2', val: 2, min: 0.5, max: 8, paso: 0.5, u: 'Ω', factor: 1, liga: [['R2', 'R']] },
+        C: { sim: 'C', val: 2, min: 1, max: 2.5, paso: 0.1, u: 'µF', factor: 1e-6, liga: [['C', 'C']] },
+      },
+      graficas: [{ m: 'I', series: [{ id: 'R1' }, { id: 'C' }, { id: 'R2' }] }, { m: 'q', series: [{ id: 'C' }] }, { m: 'V', series: [{ id: 'C' }] }],
+      sel: 'C',
+      nota: 'Figura redibujada con los datos del examen: E = 6 V, R₁ = 4 Ω, R₂ = 2 Ω y C = 2 µF. Con R₁C = 8 µs, la escena dura 200 µs y se reproduce a cámara lenta. S₁ se cierra en t = 10 µs; S₂, en t = 110 µs, con C ya cargado.',
+      examen: X => {
+        const E = X.el('E').E, R1 = X.el('R1').R, R2 = X.el('R2').R, C = X.el('C').C, kC = X.k('C'), kR1 = X.k('R1');
+        const t1 = X.accion('S1', true), t2 = X.accion('S2', true), a = X.en(t1), b = X.en(t2), s = X.en(X.dur);
+        return [
+          { n: '(1)', etq: S('I', 'R1'), valor: X.despues(t1).I[kR1], esperado: E / R1, u: 'A', formula: 'E/R₁: C descargado es un cortocircuito', opciones: listaOpc([1.5, 3, 6, 12, 24]), t: t1 },
+          { n: '(2)', etq: S('q', 'C'), valor: b.q[kC], esperado: C * E, u: 'C', formula: 'CE', opciones: listaOpc([6, 12, 36, 72, 144], 1e-6), t: t1 },
+          { n: '(3)', etq: S('W', 'E'), valor: b.W[X.k('E')] - a.W[X.k('E')], esperado: C * E * E, u: 'J', formula: 'qE = CE²', opciones: listaOpc([6, 12, 36, 72, 144], 1e-6), t: t1 },
+          { n: '(4)', etq: S('Q', 'R1'), valor: b.Q[kR1] - a.Q[kR1], esperado: C * E * E / 2, u: 'J', formula: 'CE² − CE²/2 = CE²/2', opciones: listaOpc([6, 12, 36, 72, 144], 1e-6), t: t1 },
+          { n: '(5)', etq: S('q', 'C'), valor: s.q[kC], esperado: C * E * R2 / (R1 + R2), u: 'C', formula: 'C·R₂E/(R₁ + R₂)', opciones: listaOpc([4, 6, 12, 24, 36], 1e-6), t: t2 },
+        ];
+      },
     },
   ];
   const copia = o => JSON.parse(JSON.stringify(o));
@@ -253,12 +590,74 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       for (const [k] of CAT[el.tipo].params) if (el[k] != null) c[k] = el[k];
       if (el.tipo === 'interruptor') c.cerrado = !!el.cerrado;
       if (el.tipo === 'interruptor-3') c.posicion = el.posicion || null;
+      if (el.tipo === 'capacitor' && el.placa) c.perfil = perfilPlaca(el.placa);
       return c;
     });
     for (const s of tramos) componentes.push({ id: s.id, tipo: 'cable', nodos: [clave(s.a), clave(s.b)] });
     const uniones = [...usos.entries()].filter(([, n]) => n >= 3).map(([k]) => k.split(',').map(Number));
     for (const p of Object.values(ESC.nodos)) if (!uniones.some(u => clave(u) === clave(p))) uniones.push(p);
     RED = { tramos, geo, uniones, circuito: { componentes, acciones: ESC.acciones.map(a => ({ ...a })) } };
+  }
+
+  // Placa conductora de espesor e·d que entra en un capacitor: fracción
+  // metida f(t), lineal a tramos. Con la placa metida una fracción f, el
+  // capacitor son dos en paralelo: C·(1 − f) + C·f/(1 − e).
+  const fraccionPlaca = (placa, tt) => {
+    const p = placa.f; if (tt <= p[0][0]) return p[0][1];
+    for (let i = 0; i + 1 < p.length; i++) if (tt <= p[i + 1][0]) return p[i][1] + (p[i + 1][1] - p[i][1]) * (tt - p[i][0]) / (p[i + 1][0] - p[i][0]);
+    return p[p.length - 1][1];
+  };
+  const perfilPlaca = placa => placa.f.map(([tt, f]) => [tt, 1 + f * (1 / (1 - placa.e) - 1)]);
+  // Tramos en que la placa se mueve: [[t₀, t₁] de entrada, [t₂, t₃] de salida, …]
+  const tramosPlaca = placa => placa.f.slice(1).map((q, i) => [placa.f[i][0], q[0], q[1] - placa.f[i][1]]).filter(([, , d]) => d !== 0).map(([a, b]) => [a, b]);
+  function textoPlaca(placa) {
+    const tr = placa.f.slice(1).map((q, i) => [placa.f[i], q]).filter(([a, b]) => a[1] !== b[1]);
+    const mov = tr.map(([a, b]) => `${b[1] > a[1] ? 'entra' : 'sale'} de t = ${Tf(a[0], 3)} a ${Tf(b[0], 3)}`).join('; ');
+    return `Placa conductora de espesor ${Math.abs(placa.e - 1 / 3) < 1e-9 ? 'd/3' : `${fmt(placa.e, 3)}·d`}${mov ? `: ${mov}` : ''}. Con la placa dentro, la capacidad es ${fmt(1 / (1 - placa.e), 3)} veces C.`;
+  }
+
+  // ---------------------------------------------------------------------
+  // Examen: acceso a la simulación para las filas de cada escena MEXT
+  // ---------------------------------------------------------------------
+  function contextoExamen() {
+    const ms = SIM.muestras;
+    const el = id => { const e = elemento(id); if (!e) throw new Error(`Falta ${id}`); return e; };
+    const k = id => { const i = X.idx.get(id); if (i == null) throw new Error(`Falta ${id}`); return i; };
+    const acciones = (id, estado) => ESC.acciones.filter(a => a.id === id && String(a.estado) === String(estado)).map(a => a.t);
+    return {
+      el, k, dur: ESC.duracion, muestras: ms, acciones,
+      accion: (id, estado) => { const ts = acciones(id, estado); if (!ts.length) throw new Error(`Sin acción de ${id}`); return ts[0]; },
+      en: tt => estadoEn(SIM, tt),
+      // La primera muestra después de un evento (justo después de conmutar)
+      despues: tt => ms.find(m => m.t > tt + 1e-12 * ESC.duracion) || ms[ms.length - 1],
+      nodo: (s, n) => { if (!ESC.nodos[n]) throw new Error(`Falta el nodo ${n}`); return s.V[X.nodo(clave(ESC.nodos[n]))]; },
+      circuito: () => copia(RED.circuito),
+      tramosPlaca: placa => { const tr = tramosPlaca(placa); if (tr.length < 2) throw new Error('La placa no entra y sale'); return tr; },
+      // Cero de f en [a, b] por bisección (f cambia de signo)
+      cero: (f, a, b) => {
+        let fa = f(a); if (fa === 0) return a;
+        if (Math.sign(fa) === Math.sign(f(b))) return NaN;
+        for (let i = 0; i < 200 && b - a > 1e-13 * Math.abs(b); i++) { const m = (a + b) / 2, fm = f(m); if (fm === 0) return m; if (Math.sign(fm) === Math.sign(fa)) { a = m; fa = fm; } else b = m; }
+        return (a + b) / 2;
+      },
+      // Oscilación de una corriente después de t₀: amplitud y periodo (por los cruces por cero)
+      oscilacion: (kk, t0) => {
+        let max = 0; const cruces = []; let ant = null;
+        for (const m of ms) {
+          if (m.t <= t0) continue;
+          max = Math.max(max, Math.abs(m.I[kk]));
+          if (ant && ant.I[kk] !== 0 && Math.sign(ant.I[kk]) !== Math.sign(m.I[kk])) cruces.push(ant.t + (m.t - ant.t) * ant.I[kk] / (ant.I[kk] - m.I[kk]));
+          ant = m;
+        }
+        const T = cruces.length >= 3 ? cruces[2] - cruces[0] : cruces.length === 2 ? 2 * (cruces[1] - cruces[0]) : NaN;
+        return { max, T };
+      },
+    };
+  }
+  function calcularExamen() {
+    const base = ESCENARIOS.find(e => e.clave === ESC.clave);
+    if (!SIM || !base || !base.examen) return [];
+    try { return base.examen(contextoExamen()); } catch { return []; }
   }
 
   // ---------------------------------------------------------------------
@@ -289,13 +688,17 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         if (el.tipo === 'resistencia' || el.tipo === 'reostato') Pmax = Math.max(Pmax, Math.abs(m.v[k] * m.I[k]));
       }
     }
-    X = { idx, nodo, fases, Vmax, Imax, qRef, Pmax, kPuntos: 1.6 / Imax, barrido: null };
+    // kPuntos: velocidad de los puntos de corriente en tiempo de pantalla (cámara lenta incluida)
+    X = { idx, nodo, fases, Vmax, Imax, qRef, Pmax, kPuntos: 1.6 / (Imax * ritmo()), barrido: null, examen: [] };
     // Escala del registro de energía: la mayor cantidad de toda la corrida
     let Emax = 1e-15;
     for (const m of ms) { const b = balance(SIM, m); Emax = Math.max(Emax, Math.abs(b.W), Math.abs(b.U), Math.abs(b.Q), Math.abs(m.perdidas)); }
     X.Emax = Emax;
+    X.examen = calcularExamen();
   }
   const estado = tt => (SIM ? estadoEn(SIM, tt) : null);
+  // Lectura de instrumento: por debajo de 10⁻⁹ de la escala es ruido de redondeo y marca 0
+  const limpio = (v, escala) => (Math.abs(v) <= 1e-9 * escala ? 0 : v);
   const iDe = id => X.idx.get(id);
 
   // Estado de un interruptor en el instante tt (inicial más acciones hasta tt)
@@ -320,7 +723,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   }
   function encuadrar() {
     tz.vista.encuadrar(extension(), { x: 0, y: 44, w: tz.w, h: tz.h - 88 }, 40);
-    tz.vista.escala = Math.min(tz.vista.escala, 90);
+    // Con el lienzo sin tamaño (panel oculto o ventana mínima) la escala saldría negativa
+    tz.vista.escala = Math.max(4, Math.min(tz.vista.escala, 90));
     const e = extension();
     tz.vista.ox = tz.w / 2 - tz.vista.escala * (e.x0 + e.x1) / 2;
     tz.vista.oy = 44 + (tz.h - 88) / 2 + tz.vista.escala * (e.y0 + e.y1) / 2;
@@ -383,6 +787,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       const nodos = RED.circuito.componentes.find(c => c.id === id).nodos;
       o.conectadas = { a: nodos[1] != null, b: nodos[2] != null, c: nodos[3] != null };
     }
+    if (el.tipo === 'capacitor' && el.placa) o.placa = { f: fraccionPlaca(el.placa, t), e: el.placa.e };
     if (k >= 0) {
       if (el.tipo === 'capacitor' && capas.cargas) { o.q = s.q[k]; o.qRef = X.qRef; }
       if (el.tipo === 'bombilla') o.brillo = Math.sqrt(Math.max(0, s.v[k] * s.I[k]) / el.Pn);
@@ -424,14 +829,14 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
 
   // Ficha del último evento durante un rato: qué pasó y cuánta energía se perdió
   function fichaEvento(s) {
-    const e = [...SIM.eventos].reverse().find(ev => ev.t <= t + 1e-9 && ev.t > 0);
-    if (!e || t - e.t > 1.5 || !e.acciones.length) return;
+    const e = [...SIM.eventos].reverse().find(ev => ev.t <= t + 1e-9 * ESC.duracion && ev.t > 0), dura = 1.5 * ritmo();
+    if (!e || t - e.t > dura || !e.acciones.length) return;
     const el = elemento(e.acciones[0].id); if (!el) return;
     const [x, y, w, h] = tz.circCaja(forma(el));
     // Anillo del evento junto al interruptor, del lado contrario a su etiqueta
     const lado = { arr: 'aba', aba: 'arr', izq: 'der', der: 'izq' }[el.etq || 'arr'];
     const [px, py] = { aba: [x + w / 2, y + h + 12], arr: [x + w / 2, y - 12], izq: [x - 12, y + h / 2], der: [x + w + 12, y + h / 2] }[lado];
-    const lineas = [[{ t: e.nombre, f: 'ui', tam: 11.5 }, { t: ' · ', f: 'num', tam: 11.5, color: 'texto-3' }, { t: 't', f: 'sim', tam: 13 }, { t: ' = ' + cantidad(e.t, 's'), f: 'num', tam: 11.5 }]];
+    const lineas = [[{ t: e.nombre, f: 'ui', tam: 11.5 }, { t: ' · ', f: 'num', tam: 11.5, color: 'texto-3' }, { t: 't', f: 'sim', tam: 13 }, { t: ' = ' + Tf(e.t), f: 'num', tam: 11.5 }]];
     if (e.perdida > 1e-15) lineas.push([{ t: 'Energía perdida ', f: 'ui', tam: 11.5 }, { t: valorCon(e.perdida, 'J'), f: 'num', tam: 11.5 }]);
     // Tamaño de la ficha y el sitio más despejado alrededor del anillo
     const c = tz.ctx;
@@ -444,10 +849,15 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       const fuera = Math.max(0, 8 - fx) + Math.max(0, fx + W - tz.w + 8) + Math.max(0, 52 - fy) + Math.max(0, fy + H - tz.h + 52);
       return area + 1e4 * fuera;
     };
-    const opciones = [[px + 16, py - H / 2], [px - 16 - W, py - H / 2], [px - W / 2, py + 16], [px - W / 2, py - 16 - H], [px + 16, py - H - 8], [px + 16, py + 8], [px - 16 - W, py - H - 8], [px - 16 - W, py + 8]];
+    // Junto al anillo primero; si todo lo cercano tapa algo, más lejos (con su línea guía)
+    const opciones = [];
+    for (const d of [16, 60, 110]) {
+      opciones.push([px + d, py - H / 2], [px - d - W, py - H / 2], [px - W / 2, py + d], [px - W / 2, py - d - H],
+        [px + d, py - H - 8], [px + d, py + 8], [px - d - W, py - H - 8], [px - d - W, py + 8]);
+    }
     let mejor = opciones[0], menor = Infinity;
     for (const o of opciones) { const v = solape(o); if (v < menor - 1) { menor = v; mejor = o; } }
-    c.save(); c.globalAlpha = Math.max(0.35, 1 - (t - e.t) / 1.5);
+    c.save(); c.globalAlpha = Math.max(0.35, 1 - (t - e.t) / dura);
     const [ax, ay] = tz.eventoAnillo([tz.vista.mx(px), tz.vista.my(py)]);
     const [fx, fy] = mejor;
     tz.ficha(fx, fy, lineas, { ancla: [ax + Math.sign(fx + W / 2 - ax) * 7, ay] });
@@ -529,6 +939,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         }
       }
       if (!CAT[el.tipo].params.length) props.insertAdjacentHTML('beforeend', `<p class="ayuda-fila" style="margin-left:0">${ES_INTERRUPTOR(el.tipo) ? 'Un clic sobre él en el lienzo lo acciona en el instante actual.' : 'Ideal: no altera el circuito.'}</p>`);
+      if (el.tipo === 'capacitor' && el.placa) props.insertAdjacentHTML('beforeend', `<p class="ayuda-fila" style="margin-left:0">${textoPlaca(el.placa)}</p>`);
       props.insertAdjacentHTML('beforeend', `<div class="fila"><span class="etq">Esquema</span><div style="display:flex;gap:4px"><button class="btn btn-secundario btn-compacto" id="p-rotar" data-ayuda="Girar 90°|Rotate|R"><svg class="ico"><use href="#i-rotar"/></svg>Girar</button><button class="btn btn-secundario btn-compacto" id="p-borrar" data-ayuda="Quitar del circuito|Delete|Supr"><svg class="ico"><use href="#i-borrar"/></svg>Quitar</button></div></div>`);
     } else if (cab) {
       props.innerHTML = `<div class="fila"><span class="etq">Esquema</span><div><button class="btn btn-secundario btn-compacto" id="p-borrar" data-ayuda="Quitar el cable|Delete|Supr"><svg class="ico"><use href="#i-borrar"/></svg>Quitar</button></div></div>`;
@@ -536,7 +947,10 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       props.innerHTML = fila('Conexiones', segmentado('p-modo', [['ideal', 'Ideales'], ['realista', 'Realistas']], ESC.modo), 'Ideales: la carga salta al instante y se registra la energía perdida. Realistas: cada tramo de cable y cada contacto tiene resistencia|Ideal / realistic wiring')
         + (ESC.modo === 'realista' ? fila('Cables', `<div class="campo"><input data-global="rCable" data-dim="resistencia" data-u="Ω" value="${numCampo(ESC.rCable)}"><span class="u">Ω</span></div>`, 'Resistencia de cada tramo de cable y de cada contacto cerrado|Wire resistance') : '')
         + fila('Inicio', segmentado('p-inicio', [['reposo', 'Cargas dadas'], ['estacionario', 'Estacionario']], ESC.inicio), 'Empezar con las cargas y corrientes iniciales de cada componente, o en el estado estacionario|Initial state')
-        + fila('Duración', `<div class="campo"><input data-global="duracion" data-dim="tiempo" data-u="s" value="${numCampo(ESC.duracion)}"><span class="u">s</span></div>`);
+        + fila('Duración', `<div class="campo"><input data-global="duracion" data-dim="tiempo" data-u="${UT()[1]}" value="${numCampo(ESC.duracion / UT()[0])}"><span class="u">${UT()[1]}</span></div>`);
+      // Nota de una escena que no es del examen (las del examen la llevan en su grupo)
+      const base = ESCENARIOS.find(e => e.clave === ESC.clave);
+      if (base && base.nota && ESC.tipo !== 'MEXT') props.insertAdjacentHTML('afterbegin', `<p class="ayuda-fila" style="margin:2px 0 8px">${base.nota}</p>`);
     }
     // Campos con unidades y expresiones
     props.querySelectorAll('input[data-param], input[data-global]').forEach(ent => campoConUnidad(ent));
@@ -565,7 +979,11 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         if (['R', 'C', 'L', 'Vn', 'Pn', 'rCable', 'duracion'].includes(k) && !(valor > 0)) throw new Error('Este valor tiene que ser positivo.');
         if (k === 'frio' && !(valor >= 1)) throw new Error('La resistencia en caliente es al menos la de frío: escribe un número ≥ 1.');
         if (k === 'r' && !(valor >= 0)) throw new Error('La resistencia interna no puede ser negativa.');
-        if (k === 'duracion') valor = Math.min(120, valor);
+        if (k === 'duracion') {
+          valor = Math.max(1e-6, Math.min(120, valor));
+          // Entre 200 y 20 000 muestras: el paso interno nunca supera el intervalo entre muestras
+          ESC.dt = Math.max(valor / 20000, Math.min(ESC.dt, valor / 200));
+        }
         if (ent.dataset.param) elSel()[k] = valor; else ESC[k] = valor;
         mostrarError(null); recalcular(); registrar(); inspector();
       } catch (e) { mostrarError(e.message); }
@@ -582,7 +1000,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const ops = el.tipo === 'interruptor' ? [['false', 'Abierto'], ['true', 'Cerrado']] : [['null', 'Abierto'], ['a', 'a'], ['b', 'b'], ['c', 'c']];
     const progs = ESC.acciones.filter(a => a.id === el.id);
     cont.innerHTML = fila('Estado', segmentado('a-estado', ops, String(e)), 'Cambiar el interruptor en el instante actual: queda como evento en la línea de tiempo|Switch now')
-      + `<div class="acciones-lista">${progs.length ? progs.map(a => `<div class="accion-prog"><span class="sim">t</span><span class="num">${cantidad(a.t, 's')}</span><span>${el.tipo === 'interruptor' ? (a.estado ? 'se cierra' : 'se abre') : a.estado ? `a la posición ${a.estado}` : 'se abre'}</span><button class="btn btn-icono btn-compacto" data-borrar="${ESC.acciones.indexOf(a)}" data-ayuda="Quitar esta acción|Remove action"><svg class="ico"><use href="#i-cerrar"/></svg></button></div>`).join('') : '<span class="ayuda-fila" style="margin:0">Sin acciones programadas.</span>'}</div>`;
+      + `<div class="acciones-lista">${progs.length ? progs.map(a => `<div class="accion-prog"><span class="sim">t</span><span class="num">${Tf(a.t)}</span><span>${el.tipo === 'interruptor' ? (a.estado ? 'se cierra' : 'se abre') : a.estado ? `a la posición ${a.estado}` : 'se abre'}</span><button class="btn btn-icono btn-compacto" data-borrar="${ESC.acciones.indexOf(a)}" data-ayuda="Quitar esta acción|Remove action"><svg class="ico"><use href="#i-cerrar"/></svg></button></div>`).join('') : '<span class="ayuda-fila" style="margin:0">Sin acciones programadas.</span>'}</div>`;
     $('#a-estado').addEventListener('click', ev => {
       const b = ev.target.closest('button'); if (!b) return;
       const v = b.dataset.v, val = v === 'true' ? true : v === 'false' ? false : v === 'null' ? null : v;
@@ -591,7 +1009,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     cont.querySelectorAll('[data-borrar]').forEach(b => b.addEventListener('click', () => {
       const a = ESC.acciones[+b.dataset.borrar];
       ESC.acciones.splice(+b.dataset.borrar, 1); recalcular(); registrar(); inspector();
-      avisar(`Se quita la acción de ${a.id} en t = ${cantidad(a.t, 's')}`);
+      avisar(`Se quita la acción de ${a.id} en t = ${Tf(a.t)}`);
     }));
   }
 
@@ -620,21 +1038,27 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     sel = s; inspector(); todo();
   }
 
-  const lectura = ([a, b, val, u]) => `<span class="sim">${a}${b ? `<sub class="r">${b}</sub>` : ''}</span><span class="v">${val}</span><span class="u">${u}</span>`;
+  // Lectura: símbolo en cursiva (o palabra en redonda, como «brillo»), valor y unidad
+  const lectura = ([a, b, val, u]) => `<span class="sim${/^[a-záéíóú]{4,}$/i.test(a) ? ' palabra' : ''}">${a}${b ? `<sub class="r">${b}</sub>` : ''}</span><span class="v">${val}</span><span class="u">${u}</span>`;
   function lecturas() {
     const s = estado(t), el = elSel();
-    $('#reloj').innerHTML = `<span class="sim">t</span>${fmt(t, 4).padStart(6, ' ')}<span class="u">s</span>`;
-    $('#lect-titulo').textContent = `Lecturas en t = ${fmt(t, 4)} s`;
-    $('#acc-titulo').textContent = `Acciones en t = ${fmt(t, 4)} s`;
+    const [ft, ut] = UT();
+    $('#reloj').innerHTML = `<span class="sim">t</span>${fmt(t / ft, 4).padStart(6, ' ')}<span class="u">${ut}</span>`;
+    $('#lect-titulo').textContent = `Lecturas en t = ${Tf(t)}`;
+    $('#acc-titulo').textContent = `Acciones en t = ${Tf(t)}`;
     const L = (a, b, v, u) => { const [x, uu] = enUnidad(v, u); return [a, b, fmt(x, 4), uu]; };
     let filas = [];
     if (s && el) {
-      const k = iDe(el.id), I = s.I[k], vv = s.v[k], P = vv * I;
+      // Lecturas de instrumento: lo que no llega a 10⁻⁹ de la escala de la corrida es 0
+      const k = iDe(el.id), I = limpio(s.I[k], X.Imax), vv = limpio(s.v[k], X.Vmax), P = vv * I;
       switch (el.tipo) {
         case 'bateria': filas = [L('V', 'bornes', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('W', '', s.W[k], 'J')]; if (el.r > 0) filas.push(L('Q', 'r', s.Q[k], 'J')); break;
         case 'fuente-corriente': filas = [L('I', '', I, 'A'), L('V', '', -vv, 'V'), L('W', '', s.W[k], 'J')]; break;
         case 'resistencia': case 'reostato': filas = [L('V', '', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('Q', '', s.Q[k], 'J')]; break;
-        case 'capacitor': filas = [L('V', '', vv, 'V'), L('q', '', s.q[k], 'C'), L('I', '', I, 'A'), L('U', 'C', s.U[k], 'J')]; break;
+        case 'capacitor':
+          filas = [L('V', '', vv, 'V'), L('q', '', s.q[k], 'C'), L('I', '', I, 'A'), L('U', 'C', s.U[k], 'J')];
+          if (el.placa) filas.push(L('C', '', capacidadEn({ C: el.C, perfil: perfilPlaca(el.placa) }, t), 'F'), L('W', 'F', s.W[k], 'J'));
+          break;
         case 'inductor': filas = [L('I', '', I, 'A'), L('V', '', vv, 'V'), L('U', 'L', s.U[k], 'J')]; break;
         case 'bombilla': filas = [L('V', '', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('R', '', Math.abs(I) > 1e-12 ? vv / I : curvaBombilla(el).R0, 'Ω'), ['brillo', '', fmt(100 * Math.min(1, Math.max(0, P) / el.Pn), 3), '%']]; break;
         case 'interruptor': case 'interruptor-3': filas = [L('V', '', vv, 'V'), L('I', '', I, 'A')]; if (ESC.modo === 'realista') filas.push(L('Q', '', s.Q[k], 'J')); break;
@@ -649,6 +1073,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       for (const [nombre, p] of Object.entries(ESC.nodos)) filas.push(L('V', nombre, s.V[X.nodo(clave(p))], 'V'));
     }
     $('#lecturas').innerHTML = filas.map(lectura).join('') || '<span class="u">—</span>';
+    examen();
     $('#insp-estado').textContent = estadoInspector(el, s);
     document.querySelectorAll('[data-var]').forEach(e => { e.textContent = fmtVar(ESC.variables[e.dataset.var]); });
     $('#b-play').innerHTML = `<svg class="ico"><use href="#i-${jugando ? 'pausar' : 'reproducir'}"/></svg>`;
@@ -658,6 +1083,36 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     document.querySelectorAll('#arbol .nodo[data-sel^="el:"]').forEach(n => { const e = elemento(n.dataset.sel.slice(3)); if (e && ES_INTERRUPTOR(e.tipo)) n.querySelector('.dato').textContent = datoArbol(e); });
     const ae = $('#a-estado'); if (ae && el) { const e = String(estadoInterruptor(el.id, t)); ae.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === e))); }
   }
+  // Grupo «Examen»: nota de la escena y una fila por apartado. La medida se
+  // escribe con el prefijo de la respuesta esperada; la opción del examen
+  // aparece solo si la medida coincide (con la fórmula o con una de las
+  // opciones numéricas). Antes de su instante, la respuesta aún no se conoce.
+  function examen() {
+    const base = ESCENARIOS.find(e => e.clave === ESC.clave), filas = X ? X.examen : [];
+    const visible = !!base && ESC.tipo === 'MEXT' && (filas.length > 0 || !!base.nota);
+    $('#grupo-examen').hidden = !visible;
+    if (!visible) return;
+    $('#examen-titulo').textContent = `Examen · MEXT ${ESC.anio || ''}`.trim();
+    if ($('#examen-nota').textContent !== (base.nota || '')) $('#examen-nota').textContent = base.nota || '';
+    $('#examen').innerHTML = filas.map(filaExamen).join('');
+  }
+  function filaExamen(f) {
+    const listo = t >= (f.t ?? 0) - 1e-9 * ESC.duracion;
+    const ref = Number.isFinite(f.esperado) && f.esperado !== 0 ? f.esperado : Number.isFinite(f.valor) ? f.valor : 0;
+    const [, uu] = f.u ? enUnidad(ref, f.u) : [0, ''];
+    const fac = f.u ? FAC[uu.slice(0, uu.length - f.u.length)] || 1 : 1;
+    const val = !listo ? '—' : f.texto ? f.texto : Number.isFinite(f.valor) ? fmt(f.valor / fac, 4) : '—';
+    let op = '';
+    if (listo && f.texto) op = f.opcion || '';
+    else if (listo && Number.isFinite(f.valor)) {
+      const tol = f.tol ?? 5e-3, coincide = v => Math.abs(f.valor - v) <= tol * Math.max(Math.abs(v), f.escala ?? 0);
+      if (f.opciones) { const m = f.opciones.find(([, v]) => coincide(v)); op = m ? m[0] : ''; }
+      else if (f.opcion && Number.isFinite(f.esperado) && coincide(f.esperado)) op = f.opcion;
+    }
+    const ayuda = `${f.formula}${Number.isFinite(f.esperado) && !f.texto ? ` = ${cantidad(f.esperado / fac, uu, 4)}` : ''}|Exam answer`;
+    return `<div class="ex-fila" data-ayuda="${ayuda.replace(/"/g, '')}"><span class="ex-n">${f.n || ''}</span><span class="ex-etq">${f.etq}</span><span class="ex-v">${val}</span><span class="ex-u">${listo && !f.texto ? uu : ''}</span><span class="ex-op">${op}</span></div>`;
+  }
+
   function estadoInspector(el, s) {
     if (sel && sel.startsWith('cable:')) return 'Conductor ideal' + (ESC.modo === 'realista' ? ` · ${valorCon(ESC.rCable, 'Ω')} por tramo` : '');
     if (!el) return `${ESC.elementos.length} componentes · conexiones ${ESC.modo === 'ideal' ? 'ideales' : 'realistas'}`;
@@ -665,7 +1120,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (ES_INTERRUPTOR(el.tipo)) return `${nom} · ${textoEstado(el, estadoInterruptor(el.id, t))}`;
     if (el.tipo === 'capacitor' && k >= 0) return `${nom} · q = ${valorCon(s.q[k], 'C')}`;
     if (el.tipo === 'bombilla' && k >= 0) return `${nom} · ${valorCon(Math.max(0, s.v[k] * s.I[k]), 'W')}`;
-    if (k >= 0 && el.tipo !== 'tierra') return `${nom} · ${valorCon(s.I[k], 'A')}`;
+    if (el.tipo === 'voltimetro' && k >= 0) return `${nom} · ${valorCon(s.v[k], 'V')}`;
+    if (k >= 0 && el.tipo !== 'tierra') return `${nom} · ${valorCon(limpio(s.I[k], X.Imax), 'A')}`;
     return nom;
   }
 
@@ -714,24 +1170,24 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   }
 
   function graficaTiempo(n, g) {
-    const cv = $(`#g${n}`), s = estado(t), series = (g.series || []).filter(serieValida);
-    if (!s || !series.length) { grafica(cv, { x: { min: 0, max: ESC.duracion }, y: { min: -1, max: 1 }, series: [], cursor: t }); $(`#t${n}`).textContent = MAG[g.m] ? MAG[g.m].nombre : ''; $(`#l${n}`).textContent = '—'; return; }
-    // Escala fija de la corrida y unidad con prefijo
+    const cv = $(`#g${n}`), s = estado(t), series = (g.series || []).filter(serieValida), [ft] = UT();
+    if (!s || !series.length) { grafica(cv, { x: { min: 0, max: ESC.duracion / ft }, y: { min: -1, max: 1 }, series: [], cursor: t / ft }); $(`#t${n}`).textContent = MAG[g.m] ? MAG[g.m].nombre : ''; $(`#l${n}`).textContent = '—'; return; }
+    // Escala fija de la corrida y unidad con prefijo; el tiempo en la unidad de la escena
     if (!g._cache || g._cache.sim !== SIM) {
       let lo = 0, hi = 0;
       for (const m of SIM.muestras) for (const sr of series) { const y = valorSerie(g, sr, m); if (y < lo) lo = y; if (y > hi) hi = y; }
       const d = Math.max(hi - lo, 1e-12), [, uu] = enUnidad(Math.max(Math.abs(lo), Math.abs(hi)), MAG[g.m].u), f = FAC[uu.slice(0, uu.length - MAG[g.m].u.length)] || 1;
-      const pts = series.map(sr => { const p = []; for (let i = 0; i < SIM.muestras.length; i += 2) { const m = SIM.muestras[i]; p.push([m.t, valorSerie(g, sr, m) / f]); } return p; });
+      const pts = series.map(sr => { const p = []; for (let i = 0; i < SIM.muestras.length; i += 2) { const m = SIM.muestras[i]; p.push([m.t / ft, valorSerie(g, sr, m) / f]); } return p; });
       g._cache = { sim: SIM, lo: (lo - 0.08 * d) / f, hi: (hi + 0.08 * d) / f, uu, f, pts };
     }
-    const C = g._cache, eventos = SIM.eventos.filter(e => e.t > 0).map(e => ({ x: e.t }));
+    const C = g._cache, eventos = SIM.eventos.filter(e => e.t > 0).map(e => ({ x: e.t / ft }));
     grafica(cv, {
-      x: { min: 0, max: ESC.duracion }, y: { min: C.lo, max: C.hi },
+      x: { min: 0, max: ESC.duracion / ft }, y: { min: C.lo, max: C.hi },
       series: series.map((sr, j) => ({ tramos: [C.pts[j]], familia: familiaSerie(g, sr), patron: PATRONES[j] })),
-      cursor: t, puntoCursor: [t, valorSerie(g, series[0], s) / C.f], eventos,
+      cursor: t / ft, puntoCursor: [t / ft, valorSerie(g, series[0], s) / C.f], eventos,
     });
     cabecera(`#t${n}`, g, C.uu);
-    $(`#l${n}`).textContent = cantidad(valorSerie(g, series[0], s) / C.f, C.uu);
+    $(`#l${n}`).textContent = cantidad(limpio(valorSerie(g, series[0], s) / C.f, Math.max(Math.abs(C.lo), Math.abs(C.hi))), C.uu);
   }
 
   // Curva I-V de la bombilla, recta de carga E = V + R·I y punto de operación
@@ -757,31 +1213,36 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     $(`#l${n}`).textContent = `${cantidad(s.v[k], 'V')} · ${cantidad(s.I[k] / f, uu)}`;
   }
 
-  // Barrido: corriente del puente contra R, con el interruptor cerrado
+  // Barrido en estado estacionario: corriente de un amperímetro (o voltaje de
+  // un voltímetro) contra una variable, con un interruptor cerrado si se da
   function graficaBarrido(n, g) {
-    const cv = $(`#g${n}`), va = ESC.variables[g.variable], s = estado(t);
-    if (!va || !elemento(g.id) || !s) { grafica(cv, { x: { min: 0, max: 1 }, y: { min: -1, max: 1 }, series: [] }); return; }
+    const cv = $(`#g${n}`), va = ESC.variables[g.variable], s = estado(t), med = elemento(g.id);
+    if (!va || !med || !s) { grafica(cv, { x: { min: 0, max: 1 }, y: { min: -1, max: 1 }, series: [] }); return; }
+    const esV = med.tipo === 'voltimetro', mag = esV ? 'v' : 'I', U = esV ? 'V' : 'A';
+    const opc = g.interruptor && elemento(g.interruptor) ? { estados: { [g.interruptor]: true } } : {};
+    const lee = op => op[mag][op.ids.indexOf(g.id)];
     if (!X.barrido) {
       const pts = [], vals = [];
       for (let i = 0; i <= 90; i++) {
         const R = va.min + (va.max - va.min) * i / 90;
         const circ = copia(RED.circuito);
         for (const [id, p] of va.liga) { const c = circ.componentes.find(x => x.id === id); if (c) c[p] = R * va.factor; }
-        try { const op = puntoOperacion(circ, { estados: { [g.interruptor]: true } }); pts.push([R, op.I[op.ids.indexOf(g.id)]]); vals.push(op.I[op.ids.indexOf(g.id)]); } catch { /* sin solución */ }
+        try { const y = lee(puntoOperacion(circ, opc)); pts.push([R, y]); vals.push(y); } catch { /* sin solución */ }
       }
-      const m = Math.max(1e-15, ...vals.map(Math.abs)), [, uu] = enUnidad(m, 'A'), f = FAC[uu.slice(0, -1)] || 1;
-      X.barrido = { pts: pts.map(([a, b]) => [a, b / f]), m: m / f, uu, f };
+      const m = Math.max(1e-15, ...vals.map(Math.abs)), [, uu] = enUnidad(m, U), f = FAC[uu.slice(0, uu.length - U.length)] || 1;
+      // Con signo solo si la curva cambia de signo (puente); si no, desde cero
+      X.barrido = { pts: pts.map(([a, b]) => [a, b / f]), m: m / f, uu, f, pos: vals.every(y => y >= 0), neg: vals.every(y => y <= 0) };
     }
-    const B = X.barrido, k = iDe(g.id), op = puntoOperacion(RED.circuito, { estados: { [g.interruptor]: true } });
-    const Iahora = op.I[op.ids.indexOf(g.id)] / B.f;
+    const B = X.barrido, k = iDe(g.id);
+    let ahora = NaN; try { ahora = lee(puntoOperacion(RED.circuito, opc)) / B.f; } catch { /* sin solución */ }
     grafica(cv, {
-      x: { min: va.min, max: va.max }, y: { min: -B.m * 1.1, max: B.m * 1.1 },
-      series: [{ tramos: [B.pts], familia: 'corriente' }],
-      puntoCursor: [va.val, Iahora],
+      x: { min: va.min, max: va.max }, y: { min: B.pos ? 0 : -B.m * 1.1, max: B.neg ? 0 : B.m * 1.1 },
+      series: [{ tramos: [B.pts], familia: esV ? 'electrico' : 'corriente' }],
+      puntoCursor: Number.isFinite(ahora) ? [va.val, ahora] : undefined,
       eventos: B.pts.filter(([, b], i) => i && Math.sign(b) !== Math.sign(B.pts[i - 1][1])).map(([a]) => ({ x: a })),
     });
-    $(`#t${n}`).innerHTML = `<span class="sim">I</span><sub>${nombreHTML(g.id)}</sub> (${B.uu}) contra <span class="sim">R</span> (Ω), con ${nombreHTML(g.interruptor)} cerrado`;
-    $(`#l${n}`).textContent = cantidad(s.I[k] / B.f, B.uu);
+    $(`#t${n}`).innerHTML = `<span class="sim">${esV ? 'V' : 'I'}</span><sub>${nombreHTML(g.id)}</sub> (${B.uu}) contra <span class="sim">${va.sim}</span>${va.sub ? `<sub>${va.sub}</sub>` : ''} (${va.u})${opc.estados ? `, con ${nombreHTML(g.interruptor)} cerrado` : ''}`;
+    $(`#l${n}`).textContent = cantidad((esV ? s.v[k] : s.I[k]) / B.f, B.uu);
   }
 
   function graficas() {
@@ -808,7 +1269,10 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       if (el.tipo === 'bateria' || el.tipo === 'fuente-corriente') {
         filas.push([`Trabajo de ${n}`, 'trabajo', s.W[k], 'Energía que entrega la fuente|Work done by the source']);
         if (el.r > 0) filas.push([`Calor en ${n} (interna)`, 'termico', s.Q[k], 'Calor en la resistencia interna|Internal Joule heat']);
-      } else if (el.tipo === 'capacitor') filas.push([`Energía en ${n}`, 'electrico', s.U[k], 'Energía eléctrica almacenada, q²/2C|Stored electric energy']);
+      } else if (el.tipo === 'capacitor') {
+        if (el.placa) filas.push(['Trabajo de la fuerza', 'trabajo', s.W[k], `Trabajo de la fuerza externa que mueve la placa conductora de ${el.id}, −∫½v²dC|Work done on the slab`]);
+        filas.push([`Energía en ${n}`, 'electrico', s.U[k], 'Energía eléctrica almacenada, q²/2C|Stored electric energy']);
+      }
       else if (el.tipo === 'inductor') filas.push([`Energía en ${n}`, 'magnetico', s.U[k], 'Energía magnética almacenada, ½LI²|Stored magnetic energy']);
       else if (el.tipo === 'resistencia' || el.tipo === 'reostato' || el.tipo === 'bombilla') filas.push([`Calor en ${n}`, 'termico', s.Q[k], 'Calor de Joule acumulado|Joule heat']);
       else if (ES_INTERRUPTOR(el.tipo) || el.tipo === 'amperimetro' || el.tipo === 'voltimetro') Qcables += s.Q[k];
@@ -817,29 +1281,34 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (ESC.modo === 'realista') filas.push(['Calor en cables', 'termico', Qcables, 'Calor de Joule en los cables y contactos|Heat in wires']);
     else filas.push(['Pérdida al conectar', 'termico', s.perdidas, 'Energía que se pierde cuando la carga salta de golpe al conectar (chispa, radiación)|Energy lost in ideal connections']);
     const b = balance(SIM, s), esc = X.Emax;
+    // Con alguna cantidad negativa (la fuerza que frena la placa), barras con signo desde el centro
+    const conSigno = X.conSigno ?? (X.conSigno = SIM.muestras.some(m => ESC.elementos.some(e => e.tipo === 'capacitor' && e.placa && m.W[iDe(e.id)] < -1e-12 * esc)));
+    $('#barras').className = 'barras' + (conSigno ? ' con-signo' : '');
     $('#barras').innerHTML = `<div class="barras-tit">Registro de energía</div>` + filas.map(([nom, fam, val, ayuda]) => {
       const fondo = fam === 'trabajo' ? 'repeating-linear-gradient(90deg, var(--tinta) 0 6px, transparent 6px 9px)' : color(fam);
-      return `<div class="barra-e" data-ayuda="${ayuda}"><span>${nom}</span><span class="riel"><i style="width:${Math.max(0, Math.min(100, val / esc * 100))}%;background:${fondo}"></i></span><span class="v">${valorCon(val, 'J')}</span></div>`;
+      const w = Math.max(0, Math.min(100, Math.abs(val) / esc * 100)), estilo = conSigno ? `left:${val >= 0 ? 50 : 50 - w / 2}%;width:${w / 2}%` : `width:${val > 0 ? w : 0}%`;
+      return `<div class="barra-e" data-ayuda="${ayuda}"><span>${nom}</span><span class="riel"><i style="${estilo};background:${fondo}"></i></span><span class="v">${valorCon(val, 'J')}</span></div>`;
     }).join('') + `<div class="barras-pie"><span class="sim">W</span> − Δ<span class="sim">U</span> − <span class="sim">Q</span> − pérdidas = ${valorCon(b.residuo, 'J', 2)}${Math.abs(b.numerico) > 1e-12 * esc ? ` · numérica ${valorCon(b.numerico, 'J', 2)}` : ''}</div>`;
     // Gráfica de energía contra t
     if (!X.serieE) {
-      const W = [], Uc = [], Ul = [], Q = [];
+      const W = [], Uc = [], Ul = [], Q = [], [ft] = UT();
       const hayL = ESC.elementos.some(e => e.tipo === 'inductor');
       SIM.muestras.forEach((m, i) => {
         if (i % 2) return;
         const bb = balance(SIM, m); let uc = 0, ul = 0;
         for (const el of ESC.elementos) { const k = iDe(el.id); if (el.tipo === 'capacitor') uc += m.U[k]; if (el.tipo === 'inductor') ul += m.U[k]; }
-        W.push([m.t, bb.W]); Uc.push([m.t, uc]); Ul.push([m.t, ul]); Q.push([m.t, bb.Q + m.perdidas]);
+        W.push([m.t / ft, bb.W]); Uc.push([m.t / ft, uc]); Ul.push([m.t / ft, ul]); Q.push([m.t / ft, bb.Q + m.perdidas]);
       });
       const [, uu] = enUnidad(X.Emax, 'J'), f = FAC[uu.slice(0, -1)] || 1;
       const esc2 = p => p.map(([a, v]) => [a, v / f]);
-      X.serieE = { W: esc2(W), Uc: esc2(Uc), Ul: esc2(Ul), Q: esc2(Q), hayL, uu, f };
+      const ymin = Math.min(0, ...W.map(p => p[1] / f));
+      X.serieE = { W: esc2(W), Uc: esc2(Uc), Ul: esc2(Ul), Q: esc2(Q), hayL, uu, f, ft, ymin };
     }
     const E = X.serieE;
     const series = [{ tramos: [E.W], familia: 'tinta', patron: 'discontinuo' }, { tramos: [E.Uc], familia: 'electrico' }];
     if (E.hayL) series.push({ tramos: [E.Ul], familia: 'magnetico' });
     series.push({ tramos: [E.Q], familia: 'termico' });
-    grafica($('#g4'), { x: { min: 0, max: ESC.duracion }, y: { min: 0, max: X.Emax / E.f * 1.08 }, series, cursor: t, eventos: SIM.eventos.filter(e => e.t > 0).map(e => ({ x: e.t })) });
+    grafica($('#g4'), { x: { min: 0, max: ESC.duracion / E.ft }, y: { min: E.ymin * 1.08, max: X.Emax / E.f * 1.08 }, series, cursor: t / E.ft, eventos: SIM.eventos.filter(e => e.t > 0).map(e => ({ x: e.t / E.ft })) });
     $('#t4').innerHTML = `<span style="color:var(--tinta)"><i class="discontinua"></i><span class="sim">W</span></span><span style="color:var(--f-electrico)"><i></i><span class="sim">U</span><sub>C</sub></span>${E.hayL ? '<span style="color:var(--f-magnetico)"><i></i><span class="sim">U</span><sub>L</sub></span>' : ''}<span style="color:var(--f-termico)"><i></i><span class="sim">Q</span></span> <span class="u">(${E.uu})</span>`;
     document.querySelector('#p-energia .grafica-cab .lect').textContent = '';
   }
@@ -849,15 +1318,15 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // ---------------------------------------------------------------------
   function tablas() {
     if (!SIM) { $('#t-eventos').innerHTML = ''; $('#t-datos').innerHTML = ''; return; }
-    $('#t-eventos').innerHTML = '<tr><th>Evento</th><th>t (s)</th><th>Energía perdida (J)</th><th>Mayor salto de carga (C)</th></tr>' +
-      (SIM.eventos.length ? SIM.eventos.map(e => `<tr class="${Math.abs(e.t - t) < ESC.dt / 2 ? 'actual' : ''}"><td class="texto">${e.nombre}${e.cortes.length ? ` · se corta ${e.cortes.join(', ')}` : ''}</td><td>${fmt(e.t, 5)}</td><td>${e.perdida > 1e-15 ? fmt(e.perdida, 4) : '0'}</td><td>${e.carga > 0 ? fmt(e.carga, 4) : '0'}</td></tr>`).join('')
+    $('#t-eventos').innerHTML = `<tr><th>Evento</th><th>t (${UT()[1]})</th>` + '<th>Energía perdida (J)</th><th>Mayor salto de carga (C)</th></tr>' +
+      (SIM.eventos.length ? SIM.eventos.map(e => `<tr class="${Math.abs(e.t - t) < ESC.dt / 2 ? 'actual' : ''}"><td class="texto">${e.nombre}${e.cortes.length ? ` · se corta ${e.cortes.join(', ')}` : ''}</td><td>${fmt(e.t / UT()[0], 5)}</td><td>${e.perdida > 1e-15 ? fmt(e.perdida, 4) : '0'}</td><td>${e.carga > 0 ? fmt(e.carga, 4) : '0'}</td></tr>`).join('')
         : '<tr><td class="texto" colspan="4">Sin eventos: programa acciones con un clic sobre un interruptor.</td></tr>');
     const nodos = Object.entries(ESC.nodos), els = ESC.elementos.filter(e => e.tipo !== 'tierra');
-    let filas = '<tr><th>t (s)</th>' + nodos.map(([n]) => `<th>V<sub>${n}</sub> (V)</th>`).join('') + els.map(e => `<th>I<sub>${nombreHTML(e.id)}</sub> (A)</th>${e.tipo === 'capacitor' ? `<th>q<sub>${nombreHTML(e.id)}</sub> (C)</th>` : ''}`).join('') + '</tr>';
+    let filas = `<tr><th>t (${UT()[1]})</th>` + nodos.map(([n]) => `<th>V<sub>${n}</sub> (V)</th>`).join('') + els.map(e => `<th>I<sub>${nombreHTML(e.id)}</sub> (A)</th>${e.tipo === 'capacitor' ? `<th>q<sub>${nombreHTML(e.id)}</sub> (C)</th>` : ''}`).join('') + '</tr>';
     const paso = ESC.duracion / 100;
     for (let j = 0; j <= 100; j++) {
       const tt = j * paso, s = estado(tt);
-      filas += `<tr class="${Math.abs(tt - t) < paso / 2 ? 'actual' : ''}"><td>${fmt(tt, 4)}</td>` + nodos.map(([, p]) => `<td>${fmt(s.V[X.nodo(clave(p))], 4)}</td>`).join('')
+      filas += `<tr class="${Math.abs(tt - t) < paso / 2 ? 'actual' : ''}"><td>${fmt(tt / UT()[0], 4)}</td>` + nodos.map(([, p]) => `<td>${fmt(s.V[X.nodo(clave(p))], 4)}</td>`).join('')
         + els.map(e => { const k = iDe(e.id); return `<td>${fmt(s.I[k], 4)}</td>${e.tipo === 'capacitor' ? `<td>${fmt(s.q[k], 4)}</td>` : ''}`; }).join('') + '</tr>';
     }
     $('#t-datos').innerHTML = filas;
@@ -866,7 +1335,45 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // ---------------------------------------------------------------------
   // Ciclo de actualización
   // ---------------------------------------------------------------------
-  const lt = new LineaTiempo($('#tl'), { duracion: 12, eventos: [], alCambiar: nt => { t = nt; jugando = false; todo(); } });
+  // Línea de tiempo: en segundos, la común; con escenas de ms o µs, las marcas
+  // y la ficha de cada evento van en la unidad de la escena (como en Magnetismo
+  // · Partículas), con la unidad junto a la última marca.
+  class LineaTiempoU extends LineaTiempo {
+    dibujar() {
+      const [fu, uu] = UT();
+      if (fu === 1) { super.dibujar(); return; }
+      const c = this.canvas, tk = leerTokens(), dpr = window.devicePixelRatio || 1;
+      const r = c.getBoundingClientRect(); this.w = r.width; const H = r.height;
+      c.width = Math.round(r.width * dpr); c.height = Math.round(H * dpr);
+      const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, this.w, H);
+      const yRiel = 22;
+      g.fillStyle = tk['campo-activo']; g.beginPath(); g.roundRect(this.m, yRiel - 2, this.w - 2 * this.m, 4, 2); g.fill();
+      g.fillStyle = tk['linea-fuerte']; g.beginPath(); g.roundRect(this.m, yRiel - 2, this._x(this.simulado) - this.m, 4, 2); g.fill();
+      g.fillStyle = tk.tinta; g.beginPath(); g.roundRect(this.m, yRiel - 2, Math.max(0, this._x(this.t) - this.m), 4, 2); g.fill();
+      const D = this.duracion / fu, paso = pasoAgradable(D / Math.max(4, Math.floor(this.w / 90)));
+      g.font = '11px "IBM Plex Mono", Consolas, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
+      g.fillStyle = tk['texto-3']; g.strokeStyle = tk.linea; g.lineWidth = 1;
+      const marcas = []; for (let v = 0; v <= D + 1e-9 * D; v += paso) marcas.push(v);
+      marcas.forEach((v, i) => {
+        const x = Math.round(this._x(v * fu)) + 0.5;
+        g.beginPath(); g.moveTo(x, yRiel + 6); g.lineTo(x, yRiel + 9); g.stroke();
+        const txt = i === marcas.length - 1 ? `${fmtMarca(v, paso)}${ESP}${uu}` : fmtMarca(v, paso), wt = g.measureText(txt).width;
+        if (x + wt / 2 > this.w - 2) { g.textAlign = 'right'; g.fillText(txt, this.w - 2, yRiel + 11); g.textAlign = 'center'; } else g.fillText(txt, x, yRiel + 11);
+      });
+      for (const e of this.eventos) rombo(g, this._x(e.t), yRiel - 9, 3.5, e === this.hover ? tk.tinta : tk['texto-2']);
+      if (this.hover) {
+        g.font = '500 11px "IBM Plex Sans", sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle';
+        const txt = `${this.hover.nombre} · ${Tf(this.hover.t)}`, wTxt = g.measureText(txt).width;
+        let x = this._x(this.hover.t) + 8; if (x + wTxt + 12 > this.w) x = this._x(this.hover.t) - wTxt - 20;
+        g.fillStyle = tk.tinta; g.beginPath(); g.roundRect(x, yRiel - 18, wTxt + 12, 18, 4); g.fill();
+        g.fillStyle = tk['sobre-tinta']; g.fillText(txt, x + 6, yRiel - 9);
+      }
+      const xc = this._x(this.t);
+      g.strokeStyle = tk.tinta; g.lineWidth = 1.5; g.beginPath(); g.moveTo(xc, yRiel - 12); g.lineTo(xc, yRiel + 8); g.stroke();
+      g.fillStyle = tk.lienzo; g.beginPath(); g.arc(xc, yRiel, 6, 0, 2 * Math.PI); g.fill(); g.stroke();
+    }
+  }
+  const lt = new LineaTiempoU($('#tl'), { duracion: 12, eventos: [], alCambiar: nt => { t = nt; jugando = false; todo(); } });
   function todo() {
     dibujar(); lecturas(); lt.poner(t); graficas();
     if (!$('#p-eventos').hidden || !$('#p-tabla').hidden) tablas();
@@ -885,7 +1392,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     $('#escena-nombre').textContent = ESC.titulo;
     const chip = $('#escena-chip');
     chip.textContent = ESC.tipo === 'MEXT' ? `MEXT ${ESC.anio || ''}`.trim() : ESC.tipo || 'Propio';
-    chip.className = 'chip' + (ESC.tipo === 'MEXT' ? '' : '');
+    chip.className = 'chip' + (ESC.tipo === 'MEXT' ? ' lleno' : '');
     document.title = `Volta · Circuitos · ${ESC.titulo}`;
     return e;
   }
@@ -899,12 +1406,12 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const tt = t, descartadas = ESC.acciones.filter(a => a.t > tt + 1e-9).length;
     ESC.acciones = ESC.acciones.filter(a => a.t < tt - 1e-9 || (a.t <= tt + 1e-9 && a.id !== id));
     const ya = estadoInterruptor(id, tt);
-    if (String(ya) === String(estadoNuevo)) { recalcular(); registrar(); inspector(); avisar(`${id} ya está ${textoEstado(el, ya)} en t = ${cantidad(tt, 's')}`); return; }
+    if (String(ya) === String(estadoNuevo)) { recalcular(); registrar(); inspector(); avisar(`${id} ya está ${textoEstado(el, ya)} en t = ${Tf(tt)}`); return; }
     ESC.acciones.push({ t: tt, id, estado: estadoNuevo });
     ESC.acciones.sort((a, b) => a.t - b.t);
     recalcular(); registrar(); inspector();
     const cola = descartadas ? ` · se descartan ${descartadas} ${descartadas > 1 ? 'acciones posteriores' : 'acción posterior'}` : '';
-    avisar(`${el.tipo === 'interruptor' ? `${id} se ${estadoNuevo ? 'cierra' : 'abre'}` : estadoNuevo ? `${id} pasa a la posición ${estadoNuevo}` : `${id} se abre`} en t = ${cantidad(tt, 's')}${cola}`);
+    avisar(`${el.tipo === 'interruptor' ? `${id} se ${estadoNuevo ? 'cierra' : 'abre'}` : estadoNuevo ? `${id} pasa a la posición ${estadoNuevo}` : `${id} se abre`} en t = ${Tf(tt)}${cola}`);
   }
   function alternarInterruptor(id) {
     const el = elemento(id), e = estadoInterruptor(id, t);
@@ -992,6 +1499,21 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   };
   function escenaActual() { return crearEscena({ modulo: 'circuitos', espacio: 'transitorios', titulo: ESC.titulo, datos: instantanea() }); }
 
+  // Placa conductora de un capacitor: espesor relativo e en (0, 0.95] y
+  // fracción metida f(t) en [0, 1], de 2 a 50 puntos con t creciente
+  function placaSegura(pl) {
+    if (!pl || typeof pl !== 'object' || !Array.isArray(pl.f)) return null;
+    const e = numero(pl.e, NaN);
+    if (!(e > 0 && e <= 0.95) || pl.f.length < 2 || pl.f.length > 50) return null;
+    const f = [];
+    for (const par of pl.f) {
+      if (!Array.isArray(par) || !Number.isFinite(par[0]) || !Number.isFinite(par[1]) || par[0] < 0 || par[0] > 1e3) return null;
+      if (f.length && par[0] <= f[f.length - 1][0]) return null;
+      f.push([par[0], Math.max(0, Math.min(1, par[1]))]);
+    }
+    return { e, f };
+  }
+
   // Valida y acota lo que viene de un archivo antes de usarlo
   function datosSeguros(d = {}) {
     const base = ESCENARIOS.find(x => x.clave === d.clave) || ESCENARIOS[0];
@@ -1008,6 +1530,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       for (const k of ['R', 'C', 'L', 'Vn', 'Pn']) if (k in el && !(el[k] > 0)) el[k] = CAT[e.tipo].params.find(p => p[0] === k)[4];
       if (el.tipo === 'interruptor') el.cerrado = !!e.cerrado;
       if (el.tipo === 'interruptor-3') el.posicion = ['a', 'b', 'c'].includes(e.posicion) ? e.posicion : null;
+      if (el.tipo === 'capacitor') { const pl = placaSegura(e.placa); if (pl) el.placa = pl; }
       return el;
     });
     // Las acciones y las variables se refieren a los nombres ya saneados
@@ -1016,7 +1539,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const idDe = v => renombre.get(v) ?? v;
     const cables = (Array.isArray(d.cables) ? d.cables : base.cables).filter(Array.isArray).map(poli => poli.map(punto).filter(Boolean)).filter(p => p.length >= 2);
     const nodos = Object.fromEntries(Object.entries(d.nodos && typeof d.nodos === 'object' ? d.nodos : base.nodos).filter(([n, p]) => /^[A-Za-z]{1,2}$/.test(n) && punto(p)).map(([n, p]) => [n, punto(p)]));
-    const duracion = numero(d.duracion, base.duracion, 0.1, 120), dt = numero(d.dt, base.dt, 1e-4, 1);
+    // De 1 µs a 120 s, con 50 a 20 000 muestras
+    const duracion = numero(d.duracion, base.duracion, 1e-6, 120), dt = numero(d.dt, base.dt, duracion / 20000, duracion / 50);
     const acciones = (Array.isArray(d.acciones) ? d.acciones : base.acciones).filter(a => a && ids.has(idDe(a.id)) && Number.isFinite(a.t) && a.t >= 0 && a.t <= duracion)
       .map(a => ({ t: a.t, id: idDe(a.id), estado: typeof a.estado === 'boolean' || ['a', 'b', 'c'].includes(a.estado) || a.estado === null ? a.estado : false }));
     const variables = {};
@@ -1036,7 +1560,9 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       if (!g || typeof g !== 'object') return null;
       if (['V', 'I', 'q', 'U'].includes(g.m)) return { m: g.m, series: (Array.isArray(g.series) ? g.series : []).map(serie).filter(Boolean).slice(0, 3) };
       if (g.m === 'iv' && ['id', 'fuente', 'serie'].every(k => ids.has(idDe(g[k])))) return { m: 'iv', id: idDe(g.id), fuente: idDe(g.fuente), serie: idDe(g.serie) };
-      if (g.m === 'barrido' && ids.has(idDe(g.id)) && ids.has(idDe(g.interruptor)) && variables[g.variable]) return { m: 'barrido', id: idDe(g.id), interruptor: idDe(g.interruptor), variable: g.variable };
+      if (g.m === 'barrido' && ids.has(idDe(g.id)) && (g.interruptor == null || ids.has(idDe(g.interruptor))) && Object.prototype.hasOwnProperty.call(variables, g.variable)) {
+        return { m: 'barrido', id: idDe(g.id), variable: g.variable, ...(g.interruptor != null ? { interruptor: idDe(g.interruptor) } : {}) };
+      }
       return null;
     };
     const propias = Array.isArray(d.graficas) ? d.graficas.map(graf) : [];
@@ -1114,7 +1640,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       .then(r => { if (r) avisarLienzo(area, `Datos exportados: ${filas.length} filas`); }, e => avisar(`No se pudo exportar: ${e}`, false));
   }
   function exportarPNG() {
-    descargarLienzo(lienzo, `${nombreArchivo(ESC.titulo)}-t${fmt(t, 3)}s.png`).then(r => { if (r) avisarLienzo(area, 'Imagen del lienzo exportada'); });
+    descargarLienzo(lienzo, `${nombreArchivo(ESC.titulo)}-t${fmt(t / UT()[0], 3)}${UT()[1].replace('µ', 'u')}.png`).then(r => { if (r) avisarLienzo(area, 'Imagen del lienzo exportada'); });
   }
   $('#b-exportar').addEventListener('click', exportarCSV);
 
@@ -1123,7 +1649,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // ---------------------------------------------------------------------
   function cuadro(ahora) {
     if (jugando) {
-      const d = Math.min(0.05, (ahora - ultimo) / 1000) * velocidad;
+      const d = Math.min(0.05, (ahora - ultimo) / 1000) * velocidad * ritmo();
       t = Math.min(ESC.duracion, t + d);
       if (t >= ESC.duracion) jugando = false;
       todo();
@@ -1135,8 +1661,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   const irA = nt => { jugando = false; t = Math.max(0, Math.min(ESC.duracion, nt)); todo(); };
   $('#b-play').addEventListener('click', alternar);
   $('#b-reiniciar').addEventListener('click', () => irA(0));
-  $('#b-atras').addEventListener('click', () => irA(t - 1 / 60));
-  $('#b-adelante').addEventListener('click', () => irA(t + 1 / 60));
+  $('#b-atras').addEventListener('click', () => irA(t - ritmo() / 60));
+  $('#b-adelante').addEventListener('click', () => irA(t + ritmo() / 60));
   $('#b-modo').addEventListener('click', () => cambiarModo(ESC.modo === 'ideal' ? 'realista' : 'ideal'));
   $('#velocidades').addEventListener('click', ev => { const b = ev.target.closest('button'); if (b) velocidad = parseFloat(b.dataset.v); });
   document.querySelectorAll('.capa-btn').forEach(b => b.addEventListener('click', () => {
@@ -1246,8 +1772,11 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const m = $('#menu-escenarios');
     if (!m.hidden) { m.hidden = true; return; }
     const grupos = ['Tutorial', 'Ejemplo', 'MEXT'];
-    m.innerHTML = grupos.map(g => `<div class="menu-titulo">${g === 'MEXT' ? 'MEXT' : g + 'es'}</div>` + ESCENARIOS.filter(e => e.tipo === g).map(e =>
-      `<div class="menu-item${ESC.clave === e.clave ? ' activo' : ''}" role="menuitem" data-clave="${e.clave}"><svg class="ico"><use href="#${ICONO_TIPO[g]}"/></svg>${e.titulo}${e.anio ? `<span class="chip">${e.anio}</span>` : ''}</div>`).join('')).join('');
+    // MEXT: del examen más reciente al más antiguo
+    const orden = lista => lista.slice().sort((a, b) => (b.anio || '').localeCompare(a.anio || '', 'es', { numeric: true }));
+    const TITULO = { Tutorial: 'Tutoriales', Ejemplo: 'Ejemplos', MEXT: 'MEXT' };
+    m.innerHTML = grupos.map(g => `<div class="menu-titulo">${TITULO[g]}</div>` + orden(ESCENARIOS.filter(e => e.tipo === g)).map(e =>
+      `<div class="menu-item${ESC.clave === e.clave ? ' activo' : ''}" role="menuitem" data-clave="${e.clave}"><svg class="ico"><use href="#${ICONO_TIPO[g]}"/></svg>${e.titulo}${e.anio ? `<span class="chip lleno">${e.anio}</span>` : ''}</div>`).join('')).join('');
     const r = $('#b-escenario').getBoundingClientRect();
     m.style.left = r.left + 'px'; m.style.top = (r.bottom + 6) + 'px'; m.hidden = false;
   }
@@ -1313,8 +1842,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (mod && tecla === 'z') { ev.preventDefault(); deshacer(); return; }
     if (mod) return;
     if (ev.code === 'Space') { ev.preventDefault(); if (!ev.repeat) alternar(); espacioPulsado = true; }
-    else if (ev.key === 'ArrowRight') irA(t + 1 / 60);
-    else if (ev.key === 'ArrowLeft') irA(t - 1 / 60);
+    else if (ev.key === 'ArrowRight') irA(t + ritmo() / 60);
+    else if (ev.key === 'ArrowLeft') irA(t - ritmo() / 60);
     else if (ev.key === 'Home') irA(0);
     else if (ev.key === 'Escape') { if (herramienta) ponerHerramienta(herramienta); $('#menu-escenarios').hidden = true; }
     else if (ev.key === 'Delete' || ev.key === 'Backspace') borrarSeleccion();
@@ -1326,15 +1855,16 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   document.addEventListener('keyup', ev => { if (ev.code === 'Space') espacioPulsado = false; });
 
   // ---------------------------------------------------------------------
-  // Arranque. Parámetros para capturas: ?escenario=red&t=3.8&sel=C2&pestana=energia
+  // Arranque. Parámetros para capturas: ?escena=red&t=3.8&sel=C2&pestana=energia
+  // (escenario= también vale); t en segundos
   // ---------------------------------------------------------------------
   Volta.alCambiarTema(() => { tz.temas(); todo(); });
   window.addEventListener('resize', () => { tz.ajustar(); if (!vistaTocada) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); } todo(); });
   document.fonts.ready.then(() => {
     const q = new URLSearchParams(location.search);
-    const limpio = ![...q.keys()].length;
+    const limpio = ![...q.keys()].length, pedida = q.get('escena') || q.get('escenario');
     const previa = escenaPendiente('circuitos') || (limpio ? autoguardado.leer('circuitos', { modulo: 'circuitos' }) : null);
-    if (q.has('escenario') || !previa) cargarEscenario(q.get('escenario') || 'rc');
+    if (pedida || !previa) cargarEscenario(pedida || 'rc');
     else { ESC = datosSeguros(previa.datos); aplicarVariables(); sel = null; }
     if (q.has('sel')) sel = q.get('sel') ? 'el:' + q.get('sel') : null;
     if (q.get('modo') === 'realista') ESC.modo = 'realista';

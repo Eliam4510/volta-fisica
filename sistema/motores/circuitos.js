@@ -35,6 +35,14 @@
      el balance cierra paso a paso por el teorema de Tellegen (Σ v̄·ī = 0).
      El pequeño exceso de los pasos de Euler implícito se registra aparte
      como disipación numérica.
+   - Capacitores que cambian en el tiempo (una placa conductora o un
+     dieléctrico que entra o sale): C(t) = C·f(t), con f lineal a tramos.
+     La variable de estado es la carga, q = C(t)·v, y el modelo compañero
+     la integra con la regla trapezoidal; cada vértice del perfil corta el
+     tramo como un evento (dC/dt salta y la corriente con él). El trabajo
+     de la fuerza externa que mueve la placa, −∫½·v²·dC, queda en W de ese
+     capacitor: en un paso trapezoidal vale exactamente −½·v₀·v₁·ΔC, así
+     que el balance sigue cerrando.
    Puro: sin DOM. Lo usan la pantalla de Circuitos y las pruebas.
    ========================================================================== */
 
@@ -76,6 +84,8 @@ const BORNES = {
  * @property {number} [x]   Reóstato: posición del cursor (0 a 1)
  * @property {number} [C]   Capacitor (F)
  * @property {number} [q0]  Capacitor: carga inicial de la placa a (C)
+ * @property {Array<[number, number]>} [perfil] Capacitor: factor f(t) de la capacidad como tabla
+ *   [[t, f], …] (t creciente, f > 0), lineal entre puntos y constante fuera: C(t) = C·f(t)
  * @property {number} [L]   Inductor (H)
  * @property {number} [i0]  Inductor: corriente inicial de a a b (A)
  * @property {boolean} [cerrado]  Interruptor
@@ -123,7 +133,8 @@ export const OPCIONES_CIRCUITO = Object.freeze({
  * I: corriente (batería: la que sale por el borne +; dos bornes: de a a b);
  * v: diferencia de potencial entre sus bornes (batería: V₊ − V₋);
  * q: carga de la placa a de cada capacitor; U: energía almacenada ahora;
- * W: trabajo acumulado que entregó cada fuente; Q: calor acumulado.
+ * W: trabajo acumulado que entregó cada fuente (en un capacitor con perfil,
+ * el de la fuerza externa que cambia su capacidad); Q: calor acumulado.
  * @typedef {Object} MuestraCircuito
  * @property {number} t
  * @property {Float64Array} V
@@ -181,6 +192,39 @@ function posicionTres(id, e) {
   if (e === 'a' || e === 'b' || e === 'c') return e;
   throw new ErrorCircuito(`«${id}»: la posición de un interruptor de tres posiciones es "a", "b", "c" o "abierto" (recibió ${e}).`);
 }
+
+// ---------------------------------------------------------------------------
+// Capacitor variable: perfil f(t) lineal a tramos
+// ---------------------------------------------------------------------------
+const MAX_PERFIL = 200;
+function perfilValido(id, p) {
+  if (!Array.isArray(p) || !p.length || p.length > MAX_PERFIL) throw new ErrorCircuito(`«${id}»: el perfil de la capacidad es una tabla de 1 a ${MAX_PERFIL} pares [t, f].`);
+  let tAnt = -Infinity;
+  return p.map(par => {
+    if (!Array.isArray(par) || !esNumero(par[0]) || !esNumero(par[1])) throw new ErrorCircuito(`«${id}»: el perfil de la capacidad es una tabla de pares [t, f].`);
+    if (par[0] < 0 || par[0] <= tAnt) throw new ErrorCircuito(`«${id}»: los instantes del perfil empiezan en t ≥ 0 y crecen.`);
+    if (!(par[1] > 0)) throw new ErrorCircuito(`«${id}»: el factor de la capacidad tiene que ser positivo (recibió ${par[1]}).`);
+    tAnt = par[0];
+    return /** @type {[number, number]} */ ([par[0], par[1]]);
+  });
+}
+/** Factor f(t) de un perfil: lineal entre puntos, constante fuera. */
+function factorEn(p, t) {
+  if (t <= p[0][0]) return p[0][1];
+  const n = p.length;
+  if (t >= p[n - 1][0]) return p[n - 1][1];
+  let i = 0; while (t > p[i + 1][0]) i++;
+  const [t0, f0] = p[i], [t1, f1] = p[i + 1];
+  return f0 + (f1 - f0) * (t - t0) / (t1 - t0);
+}
+
+/**
+ * Capacidad de un capacitor en el instante t: C·f(t) si tiene perfil, C si no.
+ * @param {{C: number, perfil?: Array<[number, number]>}} c @param {number} t
+ */
+export function capacidadEn(c, t) { return c.perfil ? c.C * factorEn(c.perfil, t) : c.C; }
+// Lo mismo para una rama del motor (valor = C)
+const capRama = (r, t) => (r.perfil ? r.valor * factorEn(r.perfil, t) : r.valor);
 
 // ---------------------------------------------------------------------------
 // Bombilla: curva I-V
@@ -281,7 +325,10 @@ function normalizarComponente(c, i) {
       const p = { Vn: c.Vn, Pn: c.Pn, frio: c.frio, curva: c.curva };
       return { ...base, ...p, curvaIV: curvaBombilla(p) };
     }
-    case 'capacitor': return { ...base, C: positivo(id, 'la capacitancia C', c.C), q0: finito(id, 'la carga inicial', c.q0 ?? 0) };
+    case 'capacitor': {
+      const cap = { ...base, C: positivo(id, 'la capacitancia C', c.C), q0: finito(id, 'la carga inicial', c.q0 ?? 0) };
+      return c.perfil != null ? { ...cap, perfil: perfilValido(id, c.perfil) } : cap;
+    }
     case 'inductor': return { ...base, L: positivo(id, 'la inductancia L', c.L), i0: finito(id, 'la corriente inicial', c.i0 ?? 0) };
     case 'interruptor': return { ...base, cerrado: estadoSimple(id, c.cerrado ?? false) };
     case 'interruptor-3': return { ...base, posicion: posicionTres(id, c.posicion ?? null) };
@@ -350,7 +397,7 @@ function unir(p, a, b) { a = buscar(p, a); b = buscar(p, b); if (a < b) p[b] = a
 function topologia(P, estados, o) {
   const nR = P.nombres.length;
   /** @type {any[]} */ const ramas = [];
-  const add = (tipo, a, b, valor, ci, rol = '') => { ramas.push({ tipo, a, b, valor, ci, rol, ma: 0, mb: 0, jv: -1, jl: -1, curva: null }); };
+  const add = (tipo, a, b, valor, ci, rol = '') => { ramas.push({ tipo, a, b, valor, ci, rol, ma: 0, mb: 0, jv: -1, jl: -1, curva: null, perfil: null }); };
   const conductor = (a, b, ci, rol) => (o.modo === 'realista' ? add('G', a, b, 1 / o.rCable, ci, rol) : add('K', a, b, 0, ci, rol));
   P.comps.forEach((c, ci) => {
     const [a, b] = c.n;
@@ -368,7 +415,7 @@ function topologia(P, estados, o) {
         break;
       }
       case 'bombilla': add('N', a, b, 0, ci); ramas[ramas.length - 1].curva = c.curvaIV; break;
-      case 'capacitor': add('C', a, b, c.C, ci); break;
+      case 'capacitor': add('C', a, b, c.C, ci); ramas[ramas.length - 1].perfil = c.perfil || null; break;
       case 'inductor': add('L', a, b, c.L, ci); break;
       case 'interruptor': if (estados[ci]) conductor(a, b, ci, 'contacto'); break;
       case 'interruptor-3': {
@@ -506,12 +553,13 @@ function resolver(S, motivo) {
 const SINGULAR = 'El circuito no tiene una solución única: hay un lazo de fuentes de voltaje o de inductores sin resistencia, o dos fuentes en paralelo que se contradicen.';
 const SINGULAR_DC = 'El circuito no tiene estado estacionario: hay un lazo de fuentes de voltaje o de inductores sin resistencia, o una fuente de corriente que carga sin fin un capacitor.';
 
-// Filas de las referencias (V = 0) y de las islas (carga total fija)
-function restricciones(S, T, Qislas) {
+// Filas de las referencias (V = 0) y de las islas (carga total fija), con la
+// capacidad del instante t
+function restricciones(S, T, Qislas, t) {
   for (const m of T.refs) { filaNueva(S, m); S.A[m * S.n + m] = 1; }
   T.islas.forEach((isla, j) => {
     filaNueva(S, isla.fila);
-    for (const { k, s } of isla.caps) { const r = T.ramas[k]; sumar(S, isla.fila, r.ma, s * r.valor); sumar(S, isla.fila, r.mb, -s * r.valor); }
+    for (const { k, s } of isla.caps) { const r = T.ramas[k], C = capRama(r, t); sumar(S, isla.fila, r.ma, s * C); sumar(S, isla.fila, r.mb, -s * C); }
     S.b[isla.fila] = Qislas[j];
   });
 }
@@ -519,7 +567,8 @@ function restricciones(S, T, Qislas) {
 // ---------------------------------------------------------------------------
 // Pasos: punto de operación, Euler implícito ('be') y trapezoidal ('tr')
 // ---------------------------------------------------------------------------
-// Estado por rama: v (Va − Vb) e i (de a a b); V: potencial de los nodos unidos.
+// Estado por rama: v (Va − Vb) e i (de a a b); V: potencial de los nodos
+// unidos; t: instante del estado (la capacidad de los capacitores con perfil).
 
 /**
  * Resuelve el circuito en t + h (o el estacionario si metodo = 'dc') a
@@ -527,6 +576,7 @@ function restricciones(S, T, Qislas) {
  */
 function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo === 'dc')) {
   const dc = metodo === 'dc', tr = metodo === 'tr';
+  const t1 = dc ? st.t : st.t + h;
   const nr = T.ramas.length, n = T.M + T.nV + (dc ? T.nLdc : 0);
   const gN = new Float64Array(nr), iN = new Float64Array(nr), guia = Float64Array.from(st.v);
   for (let it = 0; ; it++) {
@@ -549,7 +599,7 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
         default: break;
       }
     });
-    restricciones(S, T, Qislas);
+    restricciones(S, T, Qislas, t1);
     const x = resolver(S, dc ? SINGULAR_DC : SINGULAR);
     if (!T.nN) return extraer(T, x, st, h, metodo, iL);
     // Newton: convergencia en el voltaje de cada bombilla (con paso limitado)
@@ -587,8 +637,13 @@ function inyeccionIsla(T, isla) {
   return inj;
 }
 
-// Modelos compañeros: i = g·v + ieq (de a a b)
+// Modelos compañeros: i = g·v + ieq (de a a b). Capacitor con perfil: la
+// regla se aplica a la carga, q₁ = q₀ + h·(i₀ + i₁)/2 con q = C(t)·v.
 function companeroC(r, st, k, h, tr) {
+  if (r.perfil) {
+    const q0 = capRama(r, st.t) * st.v[k], C1 = capRama(r, st.t + h);
+    return tr ? [2 * C1 / h, -2 * q0 / h - st.i[k]] : [C1 / h, -q0 / h];
+  }
   const g = (tr ? 2 : 1) * r.valor / h;
   return [g, tr ? -g * st.v[k] - st.i[k] : -g * st.v[k]];
 }
@@ -601,7 +656,7 @@ function extraer(T, x, st, h, metodo, iL) {
   const dc = metodo === 'dc', tr = metodo === 'tr', nr = T.ramas.length;
   const V = Float64Array.from(x.subarray(0, T.M)), v = new Float64Array(nr), i = new Float64Array(nr);
   T.ramas.forEach((r, k) => {
-    const d = (r.ma >= 0 ? x[r.ma] : 0) - (r.mb >= 0 ? x[r.mb] : 0);
+    const Va = r.ma >= 0 ? x[r.ma] : 0, Vb = r.mb >= 0 ? x[r.mb] : 0, d = Va - Vb;
     v[k] = d;
     switch (r.tipo) {
       case 'G': i[k] = r.valor * d; break;
@@ -610,10 +665,17 @@ function extraer(T, x, st, h, metodo, iL) {
       case 'C':
         if (!dc) {
           // Un cambio de voltaje por debajo del redondeo es cero: si no, g = C/h
-          // lo amplificaría en una corriente espuria que la trapezoidal no amortigua
-          const ruido = 8 * Number.EPSILON * (Math.abs(d) + Math.abs(st.v[k]));
+          // lo amplificaría en una corriente espuria que la trapezoidal no amortigua.
+          // El redondeo se mide con los potenciales de los bornes: un capacitor
+          // descargado entre dos nodos a 6 V tiene v = 6 − 6 ± 10⁻¹⁵ V.
+          const ruido = 8 * Number.EPSILON * (Math.abs(d) + Math.abs(st.v[k]) + Math.abs(Va) + Math.abs(Vb));
           const [g, ieq] = companeroC(r, st, k, h, tr);
-          i[k] = Math.abs(d - st.v[k]) <= ruido ? g * st.v[k] + ieq : g * d + ieq;
+          if (r.perfil) {
+            // Con perfil, lo mismo con la carga: un cambio de q por debajo del redondeo
+            // (un capacitor aislado cuya placa se mueve) no es corriente
+            const C1 = capRama(r, st.t + h), q1 = C1 * d, q0 = capRama(r, st.t) * st.v[k];
+            i[k] = Math.abs(q1 - q0) <= 8 * Number.EPSILON * (Math.abs(q1) + Math.abs(q0) + C1 * (Math.abs(Va) + Math.abs(Vb))) ? (tr ? -st.i[k] : 0) : g * d + ieq;
+          } else i[k] = Math.abs(d - st.v[k]) <= ruido ? g * st.v[k] + ieq : g * d + ieq;
         }
         break;
       case 'L':
@@ -624,7 +686,7 @@ function extraer(T, x, st, h, metodo, iL) {
       default: break;
     }
   });
-  return { V, v, i, conK: false };
+  return { V, v, i, conK: false, t: dc ? st.t : st.t + h };
 }
 
 // Corriente de los conductores ideales: Kirchhoff sobre un árbol generador de
@@ -671,8 +733,9 @@ function flujoConductores(T, st) {
  * bombillas y los inductores, no): Kirchhoff sobre las cargas transferidas,
  * con cada capacitor como C·(v⁺ − v⁻) y cada fuente fijando su voltaje.
  * Devuelve la energía perdida (trabajo de las fuentes − ΔU de los capacitores).
+ * Los capacitores con perfil usan su capacidad del instante t.
  */
-function impulso(T, P, q, W) {
+function impulso(T, P, q, W, t) {
   const caps = [], fuentes = [];
   T.ramas.forEach((r, k) => { if (r.tipo === 'C') caps.push(k); else if (r.tipo === 'V') fuentes.push(k); });
   if (!caps.length) return { perdida: 0, carga: 0 };
@@ -685,28 +748,33 @@ function impulso(T, P, q, W) {
   const raizT = buscar(uf, n), vistos = new Set(), refs = [];
   for (let i = 0; i < n; i++) { const r = buscar(uf, i); if (r !== raizT && !vistos.has(r)) { vistos.add(r); refs.push(i); } }
   const S = nuevoSistema(n + fuentes.length);
-  for (const k of caps) {
+  const Ct = caps.map(k => capRama(T.ramas[k], t));
+  caps.forEach((k, j) => {
     const r = T.ramas[k];
-    conductancia(S, loc(r.ma), loc(r.mb), r.valor);
+    conductancia(S, loc(r.ma), loc(r.mb), Ct[j]);
     corrienteFija(S, loc(r.ma), loc(r.mb), -q[r.ci]);
-  }
+  });
   fuentes.forEach((k, j) => { const r = T.ramas[k]; ramaFuente(S, loc(r.ma), loc(r.mb), n + j, r.valor); });
   for (const i of refs) { filaNueva(S, i); S.A[i * S.n + i] = 1; }
   const x = resolver(S, SINGULAR);
   const vn = m => (m < 0 ? 0 : x[idx[m]]);
   let qRef = 0, salto = 0;
-  const nuevas = caps.map(k => {
-    const r = T.ramas[k], q1 = r.valor * (vn(r.ma) - vn(r.mb));
+  const nuevas = caps.map((k, j) => {
+    const r = T.ramas[k], q1 = Ct[j] * (vn(r.ma) - vn(r.mb));
     qRef = Math.max(qRef, Math.abs(q[r.ci]), Math.abs(q1));
     salto = Math.max(salto, Math.abs(q1 - q[r.ci]));
     return q1;
   });
-  // Un salto del orden del redondeo no es un salto: el estado ya era consistente
+  // Un salto del orden del redondeo no es un salto: el estado ya era consistente.
+  // La escala incluye la carga que pueden dar las fuentes (C·ΣE): con todos los
+  // capacitores descargados, el ruido de 10⁻¹⁸ C no cuenta como conexión.
+  let Vf = 0; for (const k of fuentes) Vf += Math.abs(T.ramas[k].valor);
+  for (const C of Ct) qRef = Math.max(qRef, C * Vf);
   if (!(salto > 1e-12 * qRef)) return { perdida: 0, carga: 0 };
   let U0 = 0, U1 = 0, Wimp = 0;
   caps.forEach((k, j) => {
     const r = T.ramas[k];
-    U0 += q[r.ci] * q[r.ci] / (2 * r.valor); U1 += nuevas[j] * nuevas[j] / (2 * r.valor);
+    U0 += q[r.ci] * q[r.ci] / (2 * Ct[j]); U1 += nuevas[j] * nuevas[j] / (2 * Ct[j]);
     q[r.ci] = nuevas[j];
   });
   fuentes.forEach((k, j) => { const r = T.ramas[k], w = -r.valor * x[n + j]; W[r.ci] += w; Wimp += w; });
@@ -738,23 +806,23 @@ function estadoInterruptores(P) {
   return P.comps.map(c => (c.tipo === 'interruptor' ? c.cerrado : c.tipo === 'interruptor-3' ? c.posicion : null));
 }
 
-function energiaAlmacenada(P, q, iL) {
+function energiaAlmacenada(P, q, iL, t = 0) {
   let U = 0;
   P.comps.forEach((c, ci) => {
-    if (c.tipo === 'capacitor') U += q[ci] * q[ci] / (2 * c.C);
+    if (c.tipo === 'capacitor') U += q[ci] * q[ci] / (2 * capacidadEn(c, t));
     else if (c.tipo === 'inductor') U += 0.5 * c.L * iL[ci] * iL[ci];
   });
   return U;
 }
 
-/** Estado de las ramas antes de resolver: solo las variables de estado. */
-function estadoRamas(T, q, iL) {
+/** Estado de las ramas en t antes de resolver: solo las variables de estado. */
+function estadoRamas(T, q, iL, t = 0) {
   const nr = T.ramas.length, v = new Float64Array(nr), i = new Float64Array(nr);
   T.ramas.forEach((r, k) => {
-    if (r.tipo === 'C') v[k] = q[r.ci] / r.valor;
+    if (r.tipo === 'C') v[k] = q[r.ci] / capRama(r, t);
     else if (r.tipo === 'L') i[k] = iL[r.ci];
   });
-  return { V: new Float64Array(T.M), v, i, conK: true };
+  return { V: new Float64Array(T.M), v, i, conK: true, t };
 }
 
 function construirMuestra(T, P, st, t, ctx) {
@@ -773,7 +841,7 @@ function construirMuestra(T, P, st, t, ctx) {
     if (!rs.length) return;
     const k0 = rs[0];
     I[ci] = (c.tipo === 'bateria' ? -st.i[k0] : st.i[k0]) + 0;   // + 0: nunca −0
-    if (c.tipo === 'capacitor') { q[ci] = c.C * st.v[k0]; U[ci] = q[ci] * q[ci] / (2 * c.C); }
+    if (c.tipo === 'capacitor') { const C = capacidadEn(c, st.t); q[ci] = C * st.v[k0]; U[ci] = q[ci] * q[ci] / (2 * C); }
     else if (c.tipo === 'inductor') U[ci] = 0.5 * c.L * st.i[k0] * st.i[k0];
   });
   return { t, V, I, v, q, U, W: Float64Array.from(ctx.W), Q: Float64Array.from(ctx.Qj), perdidas: ctx.perdidas, numerico: ctx.numerico };
@@ -783,6 +851,8 @@ function construirMuestra(T, P, st, t, ctx) {
  * Energía de un paso por rama (teorema de Tellegen). Trapezoidal: h·v̄·ī,
  * exacta para capacitores e inductores. Euler implícito: h·v₁·i₁; lo que
  * excede la variación de energía almacenada es disipación numérica.
+ * Capacitor con perfil: la fuerza externa hace W = −½·v₀·v₁·ΔC (con la
+ * trapezoidal, exactamente ΔU − h·v̄·ī).
  */
 function contabilizar(T, st0, st1, h, metodo, ctx) {
   const tr = metodo === 'tr';
@@ -792,7 +862,14 @@ function contabilizar(T, st0, st1, h, metodo, ctx) {
     switch (r.tipo) {
       case 'V': case 'J': ctx.W[r.ci] -= p; break;
       case 'G': case 'N': ctx.Qj[r.ci] += p; break;
-      case 'C': ctx.numerico += p - 0.5 * r.valor * (st1.v[k] * st1.v[k] - st0.v[k] * st0.v[k]); break;
+      case 'C':
+        if (r.perfil) {
+          const C0 = capRama(r, st0.t), C1 = capRama(r, st1.t), v0 = st0.v[k], v1 = st1.v[k];
+          const Wf = -0.5 * v0 * v1 * (C1 - C0);
+          ctx.W[r.ci] += Wf;
+          ctx.numerico += p + Wf - 0.5 * (C1 * v1 * v1 - C0 * v0 * v0);
+        } else ctx.numerico += p - 0.5 * r.valor * (st1.v[k] * st1.v[k] - st0.v[k] * st0.v[k]);
+        break;
       case 'L': ctx.numerico += p - 0.5 * r.valor * (st1.i[k] * st1.i[k] - st0.i[k] * st0.i[k]); break;
       default: break;
     }
@@ -823,13 +900,13 @@ function errorLocal(T, hist, t1, st1) {
 const vectorEstado = (T, st) => T.estadosRama.map(k => (T.ramas[k].tipo === 'C' ? st.v[k] : st.i[k]));
 function energiaRamas(T, st) {
   let U = 0;
-  for (const k of T.estadosRama) { const r = T.ramas[k], x = r.tipo === 'C' ? st.v[k] : st.i[k]; U += 0.5 * r.valor * x * x; }
+  for (const k of T.estadosRama) { const r = T.ramas[k], x = r.tipo === 'C' ? st.v[k] : st.i[k]; U += 0.5 * (r.tipo === 'C' ? capRama(r, st.t) : r.valor) * x * x; }
   return U;
 }
 
 function integrarTramo(ctx, T, tIni, tFin, primero) {
   const { o, P, q, iL } = ctx, dt = o.dt;
-  let st = estadoRamas(T, q, iL);
+  let st = estadoRamas(T, q, iL, tIni);
   // Carga de cada isla: variable de estado propia del tramo. Solo la cambian
   // las fuentes de corriente; así no acumula el redondeo de paso en paso.
   const Qisla = cargasIslas(T, q, false), inj = T.islas.map(isla => inyeccionIsla(T, isla));
@@ -864,13 +941,13 @@ function integrarTramo(ctx, T, tIni, tFin, primero) {
     contabilizar(T, st, cand, h, 'tr', ctx);
     Qisla.forEach((Q, j) => { Qisla[j] = Q + h * inj[j]; });
     t = h === resto ? tSig : t + h;
-    st = cand;
+    st = cand; st.t = t;
     hist.push({ t, x: vectorEstado(T, st) }); if (hist.length > 3) hist.shift();
     if (!recortado && razon < 1 / 16 && k > 0) k--;
     if (t === tSig) { ctx.muestras.push(construirMuestra(T, P, st, t, ctx)); tSig = siguiente(t); }
   }
   // Variables de estado al final del tramo
-  T.ramas.forEach((r, j) => { if (r.tipo === 'C') q[r.ci] = r.valor * st.v[j]; else if (r.tipo === 'L') iL[r.ci] = st.i[j]; });
+  T.ramas.forEach((r, j) => { if (r.tipo === 'C') q[r.ci] = capRama(r, st.t) * st.v[j]; else if (r.tipo === 'L') iL[r.ci] = st.i[j]; });
 }
 
 // ---------------------------------------------------------------------------
@@ -934,12 +1011,17 @@ export function simularCircuito(circuito, opciones = {}) {
   const estados = estadoInterruptores(P);
   const { q, iL } = condicionesIniciales(P);
 
-  // Acciones agrupadas por instante; las de t = 0 se aplican antes de empezar
+  // Acciones agrupadas por instante; las de t = 0 se aplican antes de empezar.
+  // Los vértices de los perfiles de capacidad también cortan los tramos
+  // (grupos sin acciones): ahí dC/dt salta y el paso vuelve a arrancar.
+  const cortes = P.acciones.map(a => ({ t: a.t, a }));
+  for (const c of P.comps) if (c.perfil) for (const [tp] of c.perfil) if (tp > 0) cortes.push({ t: tp, a: null });
+  cortes.sort((x, y) => x.t - y.t || (x.a ? x.a.orden : Infinity) - (y.a ? y.a.orden : Infinity));
   const grupos = [];
-  for (const a of P.acciones) {
-    if (a.t >= o.duracion) continue;
+  for (const { t: tc, a } of cortes) {
+    if (tc >= o.duracion) continue;
     const ult = grupos[grupos.length - 1];
-    if (ult && Math.abs(a.t - ult.t) <= 1e-12 * o.duracion) ult.acciones.push(a); else grupos.push({ t: a.t, acciones: [a] });
+    if (ult && Math.abs(tc - ult.t) <= 1e-12 * o.duracion) { if (a) ult.acciones.push(a); } else grupos.push({ t: tc, acciones: a ? [a] : [] });
   }
   const aplicar = g => { for (const a of g.acciones) estados[a.ci] = a.estado; };
   const iniciales = grupos.length && grupos[0].t <= 1e-12 * o.duracion ? grupos.shift() : null;
@@ -948,7 +1030,7 @@ export function simularCircuito(circuito, opciones = {}) {
   let T = topologia(P, estados, o);
   if (o.inicio === 'estacionario') {
     const st = resolverPaso(T, estadoRamas(T, q, iL), 0, 'dc', q, iL);
-    T.ramas.forEach((r, k) => { if (r.tipo === 'C') q[r.ci] = r.valor * st.v[k]; else if (r.tipo === 'L') iL[r.ci] = st.i[k]; });
+    T.ramas.forEach((r, k) => { if (r.tipo === 'C') q[r.ci] = capRama(r, 0) * st.v[k]; else if (r.tipo === 'L') iL[r.ci] = st.i[k]; });
   }
   const ctx = {
     o, P, q, iL, W: new Float64Array(nC), Qj: new Float64Array(nC), perdidas: 0, numerico: 0,
@@ -972,7 +1054,7 @@ export function simularCircuito(circuito, opciones = {}) {
   ctx.Eref = Math.max(ctx.Eref, U0, 1e-300);
 
   const conmutar = (t, acciones) => {
-    const imp = impulso(T, P, q, ctx.W), cor = cortarInductores(T, P, iL);
+    const imp = impulso(T, P, q, ctx.W, t), cor = cortarInductores(T, P, iL);
     const perdida = imp.perdida + cor.perdida;
     ctx.perdidas += perdida;
     if (acciones.length || imp.carga > 0 || cor.cortes.length) {

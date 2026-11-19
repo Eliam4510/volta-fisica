@@ -50,7 +50,7 @@ Principios del proyecto:
 | Electrostática | Utilizable | Cargas, hilos, anillos, láminas y esferas; campo, potencial, Gauss y cargas en movimiento; capacitores con dieléctricos, conductores y batería conectada o no; 18 escenas MEXT |
 | Termodinámica | Utilizable | Laboratorio de gases (cilindros, recipientes con válvulas, globos, burbujas), ciclos en el diagrama P-V con Q, W y ΔU por tramo, gas molecular de discos con Maxwell–Boltzmann, y calor y calorimetría; 29 escenas MEXT |
 | Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria; 8 escenas MEXT |
-| Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC |
+| Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC, capacitores cuya capacidad cambia en el tiempo, voltímetro y amperímetro; 10 escenas MEXT |
 | Magnetismo e inducción | Utilizable | Campos de hilos, espiras, solenoides e imanes; partículas en E y B con Boris (selector, espectrómetro, ciclotrón, Hall); inducción acoplada (rieles, espiras, generador) con balance de energía; 13 escenas MEXT |
 | Ondas y sonido | Utilizable | Cuerdas y tubos (reflexión, uniones, modos, resonancia) y Doppler con audio; la cubeta 2D, en preparación |
 | Óptica | Utilizable | Trazado de rayos (Snell, Fresnel, reflexión total, prismas con dispersión, lentes y espejos), interferencia y difracción por suma de Huygens, películas delgadas, anillos de Newton y Michelson |

@@ -146,7 +146,8 @@
   /**
    * Dibuja un componente. el: {tipo, c: [x, y] (centro), rot (grados)}.
    * o: {cerrado, posicion, q, qRef, brillo (0 a 1), calor (0 a 1), grueso,
-   *     conectadas: {a, b, c} (posiciones con algo conectado)}
+   *     conectadas: {a, b, c} (posiciones con algo conectado),
+   *     placa: {f, e} (capacitor: placa conductora de espesor e·d metida una fracción f)}
    */
   P.circElemento = function (el, o = {}) {
     const c = this.ctx, { S, u } = marco(this, el.c, el.rot || 0), t = this.t;
@@ -154,7 +155,7 @@
     c.save(); c.setLineDash([]); c.lineCap = 'round'; c.lineJoin = 'round';
     c.strokeStyle = t.tinta; c.fillStyle = t.lienzo; c.lineWidth = g;
     const linea = (...pts) => { trazar(c, pts.map(p => S(p[0], p[1]))); c.stroke(); };
-    const circulo = (lx, ly, r, relleno = t.lienzo) => { const [x, y] = S(lx, ly); c.beginPath(); c.arc(x, y, r, 0, 2 * Math.PI); c.fillStyle = relleno; c.fill(); c.stroke(); };
+    const circulo = (lx, ly, r, relleno = t.lienzo) => { const [x, y] = S(lx, ly); c.beginPath(); c.arc(x, y, Math.max(0, r), 0, 2 * Math.PI); c.fillStyle = relleno; c.fill(); c.stroke(); };
     switch (el.tipo) {
       case 'resistencia': case 'reostato': {
         const [a, h] = GC.resistencia;
@@ -187,6 +188,15 @@
       case 'capacitor': {
         const p = GC.placa, s = GC.hueco;
         linea([-1, 0], [-s, 0]); linea([s, 0], [1, 0]);
+        // Placa conductora (materia: relleno de conductor y contorno de tinta) de
+        // espesor e·d, centrada en el hueco; entra a lo largo de las placas desde
+        // el lado +y del marco local. f = 0: fuera, junto a ellas; f = 1: dentro.
+        if (o.placa) {
+          const f = Math.max(0, Math.min(1, o.placa.f)), m = s * Math.max(0.05, Math.min(0.9, o.placa.e)), y0 = p - 2 * p * f;
+          trazar(c, [S(-m, y0), S(m, y0), S(m, y0 + 2 * p), S(-m, y0 + 2 * p)]); c.closePath();
+          c.fillStyle = t['campo-activo']; c.fill(); c.lineWidth = 1; c.stroke();
+          c.lineWidth = g;
+        }
         c.lineWidth = 2.5; c.lineCap = 'butt';
         linea([-s, -p], [-s, p]); linea([s, -p], [s, p]);
         // Signos de carga en la cara exterior de cada placa, proporcionales a q

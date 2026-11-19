@@ -2,10 +2,12 @@
 // corriente continua (Ohm, serie y paralelo, divisor, puente de Wheatstone),
 // transitorios RC, LC y RLC, reparto de carga entre capacitores, MEXT 2023 P2,
 // MEXT 2019 P2 y MEXT 2027 1-(3), conservación de la carga en islas, bombilla
-// no lineal con recta de carga, registro de energía y determinismo.
+// no lineal con recta de carga, registro de energía, determinismo y
+// capacitores cuya capacidad cambia en el tiempo (placa o dieléctrico que se
+// mueve). Las demás escenas MEXT, en pruebas/circuitos-mext.test.js.
 import { describe, it, expect } from 'vitest';
 import {
-  simularCircuito, puntoOperacion, estadoEn, balance, indiceDe, curvaBombilla,
+  simularCircuito, puntoOperacion, estadoEn, balance, indiceDe, curvaBombilla, capacidadEn,
   ErrorCircuito, OPCIONES_CIRCUITO, TIPOS_COMPONENTE,
 } from '../sistema/motores/circuitos.js';
 
@@ -668,5 +670,116 @@ describe('errores que dicen qué pasa', () => {
   });
   it('acción sobre algo que no es un interruptor', () => {
     falla(() => simularCircuito({ componentes: base(), acciones: [{ t: 1, id: 'R', estado: true }] }), /no es un interruptor/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('capacitor con perfil de capacidad C(t) = C·f(t)', () => {
+  const C = 1e-3, E = 10;
+  // Batería ideal sobre el capacitor: S se cierra en 0.5 s y se abre en 5.5 s;
+  // f sube de 1 a 3/2 entre 1.5 y 4.5 s y vuelve a 1 entre 6.5 y 9.5 s
+  const perfil = [[1.5, 1], [4.5, 1.5], [6.5, 1.5], [9.5, 1]];
+  const circuito = (modo = 'ideal') => simularCircuito({
+    componentes: [
+      { id: 'E', tipo: 'bateria', nodos: ['p', 'g'], E },
+      { id: 'S', tipo: 'interruptor', nodos: ['p', 'a'] },
+      { id: 'C', tipo: 'capacitor', nodos: ['a', 'g'], C, perfil },
+      { id: 'T', tipo: 'tierra', nodos: ['g'] },
+    ],
+    acciones: [{ t: 0.5, id: 'S', estado: true }, { t: 5.5, id: 'S', estado: false }],
+  }, { duracion: 10, dt: 0.01, modo, rCable: 0.05 });
+
+  it('capacidadEn: lineal entre los puntos del perfil y constante fuera', () => {
+    const c = { C, perfil };
+    expect(capacidadEn(c, 0)).toBe(C);
+    cerca(capacidadEn(c, 3), 1.25 * C);
+    expect(capacidadEn(c, 5)).toBe(1.5 * C);
+    cerca(capacidadEn(c, 8), 1.25 * C);
+    expect(capacidadEn(c, 20)).toBe(C);
+    expect(capacidadEn({ C }, 3)).toBe(C);
+  });
+
+  it('con la batería: q = E·C(t) y la corriente es E·dC/dt mientras la capacidad cambia', () => {
+    const sim = circuito(), k = indiceDe(sim, 'C');
+    for (const t of [1, 2, 3.3, 4.5, 5]) cerca(estadoEn(sim, t).q[k], E * capacidadEn({ C, perfil }, t), 1e-12);
+    // dC/dt = 0.5·C/3 s; el error de la corriente es el redondeo amplificado por C/h
+    for (const t of [2, 3, 4]) cerca(estadoEn(sim, t).I[k], E * 0.5 * C / 3, 1e-6);
+    cerca(estadoEn(sim, 1.4).I[k], 0, 0, 1e-12);
+  });
+
+  it('cada vértice del perfil corta el paso: la corriente salta justo ahí, sin evento en la tabla', () => {
+    const sim = circuito(), k = indiceDe(sim, 'C');
+    // En el vértice, el estado es el de justo antes (sin corriente); la primera muestra después ya la tiene
+    cerca(estadoEn(sim, 1.5).I[k], 0, 0, 1e-12);
+    const despues = sim.muestras.find(m => m.t > 1.5);
+    expect(despues.t - 1.5).toBeLessThan(1e-6);
+    cerca(despues.I[k], E * 0.5 * C / 3, 1e-6);
+    expect(sim.eventos.map(e => e.t)).toEqual([0.5, 5.5]);
+  });
+
+  it('el trabajo de la fuerza externa es −½E²ΔC con la batería y q²/2·Δ(1/C) con la carga fija', () => {
+    const sim = circuito(), k = indiceDe(sim, 'C'), kE = indiceDe(sim, 'E');
+    const [a, b, c, d] = [1.5, 4.5, 6.5, 9.5].map(t => estadoEn(sim, t));
+    cerca(b.W[kE] - a.W[kE], E * E * 0.5 * C, 1e-12);          // la batería: E·Δq
+    cerca(b.W[k] - a.W[k], -0.5 * E * E * 0.5 * C, 1e-12);       // la fuerza: −½E²ΔC
+    cerca(b.U[k] - a.U[k], 0.5 * E * E * 0.5 * C, 1e-12);        // ΔU = ½E²ΔC
+    // Isla: S abierto, la carga 1.5·C·E no cambia y v = q/C(t) sube
+    const q = 1.5 * C * E;
+    cerca(d.q[k], q, 1e-12);
+    cerca(d.v[k], q / C, 1e-12);
+    cerca(d.W[k] - c.W[k], q * q / 2 * (1 / C - 1 / (1.5 * C)), 1e-12);
+    balanceCierra(sim, 1e-12);
+  });
+
+  it('modo realista: los cables apenas cambian el resultado y el balance cierra', () => {
+    const sim = circuito('realista'), k = indiceDe(sim, 'C');
+    // La carga va con un retraso de R_cables·C ≈ 0.2 ms detrás de E·C(t): diferencias de 10⁻⁵
+    const a = estadoEn(sim, 1.5), b = estadoEn(sim, 4.5);
+    cerca(b.q[k] - a.q[k], 0.5 * C * E, 1e-4);
+    cerca(b.W[k] - a.W[k], -0.25 * C * E * E, 1e-4);
+    balanceCierra(sim, 1e-10);
+  });
+
+  it('RC con capacidad lineal: q(t) = E/(Rk + 1/C₀)·[(1 + kt) − (1 + kt)^(−1/(RC₀k))]', () => {
+    const R = 100, C0 = 1e-3, k = 0.5, T1 = 4;
+    const sim = simularCircuito({ componentes: [
+      { id: 'E', tipo: 'bateria', nodos: ['p', 'g'], E },
+      { id: 'R', tipo: 'resistencia', nodos: ['p', 'a'], R },
+      { id: 'C', tipo: 'capacitor', nodos: ['a', 'g'], C: C0, perfil: [[0, 1], [T1, 1 + k * T1]] },
+      { id: 'T', tipo: 'tierra', nodos: ['g'] },
+    ] }, { duracion: T1, dt: 0.01, ...PRECISO });
+    const kc = indiceDe(sim, 'C'), a = 1 / (R * C0 * k);
+    let err = 0, qmax = 0;
+    for (const m of sim.muestras) {
+      const x = 1 + k * m.t, qa = E / (R * k + 1 / C0) * (x - x ** -a);
+      err = Math.max(err, Math.abs(m.q[kc] - qa)); qmax = Math.max(qmax, qa);
+    }
+    expect(err / qmax).toBeLessThan(1e-6);
+    balanceCierra(sim, 1e-12);
+  });
+
+  it('el punto de operación y el inicio estacionario usan C(0)', () => {
+    const circ = { componentes: [
+      { id: 'E', tipo: 'bateria', nodos: ['p', 'g'], E },
+      { id: 'R', tipo: 'resistencia', nodos: ['p', 'a'], R: 10 },
+      { id: 'C', tipo: 'capacitor', nodos: ['a', 'g'], C, perfil: [[0, 2], [1, 3]] },
+      { id: 'T', tipo: 'tierra', nodos: ['g'] },
+    ] };
+    const op = puntoOperacion(circ);
+    cerca(op.q[op.ids.indexOf('C')], 2 * C * E);
+    const sim = simularCircuito(circ, { duracion: 0.5, dt: 0.01, inicio: 'estacionario' });
+    cerca(sim.muestras[0].q[indiceDe(sim, 'C')], 2 * C * E, 1e-9);
+  });
+
+  it('perfiles imposibles se rechazan con un mensaje claro', () => {
+    const con = perfil => () => simularCircuito({ componentes: [
+      { id: 'E', tipo: 'bateria', nodos: ['p', 'g'], E },
+      { id: 'C', tipo: 'capacitor', nodos: ['p', 'g'], C, perfil },
+      { id: 'T', tipo: 'tierra', nodos: ['g'] },
+    ] });
+    expect(con([])).toThrow(/perfil/);
+    expect(con([[1, 1], [1, 2]])).toThrow(/crecen/);
+    expect(con([[0, 1], [1, 0]])).toThrow(/positivo/);
+    expect(con([[0, 1], ['x', 2]])).toThrow(/pares/);
   });
 });
