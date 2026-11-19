@@ -7,6 +7,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.8.0] - 2026-11-19
+
+Mecánica con 38 escenas MEXT: movimiento impuesto por tramos, prensa
+hidráulica, estática con cuerpos de varillas e instrumentos (regla y
+fotopuerta). Inicio muestra las escenas recientes reales.
+
 ### Añadido
 
 - Laboratorio de Mecánica: seis escenas MEXT nuevas de cinemática y
@@ -383,7 +389,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.7.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.0...v0.5.1
