@@ -61,6 +61,9 @@ exactos.
 
 ### Corregido
 
+- Una partícula puntual que llegaba justo al extremo de un segmento (el pie
+  de una pared que arranca en el suelo) lo atravesaba; y una que pasaba por
+  detrás de dos bordes en el mismo instante agotaba los eventos.
 - La paleta de objetos de Cinemática y proyectiles no hacía nada: ahora
   lleva al Laboratorio, donde se construyen las escenas libres, y los
   instrumentos dicen que llegan en una próxima versión.

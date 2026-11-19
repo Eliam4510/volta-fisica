@@ -384,3 +384,30 @@ describe('presupuesto de cálculo', () => {
     expect(sim.incompleta).toBeNull();
   });
 });
+
+describe('extremos de las superficies', () => {
+  it('un punto que llega justo al extremo de una pared choca con ella', () => {
+    const sim = simularMecanica({ g: [0, 0], duracion: 3, particulas: [{ id: 'P', m: 1, p: [1, 0], v: [1, 0] }], superficies: [{ id: 'pared', tipo: 'segmento', a: [2, 0], b: [2, 0.5] }] });
+    cerca(ev(sim, 'Choque con pared').t, 1, 1e-9);
+    cerca(estadoMecanica(sim, 3)[0].x, 0, 1e-9);
+  });
+  it('una partícula que desliza por el suelo choca con la pared que arranca en él', () => {
+    const sim = simularMecanica({
+      duracion: 3, particulas: [{ id: 'P', m: 1, p: [1, 0], v: [1, 0] }],
+      superficies: [{ id: 'suelo', tipo: 'segmento', a: [0, 0], b: [2, 0] }, { id: 'pared', tipo: 'segmento', a: [2, 0], b: [2, 0.5] }],
+    });
+    expect(sim.incompleta).toBeNull();
+    const s = estadoMecanica(sim, 3)[0];
+    cerca(s.x, 0, 1e-9);
+    cerca(s.y, 0, 1e-9);
+  });
+  it('pasar por detrás de dos bordes en el mismo instante no atasca la simulación', () => {
+    const sim = simularMecanica({
+      duracion: 3, particulas: [{ id: 'P', m: 1, p: [2, 2], v: [0, 0] }],
+      superficies: [{ id: 'a', tipo: 'segmento', a: [0, 0], b: [0, 1] }, { id: 'b', tipo: 'segmento', a: [1, 0], b: [1, 1] }],
+    });
+    expect(sim.incompleta).toBeNull();
+    expect(sim.eventos).toEqual([]);
+    cerca(estadoMecanica(sim, 3)[0].y, 2 - g * 9 / 2, 1e-9);
+  });
+});

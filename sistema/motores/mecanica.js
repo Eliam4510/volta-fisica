@@ -503,16 +503,22 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
 /** ¿El punto proyecta dentro de la superficie? (para segmentos: 0 ≤ s ≤ L) */
 function dentroDeSuperficie(sup, p) { return margenSuperficie(sup, p) >= 0; }
 
-/** Margen hasta el borde: positivo dentro, negativo fuera. */
+/**
+ * Margen hasta el borde: positivo dentro, negativo fuera. La extensión es
+ * cerrada, con una holgura mínima: un punto justo en el extremo (el pie de
+ * una pared que arranca en el suelo) cuenta como dentro, y un margen que
+ * empieza en el borde no es exactamente 0 (el integrador no contaría un cero
+ * inicial como cruce y el choque o la salida por el borde se perderían).
+ */
 function margenSuperficie(sup, p) {
   if (sup.tipo === 'segmento') {
     const s = dot(sub(p, sup.a), sup.geo.t);
-    return Math.min(s, sup.geo.L - s);
+    return Math.min(s, sup.geo.L - s) + 1e-12 * Math.max(1, sup.geo.L);
   }
   if (sup.a0 == null) return 1;   // arco completo
   const ang = Math.atan2(p[1] - sup.c[1], p[0] - sup.c[0]);
   const a = normalizarAngulo(ang - sup.a0), total = normalizarAngulo(sup.a1 - sup.a0) || 2 * Math.PI;
-  return Math.min(a, total - a) * sup.r;
+  return Math.min(a, total - a) * sup.r + 1e-12 * Math.max(1, sup.r);
 }
 function normalizarAngulo(a) { const d = 2 * Math.PI; return ((a % d) + d) % d; }
 
@@ -725,7 +731,14 @@ export function simularMecanica(escena) {
   let pasosUsados = 0;
   // Eventos descartados (un cruce sin choque): se silencian durante una pausa
   // muy breve para que no se repitan en el mismo instante
-  let silencio = new Set();
+  let silencio = new Set(), tSilencio = -Infinity;
+  // Un cruce descartado silencia su evento durante una pausa; si en el mismo
+  // instante se descarta otro (dos bordes a la vez), se silencian los dos
+  const silenciar = nombreEv => {
+    if (t - tSilencio <= 2 * PAUSA) for (const n of silenciadosActuales) silencio.add(n);
+    silencio.add(nombreEv); tSilencio = t;
+  };
+  let silenciadosActuales = new Set();
   while (t < DUR - 1e-12 && k < LIMITE) {
     k++;
     const restr = restriccionesDelModo(S, modo);
@@ -745,6 +758,7 @@ export function simularMecanica(escena) {
     // Paso máximo acotado: un evento cuya función baja y vuelve a subir dentro de un
     // paso (dos partículas que se cruzan) no se detecta por el signo en los extremos.
     const silenciados = silencio;
+    silenciadosActuales = silenciados;
     silencio = new Set();
     const tHasta = silenciados.size ? Math.min(DUR, t + PAUSA) : DUR;
     const sol = integrar(f, t, y, tHasta, {
@@ -786,7 +800,7 @@ export function simularMecanica(escena) {
       // Dentro de la extensión es un impacto aunque haya un solape pequeño.
       const porBorde = margenSuperficie(S.sup[js], [y[4 * i], y[4 * i + 1]]) <= TOL_HUECO && C < -TOL_PENETRACION;
       descripcion = porBorde ? '' : impacto(i, js, zeno);
-      if (!descripcion) silencio.add(nombre);
+      if (!descripcion) silenciar(nombre);
     } else if (partes[0] === 'despegue') {
       const clave = `${partes[1]}:${partes[2]}`;
       excluir.add('sup:' + clave);
@@ -834,7 +848,7 @@ export function simularMecanica(escena) {
         descripcion = `La cuerda ${c.id} toca el clavo`;
       } else {
         // La partícula cruzó la recta del clavo del otro lado del pivote: la cuerda no lo toca
-        silencio.add(nombre);
+        silenciar(nombre);
       }
     } else if (partes[0] === 'desengancha') {
       const c = S.con.find(x => x.id === partes[1]), est = modo.cuerdas[c.id];
@@ -844,7 +858,7 @@ export function simularMecanica(escena) {
       descripcion = `La cuerda ${c.id} se suelta del clavo`;
     } else if (partes[0] === 'choque') {
       descripcion = choque(Number(partes[1]), Number(partes[2]), zeno);
-      if (!descripcion) silencio.add(nombre);
+      if (!descripcion) silenciar(nombre);
     } else if (partes[0] === 'separa') {
       excluir.add(`par:${partes[1]}:${partes[2]}`);
       delete modo.pares[`${partes[1]}:${partes[2]}`];
