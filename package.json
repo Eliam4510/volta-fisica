@@ -8,6 +8,7 @@
   "scripts": {
     "test": "vitest run",
     "test:vigilar": "vitest",
+    "banco": "vitest bench --run",
     "tipos": "tsc -p jsconfig.json",
     "tokens": "node sistema/tokens/construir.mjs",
     "iconos": "node sistema/iconos/construir.mjs",

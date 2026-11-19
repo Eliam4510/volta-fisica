@@ -5,5 +5,6 @@ export default defineConfig({
     include: ['pruebas/**/*.test.js'],
     environment: 'node',
     reporters: ['default'],
+    benchmark: { include: ['pruebas/rendimiento/**/*.bench.js'] },
   },
 });

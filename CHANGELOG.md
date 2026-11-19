@@ -42,6 +42,8 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   escenas `.volta`; exportar CSV con BOM e imagen PNG.
 - Revisión de tipos con TypeScript sobre el núcleo y los motores
   (`npm run tipos`), también en la integración continua.
+- Banco de rendimiento de los motores con las escenas de las pantallas
+  (`npm run banco`).
 
 ### Corregido
 
