@@ -17,9 +17,11 @@ física > funciones faltantes > rendimiento > pulido.
     `ondas-doppler.*`). Al integrar: añadirlo a MODULOS en
     `componentes/espacio.js`, a PANTALLAS y a la tarjeta de Inicio, al README
     y al CHANGELOG.
-  - Escenas MEXT del Laboratorio (temas M3–M7): toca solo el arreglo
-    ESCENARIOS de `mecanica-laboratorio.js` y crea
-    `pruebas/mecanica-laboratorio-mext.test.js`.
+- Escenas MEXT del Laboratorio integradas: 24 escenas MEXT con prueba cada
+  una. Sin representar: 2016 P3 (fricción entre dos cuerpos móviles),
+  2006 1-(1) (fuerza que depende de la posición), 2025 T2 (sin enunciado),
+  estática (M9, necesita cuerpo rígido), fluidos (M10), movimiento relativo
+  (M11) y cinemática pura (M1, gráficas v-t prescritas).
 
 ## Pendiente (ordenado)
 
@@ -148,3 +150,4 @@ análisis de datos:
 - 2026-11-19 05:30 — Laboratorio de Mecánica integrado (caja de arena), navegación común en las migas, ángulos sin unidad en grados, eventos de apoyos perdidos, tope de paso solo con clavos. v0.4.0 publicada (332 pruebas). Agente de Ondas y sonido en curso.
 - 2026-11-19 06:10 — Laboratorio: fuerza aplicada con U_F, duplicar, gráficas configurables (con aceleración y trayectoria). Paletas que no hacían nada ahora llevan al Laboratorio o explican qué falta. Inicio con estados «Disponible»/«En preparación». Autocrítica 3. 336 pruebas. Agente de Ondas en curso.
 - 2026-11-19 06:40 — Presupuesto de cálculo en Mecánica (pasos y reloj), experimento de conjunto activo descartado, campos muertos corregidos (cilindro, x de salida), GIF del Laboratorio en el README. Lanzado el agente de escenas MEXT del Laboratorio.
+- 2026-11-19 07:20 — 19 escenas MEXT nuevas en el Laboratorio (agente + 2010 1-F), cuerda elástica en el motor, extremos de segmento cerrados y silencio acumulado (errores encontrados por el agente). 439 pruebas.
