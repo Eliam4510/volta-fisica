@@ -57,3 +57,17 @@ vieja.
 13. **Las barras flotantes del lienzo son zonas reservadas.** `trazo.ejes`
     aparta de ellas las etiquetas de los ejes; las demás etiquetas del lienzo
     deben respetarlas igual.
+14. **Contactos como problema de complementariedad (2026-11-19).** Las
+    restricciones unilaterales (apoyos, pares de discos, cuerdas) cumplen
+    λ ≥ 0, w ≥ 0 y λ·w = 0. Se resuelven así en los instantes de evento: el
+    conjunto activo, con un LCP de pivoteo principal (Murty) sobre el sistema
+    ya armado y las bilaterales como filas libres; los restos de acercamiento,
+    con un LCP de impulsos inelásticos simultáneos sobre todo lo que se toca.
+    Dentro de cada tramo se sigue resolviendo una igualdad sobre el conjunto
+    activo, para que los despegues (λ → 0) sigan siendo eventos exactos.
+    J M⁻¹ Jᵀ se regulariza (el CFM de ODE y MuJoCo) solo cuando un pivote baja
+    de 10⁻⁶ de la diagonal, con un paso de refinamiento iterativo que quita el
+    sesgo en los modos bien condicionados. Al empezar cada tramo, las
+    posiciones se proyectan para quitar los solapes de cuerpos (Cline y Pai,
+    2003); las cuerdas no se proyectan. Un contacto persistente con hueco
+    exige que la rapidez relativa entera sea lenta, no solo la normal.

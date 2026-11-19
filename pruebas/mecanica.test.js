@@ -1,6 +1,6 @@
 // Motor general de Mecánica contra soluciones analíticas.
 import { describe, it, expect } from 'vitest';
-import { simularMecanica, estadoMecanica, energiaMecanica } from '../sistema/motores/mecanica.js';
+import { simularMecanica, estadoMecanica, energiaMecanica, resolverLCP } from '../sistema/motores/mecanica.js';
 
 const g = 9.8;
 const cerca = (a, b, tol) => expect(Math.abs(a - b)).toBeLessThanOrEqual(tol * Math.max(1, Math.abs(b)));
@@ -431,5 +431,103 @@ describe('cuerda elástica (resorte que solo tira)', () => {
     const sim = simularMecanica({ g: [0, 0], duracion: 1, particulas: [{ id: 'P', m: 1, p: [0.3, 0], v: [0, 0] }], conectores: [{ id: 'goma', tipo: 'resorte', a: 'P', ancla: [0, 0], k: 50, L0: 1, soloTira: true }] });
     cerca(estadoMecanica(sim, 1)[0].x, 0.3, 1e-12);
     expect(energiaMecanica(sim, 1).Ue).toBe(0);
+  });
+});
+
+describe('apoyos redundantes y complementariedad (LCP)', () => {
+  const pared = (id, a, b, e = 0.3) => ({ id, tipo: 'segmento', a, b, e });
+  const caja = W => [pared('s', [-W, 0], [W, 0]), pared('o', [-W, 2], [-W, 0]), pared('e', [W, 0], [W, 2])];
+  const disco = (id, x, y) => ({ id, m: 1, p: [x, y], v: [0, 0], radio: 0.1 });
+  /** Fila de discos de pared a pared y otra encima en los huecos (empaquetado hexagonal). */
+  const hexagonal = W => {
+    const n = Math.round(W / 0.1), P = [];
+    for (let k = 0; k < n; k++) P.push(disco('a' + k, -W + 0.1 + 0.2 * k, 0.1));
+    for (let k = 0; k < n - 1; k++) P.push(disco('b' + k, -W + 0.2 + 0.2 * k, 0.1 + 0.2 * Math.sqrt(3) / 2));
+    return P;
+  };
+  const choques = sim => sim.eventos.filter(e => /^(choque|impacto):/.test(e.clave));
+
+  it('resolverLCP cumple w = Az + q, z ≥ 0, w ≥ 0 y z·w = 0', () => {
+    const A = [[2, 1], [1, 2]];
+    // Una activa y otra suelta: z = (½, 0), w = (0, 3/2)
+    const z = resolverLCP(A, [-1, 1]);
+    cerca(z[0], 0.5, 1e-15); expect(z[1]).toBe(0);
+    expect(resolverLCP(A, [1, 2])).toEqual([0, 0]);
+    // Con una fila libre (bilateral): w₀ = 0 y z₀ de cualquier signo
+    const zl = resolverLCP(A, [1, -1], [true, false]);
+    cerca(zl[0], -1, 1e-14); cerca(zl[1], 1, 1e-14);
+    // Matrices definidas positivas al azar (generador fijo): complementariedad
+    let semilla = 7;
+    const azar = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647) * 2 - 1;
+    for (let caso = 0; caso < 40; caso++) {
+      const n = 2 + (caso % 7), B = Array.from({ length: n }, () => Array.from({ length: n }, azar));
+      const M = B.map((f, i) => f.map((_, j) => B.reduce((s, fila) => s + fila[i] * fila[j], 0) + (i === j ? 0.1 : 0)));
+      const q = Array.from({ length: n }, azar), zz = resolverLCP(M, q);
+      const w = q.map((qi, i) => qi + M[i].reduce((s, a, j) => s + a * zz[j], 0));
+      zz.forEach((zi, i) => {
+        expect(zi).toBeGreaterThanOrEqual(0);
+        expect(w[i]).toBeGreaterThanOrEqual(-1e-10);
+        expect(Math.abs(zi * w[i])).toBeLessThan(1e-10);
+      });
+    }
+  });
+
+  it('empaquetado hexagonal de pared a pared en reposo: no se mueve ni genera choques', () => {
+    // Las reacciones son indeterminadas (más apoyos que grados de libertad):
+    // sin regularizar, la eliminación daba fuerzas arbitrarias que soltaban
+    // apoyos cargados y el montón traqueteaba hasta agotar el cálculo.
+    const P = hexagonal(1);
+    const sim = simularMecanica({ duracion: 2, eParticulas: 0.3, superficies: caja(1), particulas: P });
+    expect(sim.incompleta).toBeNull();
+    expect(choques(sim)).toEqual([]);
+    estadoMecanica(sim, 2).forEach((s, k) => {
+      cerca(s.x, P[k].p[0], 1e-9); cerca(s.y, P[k].p[1], 1e-9);
+      cerca(s.vx, 0, 1e-9); cerca(s.vy, 0, 1e-9);
+    });
+  });
+
+  it('un disco que cae sobre el empaquetado: termina, en reposo y sin solapes', () => {
+    const P = [...hexagonal(0.6), disco('c', 0.05, 0.9)];
+    const sim = simularMecanica({ duracion: 1.5, eParticulas: 0.3, superficies: caja(0.6), particulas: P });
+    expect(sim.incompleta).toBeNull();
+    const S = estadoMecanica(sim, 1.5);
+    expect(energiaMecanica(sim, 1.5).K).toBeLessThan(1e-9);
+    for (const s of S) { expect(s.y).toBeGreaterThanOrEqual(0.1 - 1e-6); expect(Math.abs(s.x)).toBeLessThanOrEqual(0.5 + 1e-6); }
+    for (let a = 0; a < S.length; a++) for (let b = a + 1; b < S.length; b++) {
+      expect(Math.hypot(S[a].x - S[b].x, S[a].y - S[b].y)).toBeGreaterThanOrEqual(0.2 - 1e-6);
+    }
+  });
+
+  it('un disco que cae en un hueco justo de su diámetro llega al fondo', () => {
+    // Geometría casi tangente: con el disco a h del fondo, el hueco con sus
+    // vecinos es solo h²/(4r). Un «contacto persistente» decidido por la
+    // velocidad normal lo dejaba flotando milímetros por encima.
+    const P = [];
+    for (let k = 0; k < 10; k++) if (k !== 3) P.push(disco('d' + k, -0.9 + 0.2 * k, 0.1));
+    P.push(disco('cae', -0.3, 0.6));
+    const sim = simularMecanica({ duracion: 2, eParticulas: 0.3, superficies: caja(1), particulas: P });
+    expect(sim.incompleta).toBeNull();
+    const S = estadoMecanica(sim, 2), c = S[S.length - 1];
+    cerca(c.y, 0.1, 1e-9); cerca(c.x, -0.3, 1e-9); cerca(c.vy, 0, 1e-9);
+    S.slice(0, -1).forEach((s, k) => { cerca(s.y, 0.1, 1e-9); cerca(s.x, P[k].p[0], 1e-9); });
+    const E0 = energiaMecanica(sim, 0).E, E1 = energiaMecanica(sim, 2).E;
+    const disipada = sim.eventos.reduce((a, e) => a + e.perdida, 0);
+    expect(Math.abs(E0 - E1 - disipada)).toBeLessThan(1e-6 * E0);
+  });
+
+  it('montón con umbral de contacto alto (0.03 y 0.1 m/s): termina en reposo sin atravesar nada', () => {
+    for (const umbral of [0.03, 0.1]) {
+      const sim = simularMecanica({
+        duracion: 5, eParticulas: 0.3, superficies: caja(1), umbral,
+        particulas: Array.from({ length: 10 }, (_, i) => ({ id: 'b' + i, m: 1, p: [-0.7 + (i % 5) * 0.35, 0.5 + Math.floor(i / 5) * 0.4], v: [Math.cos(i), 0], radio: 0.1 })),
+      });
+      expect(sim.incompleta, `umbral ${umbral}`).toBeNull();
+      expect(sim.eventos.length).toBeLessThan(1000);
+      expect(energiaMecanica(sim, 5).K).toBeLessThan(1e-9);
+      for (let k = 0; k <= 100; k++) for (const s of estadoMecanica(sim, 5 * k / 100)) {
+        expect(s.y).toBeGreaterThanOrEqual(0.1 - 1e-6);
+        expect(Math.abs(s.x)).toBeLessThanOrEqual(0.9 + 1e-6);
+      }
+    }
   });
 });

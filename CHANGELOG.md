@@ -7,6 +7,28 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Corregido
+
+- Montones de discos con apoyos redundantes (una fila de pared a pared, un
+  empaquetado hexagonal): la eliminación gaussiana daba reacciones
+  arbitrarias y enormes, soltaba apoyos cargados y el montón traqueteaba con
+  choques cada pocos microsegundos hasta agotar el cálculo. Ahora un
+  empaquetado en reposo no se mueve ni genera choques, y un disco que cae
+  encima termina en reposo en menos de medio segundo de cálculo.
+- Un disco que caía en un hueco justo de su diámetro quedaba flotando
+  milímetros por encima de su sitio (contacto persistente decidido por la
+  velocidad normal, diminuta en una geometría casi tangente).
+- Con un umbral de contacto alto (0.03 o 0.1 m/s), un montón de diez discos
+  ya no agota el presupuesto de cálculo.
+
+### Cambiado
+
+- Motor de Mecánica: el conjunto de contactos activos se elige como un
+  problema de complementariedad (λ ≥ 0, aceleración ≥ 0) y los restos de
+  acercamiento de un instante se quitan con impulsos inelásticos
+  simultáneos; las posiciones se proyectan para quitar solapes al empezar
+  cada tramo. La tabla de eventos ya no anota choques de ruido de 10⁻¹⁶ J.
+
 ## [0.6.0] - 2026-11-19
 
 Módulo de Óptica con tres espacios de trabajo y 14 problemas MEXT.

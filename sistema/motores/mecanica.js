@@ -86,6 +86,12 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  */
 
 const UMBRAL_LAMBDA = 1e-12;
+/** Regularización relativa de la diagonal de J M⁻¹ Jᵀ (ver `dinamica`). */
+const REGULARIZACION = 1e-9;
+/** Constantes de la estabilización de Baumgarte: C̈ + 2α Ċ + β² C = 0. */
+const ALFA_B = 20, BETA_B = 20;
+/** Aceleración estabilizada (m/s²) por debajo de la cual una restricción soltada vuelve a penetrar. */
+const UMBRAL_W = 1e-9;
 
 // ---------------------------------------------------------------------------
 // Geometría
@@ -269,15 +275,24 @@ function restriccionPolea(c) {
 // Dinámica de un modo
 // ---------------------------------------------------------------------------
 
-/** Resuelve A·x = b por eliminación gaussiana con pivoteo parcial (A pequeña). */
-function resolver(A, b) {
+/**
+ * Resuelve A·x = b por eliminación gaussiana con pivoteo parcial (A pequeña).
+ * Con tolRel > 0 devuelve null si algún pivote es menor que tolRel por la
+ * mayor diagonal: el sistema es singular o casi (restricciones redundantes).
+ * @param {number[][]} A @param {number[]} b @param {number} [tolRel=0]
+ * @returns {number[] | null}
+ */
+function resolver(A, b, tolRel = 0) {
   const n = b.length, M = A.map((f, i) => [...f, b[i]]);
+  let escala = 0;
+  for (let i = 0; i < n; i++) escala = Math.max(escala, Math.abs(A[i][i]));
+  const tolPiv = Math.max(1e-300, tolRel * escala);
   for (let k = 0; k < n; k++) {
     let p = k;
     for (let i = k + 1; i < n; i++) if (Math.abs(M[i][k]) > Math.abs(M[p][k])) p = i;
     [M[k], M[p]] = [M[p], M[k]];
     const piv = M[k][k];
-    if (Math.abs(piv) < 1e-300) continue;
+    if (Math.abs(piv) < tolPiv) { if (tolRel > 0) return null; continue; }
     for (let i = k + 1; i < n; i++) {
       const f = M[i][k] / piv;
       for (let j = k; j <= n; j++) M[i][j] -= f * M[k][j];
@@ -290,6 +305,92 @@ function resolver(A, b) {
     x[i] = Math.abs(M[i][i]) < 1e-300 ? 0 : s / M[i][i];
   }
   return x;
+}
+
+/**
+ * J M⁻¹ Jᵀ de una lista de filas {grad: [[i, gx, gy], ...]}. Cada fila toca a
+ * una o dos partículas: se suma por partícula en vez de comparar todas las
+ * filas con todas (con 40 apoyos en un montón, el doble bucle denso era la
+ * mitad del cálculo).
+ * @param {{grad: number[][]}[]} filas @param {number[]} m masas
+ * @returns {number[][]}
+ */
+function matrizJMJ(filas, m) {
+  const k = filas.length, A = Array.from({ length: k }, () => new Array(k).fill(0));
+  /** @type {Map<number, number[][]>} */
+  const porParticula = new Map();
+  filas.forEach((e, r) => {
+    for (const [i, gx, gy] of e.grad) {
+      let l = porParticula.get(i);
+      if (!l) { l = []; porParticula.set(i, l); }
+      l.push([r, gx, gy]);
+    }
+  });
+  for (const [i, l] of porParticula) for (const [r, gx, gy] of l) for (const [q, hx, hy] of l) A[r][q] += (gx * hx + gy * hy) / m[i];
+  return A;
+}
+
+/** Copia de A con la diagonal regularizada. @param {number[][]} A */
+const regularizada = A => A.map((f, r) => f.map((v, q) => (r === q ? v * (1 + REGULARIZACION) : v)));
+
+/**
+ * A·x = b con la diagonal regularizada (el CFM de ODE y MuJoCo) y un paso de
+ * refinamiento iterativo. Con apoyos redundantes (una fila de discos de pared
+ * a pared, un disco encajado en un hueco justo) J M⁻¹ Jᵀ es singular o casi y
+ * la eliminación sola daría reacciones arbitrarias y enormes, y pasos de
+ * integración diminutos. La regularización acota esos modos; el refinamiento
+ * quita su sesgo en los bien condicionados (sin él, un disco apoyado quedaría
+ * ε·g/β² ≈ 2·10⁻¹¹ m por debajo del suelo).
+ * @param {number[][]} A @param {number[]} b @returns {number[]}
+ */
+function resolverRegularizado(A, b) {
+  // Bien condicionado (todos los pivotes por encima de 10⁻⁶ de la diagonal):
+  // basta la eliminación; es el caso habitual y cuesta la mitad
+  const directo = resolver(A, b, 1e-6);
+  if (directo) return directo;
+  const n = b.length, R = regularizada(A);
+  const x = resolver(R, b) ?? new Array(n).fill(0);
+  const res = b.map((bi, r) => { let v = bi; for (let s = 0; s < n; s++) v -= A[r][s] * x[s]; return v; });
+  const dx = resolver(R, res) ?? new Array(n).fill(0);
+  return x.map((xi, r) => xi + dx[r]);
+}
+
+/**
+ * Problema de complementariedad lineal pequeño: halla z con w = A·z + q,
+ * z ≥ 0, w ≥ 0 y z·w = 0, por pivoteo principal (Murty): en cada vuelta se
+ * cambia solo el primer índice que viola su condición. Con A definida
+ * positiva (aquí siempre regularizada) termina en un número finito de vueltas.
+ * Las filas libres (restricciones bilaterales) están siempre activas, con
+ * w = 0 y z de cualquier signo. activoInicial acelera el caso habitual en que
+ * el conjunto activo anterior sigue siendo el bueno (una sola resolución).
+ * @param {number[][]} A @param {number[]} q
+ * @param {boolean[]} [libres] @param {boolean[]} [activoInicial]
+ * @returns {number[]}
+ */
+export function resolverLCP(A, q, libres = [], activoInicial) {
+  const n = q.length, activo = activoInicial ? activoInicial.map((a, i) => a || !!libres[i]) : q.map((x, i) => x < 0 || !!libres[i]);
+  const escala = Math.max(1e-300, ...q.map(Math.abs));
+  let z = new Array(n).fill(0);
+  for (let vuelta = 0; vuelta < 10 * n + 20; vuelta++) {
+    const idx = [];
+    for (let i = 0; i < n; i++) if (activo[i]) idx.push(i);
+    const zA = idx.length ? resolver(idx.map(i => idx.map(j => A[i][j])), idx.map(i => -q[i])) ?? [] : [];
+    z = new Array(n).fill(0);
+    idx.forEach((i, k) => { z[i] = zA[k]; });
+    let cambio = -1;
+    for (let i = 0; i < n && cambio < 0; i++) {
+      if (libres[i]) continue;
+      if (activo[i]) { if (z[i] < -1e-12 * escala) cambio = i; }
+      else {
+        let w = q[i];
+        for (let j = 0; j < n; j++) w += A[i][j] * z[j];
+        if (w < -1e-12 * escala) cambio = i;
+      }
+    }
+    if (cambio < 0) break;
+    activo[cambio] = !activo[cambio];
+  }
+  return z.map((x, i) => (libres[i] ? x : Math.max(0, x)));
 }
 
 /** Fuerzas aplicadas (gravedad, arrastre, resortes, fuerzas constantes, fricción). */
@@ -344,6 +445,8 @@ function tangente(sup, p) {
 function dinamica(S, modo, y, restr) {
   const n = S.n, m = S.P.map(p => p.m);
   let lambdas = null, acc = null;
+  /** @type {null | {A: number[][], b: number[], claves: string[], unilateral: boolean[]}} */
+  let sistema = null;
   const iteraciones = Object.values(modo.contactos).some(s => S.sup[s.sup].mu > 0 && !s.pegado) ? 4 : 1;
   for (let it = 0; it < iteraciones; it++) {
     const F = fuerzas(S, modo, y, lambdas);
@@ -363,19 +466,15 @@ function dinamica(S, modo, y, restr) {
     let lam = [];
     if (k) {
       // (J M⁻¹ Jᵀ) λ = −J a0 − J̇v − 2α Ċ − β² C
-      const alfa = 20, beta = 20;
-      const A = Array.from({ length: k }, () => new Array(k).fill(0)), b = new Array(k).fill(0);
+      const alfa = ALFA_B, beta = BETA_B;
+      const A = matrizJMJ(ev, m), b = new Array(k).fill(0);
       for (let r = 0; r < k; r++) {
         let Ja0 = 0;
         for (const [i, gx, gy] of ev[r].grad) Ja0 += gx * a0[2 * i] + gy * a0[2 * i + 1];
         b[r] = -Ja0 - ev[r].jdv - 2 * alfa * ev[r].Cp - beta * beta * ev[r].C;
-        for (let s = 0; s < k; s++) {
-          let v = 0;
-          for (const [i, gx, gy] of ev[r].grad) for (const [j, hx, hy] of ev[s].grad) if (i === j) v += (gx * hx + gy * hy) / m[i];
-          A[r][s] = v;
-        }
       }
-      lam = resolver(A, b);
+      lam = resolverRegularizado(A, b);
+      sistema = { A, b, claves: [...restr.map(r => r.clave), ...pegadas.map(r => r.clave)], unilateral: [...restr.map(r => !!r.unilateral), ...pegadas.map(() => false)] };
     }
     acc = a0.slice();
     for (let r = 0; r < k; r++) for (const [i, gx, gy] of ev[r].grad) { acc[2 * i] += lam[r] * gx / m[i]; acc[2 * i + 1] += lam[r] * gy / m[i]; }
@@ -383,7 +482,7 @@ function dinamica(S, modo, y, restr) {
     restr.forEach((r, j) => { lambdas[r.clave] = lam[j]; });
     pegadas.forEach((r, j) => { lambdas[r.clave] = lam[restr.length + j]; });
   }
-  return { acc, lambdas };
+  return { acc, lambdas, sistema };
 }
 
 // ---------------------------------------------------------------------------
@@ -599,17 +698,39 @@ export function simularMecanica(escena) {
   let k = 0;
   // Un contacto recién creado puede tener la normal negativa (la partícula
   // se despega enseguida): se comprueba antes de integrar.
+  // El conjunto activo se elige como un problema de complementariedad (LCP)
+  // sobre el sistema de las restricciones activas: cada unilateral que sigue
+  // activa empuja (λ ≥ 0) y cada una que se suelta no vuelve a penetrar
+  // (aceleración estabilizada w ≥ 0). Soltar todas las de λ < 0 a la vez, como
+  // antes, podía soltar de más: un par recién apoyado sin carga se soltaba
+  // aunque su aceleración lo volviera a juntar, y el montón traqueteaba con
+  // choques cada pocos microsegundos. Las bilaterales (varillas, adherencia)
+  // son filas libres. Un apoyo degenerado (λ = 0 y w = 0) se conserva; un par
+  // de discos sin carga se suelta, como antes, para que el ruido de λ ≈ 0 no
+  // dispare eventos de separación.
+  const masas = S.P.map(p => p.m);
   const revisarDespegues = () => {
-    let cambio = true, vueltas = 0;
-    while (cambio && vueltas++ < 5) {
-      cambio = false;
+    for (let ronda = 0; ronda < 4; ronda++) {
       const restr = restriccionesDelModo(S, modo);
-      const { lambdas } = dinamica(S, modo, y, restr);
-      for (const clave of Object.keys(modo.contactos)) {
-        if ((lambdas[`contacto:${clave}`] ?? 0) < -UMBRAL_LAMBDA) { delete modo.contactos[clave]; cambio = true; }
-      }
-      for (const c of S.con) if ((c.tipo === 'cuerda' || c.tipo === 'polea') && modo.cuerdas[c.id].tensa && (lambdas[`${c.tipo}:${c.id}`] ?? 0) < -UMBRAL_LAMBDA) { modo.cuerdas[c.id].tensa = false; cambio = true; }
-      for (const par of Object.keys(modo.pares)) if (!((lambdas[`par:${par}`] ?? 0) > LAMBDA_PAR_MIN)) { delete modo.pares[par]; cambio = true; }
+      const { sistema } = dinamica(S, modo, y, restr);
+      if (!sistema) return;
+      const { A, b, claves, unilateral } = sistema, Ar = regularizada(A), q = b.map(x => -x);
+      const z = resolverLCP(Ar, q, unilateral.map(u => !u), claves.map(() => true));
+      let cambio = false;
+      claves.forEach((claveR, r) => {
+        if (!unilateral[r]) return;
+        let w = q[r];
+        for (let c = 0; c < z.length; c++) w += Ar[r][c] * z[c];
+        const [tipo, ...resto] = claveR.split(':'), clave = resto.join(':');
+        if (tipo === 'par') {
+          if (!(z[r] > LAMBDA_PAR_MIN) && w > -UMBRAL_W) { delete modo.pares[clave]; cambio = true; }
+        } else if (z[r] <= 0 && w > UMBRAL_W) {
+          if (tipo === 'contacto') delete modo.contactos[clave];
+          else modo.cuerdas[clave].tensa = false;
+          cambio = true;
+        }
+      });
+      if (!cambio) return;
     }
   };
   revisarDespegues();
@@ -675,31 +796,32 @@ export function simularMecanica(escena) {
   // a la pared mientras choca con otro): impulsos secuenciales hasta que ningún
   // par en contacto se acerca. Sin esto, un hueco ya nulo o apenas negativo no
   // cambia de signo y el choque se perdería (los cuerpos se atravesarían).
-  /** Quita la velocidad de acercamiento de un contacto (impulso inelástico mínimo, sin evento). */
-  const proyectar = (grad, Cp) => {
-    let den = 0;
-    for (const [i, gx, gy] of grad) den += (gx * gx + gy * gy) / S.P[i].m;
-    const L = -Cp / den;
-    for (const [i, gx, gy] of grad) { y[4 * i + 2] += L * gx / S.P[i].m; y[4 * i + 3] += L * gy / S.P[i].m; }
-  };
   // excluir: pares («i:j») o apoyos («i:js») que acaban de separarse en este
   // instante por un evento; no se vuelven a juntar en el mismo instante.
+  // Un hueco pequeño se da por cerrado (contacto persistente) solo si el
+  // movimiento relativo entero es lento, no solo su componente normal: en una
+  // geometría casi tangente (un disco que cae en un hueco justo de su
+  // diámetro) la velocidad normal es diminuta aunque el disco caiga deprisa,
+  // y ese «contacto» lo dejaba flotando milímetros por encima de su sitio.
+  const lentos = (i, j) => Math.hypot(y[4 * i + 2] - (j < 0 ? 0 : y[4 * j + 2]), y[4 * i + 3] - (j < 0 ? 0 : y[4 * j + 3])) <= UMBRAL;
   const resolverSimultaneos = (zeno, excluir = new Set()) => {
     for (let vuelta = 0; vuelta < 4 * S.n + 10; vuelta++) {
       let hubo = false;
       for (let i = 0; i < S.n; i++) for (let j = i + 1; j < S.n; j++) {
         const R = radio(S, i) + radio(S, j);
         if (!(R > 0)) continue;
-        const clave = `${i}:${j}`, { C, Cp, grad } = restriccionPar(S, i, j).evaluar(y);
+        const clave = `${i}:${j}`, { C, Cp } = restriccionPar(S, i, j).evaluar(y);
         if (modo.pares[clave]) {
           // Apoyados: un impulso que llega (otro choque) se transmite como choque;
-          // un resto lento de acercamiento se quita sin evento; si un impulso los
-          // separa, dejan de estar apoyados (si vuelven a juntarse, es un choque)
+          // si un impulso los separa, dejan de estar apoyados (si vuelven a
+          // juntarse, es un choque). Un resto lento de acercamiento lo quita la
+          // proyección inelástica del final, de una vez y sin evento.
           if (Cp < -UMBRAL) { delete modo.pares[clave]; if (anotar(`choque:${clave}`, () => choque(i, j, zeno))) hubo = true; }
           else if (Cp > UMBRAL) delete modo.pares[clave];
-          else if (Cp < -1e-12) { proyectar(grad, Cp); hubo = true; }
-        } else if (!excluir.has('par:' + clave) && Cp < -1e-12 && (C <= TOL_HUECO || (C <= tolContacto(R) && Cp >= -UMBRAL))) {
-          // Se tocan y se acercan: choque (si es lento, quedan apoyados)
+        } else if (!excluir.has('par:' + clave) && Cp < -1e-12 && ((C <= TOL_HUECO && Cp < -UMBRAL) || (C > TOL_HUECO && C <= tolContacto(R) && lentos(i, j)))) {
+          // Se tocan y se acercan de verdad: choque (si es lento, quedan
+          // apoyados). Si se tocan y el acercamiento es un resto lento, se
+          // apoyan en la proyección inelástica, sin anotar un choque de ruido.
           if (anotar(`choque:${clave}`, () => choque(i, j, zeno))) hubo = true;
         }
       }
@@ -707,30 +829,92 @@ export function simularMecanica(escena) {
         const ri = radio(S, i), p = [y[4 * i], y[4 * i + 1]];
         S.sup.forEach((sup, js) => {
           const clave = `${i}:${js}`, actual = modo.contactos[clave];
-          const { C, Cp, grad } = restriccionSuperficie(sup, i, ri).evaluar(y);
+          const { C, Cp } = restriccionSuperficie(sup, i, ri).evaluar(y);
           if (actual) {
             // Apoyada: un impulso hacia la superficie es un choque; uno que la
-            // aleja la despega; un resto lento se quita sin evento
+            // aleja la despega; un resto lento lo quita la proyección del final
             if (Cp < -UMBRAL) {
               delete modo.contactos[clave];
               if (anotar(`impacto:${clave}`, () => impacto(i, js, zeno))) hubo = true;
               if (modo.contactos[clave] && actual.pegado) modo.contactos[clave].pegado = true;
             } else if (Cp > UMBRAL) delete modo.contactos[clave];
-            else if (Cp < -1e-12) { proyectar(grad, Cp); hubo = true; }
             return;
           }
           if (excluir.has('sup:' + clave)) return;
           if (C < -TOL_PENETRACION || margenSuperficie(sup, p) < 0) return;
-          if (Cp < -1e-12 && (C <= TOL_HUECO || (C <= tolContacto(ri) && Cp >= -UMBRAL))) {
+          if (Cp < -1e-12 && ((C <= TOL_HUECO && Cp < -UMBRAL) || (C > TOL_HUECO && C <= tolContacto(ri) && lentos(i, -1)))) {
             if (anotar(`impacto:${clave}`, () => impacto(i, js, zeno))) hubo = true;
           }
         });
       }
       if (!hubo) break;
     }
+    proyeccionInelastica(excluir);
+  };
+  // Cierre del instante: ningún par que se toca puede quedar acercándose. Los
+  // impulsos secuenciales convergen muy despacio en una cuña (un disco que cae
+  // en un hueco justo de su diámetro entre vecinos que no pueden apartarse) y
+  // dejaban velocidades de acercamiento que provocaban otro choque al poco.
+  // Aquí se resuelve de una vez el LCP de impulsos inelásticos: P ≥ 0,
+  // Ċ' = Ċ + J M⁻¹ Jᵀ P ≥ 0, P·Ċ' = 0, sobre los apoyos activos y los que se
+  // tocan; los que reciben impulso quedan apoyados.
+  const proyeccionInelastica = (excluir = new Set()) => {
+    /** @type {{e: {C: number, Cp: number, grad: number[][], jdv: number}, alta: null | (() => void)}[]} */
+    const cand = [];
+    for (const [clave, s] of Object.entries(modo.contactos)) cand.push({ e: restriccionSuperficie(S.sup[s.sup], s.i, radio(S, s.i)).evaluar(y), alta: null });
+    for (let i = 0; i < S.n; i++) for (let j = i + 1; j < S.n; j++) {
+      if (!(radio(S, i) + radio(S, j) > 0)) continue;
+      const clave = `${i}:${j}`;
+      if (!modo.pares[clave] && excluir.has('par:' + clave)) continue;
+      const e = restriccionPar(S, i, j).evaluar(y);
+      if (modo.pares[clave]) cand.push({ e, alta: null });
+      else if (e.C <= TOL_HUECO) cand.push({ e, alta: () => { modo.pares[clave] = true; } });
+    }
+    for (let i = 0; i < S.n; i++) {
+      const p = [y[4 * i], y[4 * i + 1]];
+      S.sup.forEach((sup, js) => {
+        const clave = `${i}:${js}`;
+        if (modo.contactos[clave] || excluir.has('sup:' + clave) || margenSuperficie(sup, p) < 0) return;
+        const e = restriccionSuperficie(sup, i, radio(S, i)).evaluar(y);
+        if (e.C <= TOL_HUECO && e.C >= -TOL_PENETRACION) cand.push({ e, alta: () => { modo.contactos[clave] = { i, sup: js, pegado: false }; } });
+      });
+    }
+    if (!cand.some(c => c.e.Cp < -1e-12)) return;
+    const k = cand.length, A = regularizada(matrizJMJ(cand.map(c => c.e), masas));
+    const P = resolverLCP(A, cand.map(c => c.e.Cp));
+    for (let r = 0; r < k; r++) {
+      if (!(P[r] > 0)) continue;
+      for (const [i, gx, gy] of cand[r].e.grad) { y[4 * i + 2] += P[r] * gx / S.P[i].m; y[4 * i + 3] += P[r] * gy / S.P[i].m; }
+      if (cand[r].alta) cand[r].alta();
+    }
+  };
+  // Post-estabilización (Cline y Pai, 2003): al empezar cada tramo se llevan
+  // las posiciones a la variedad de las restricciones activas violadas
+  // (solapes, cuerdas pasadas de largo) con el paso de Gauss–Newton de
+  // mínima energía Δq = M⁻¹Jᵀ(J M⁻¹ Jᵀ)⁻¹(−C). Así la estabilización de
+  // Baumgarte no arrastra restos de solape de un tramo a otro como empujes
+  // lentos que vuelven a juntar discos ya en reposo.
+  const proyectarPosiciones = () => {
+    for (let vuelta = 0; vuelta < 3; vuelta++) {
+      const restr = restriccionesDelModo(S, modo);
+      const filas = [];
+      for (const r of restr) {
+        // Solo solapes de cuerpos: corregir el largo de una cuerda movería la
+        // partícula a lo largo de la recta pivote–clavo, justo la frontera del
+        // enganche, y el redondeo la cruzaría una y otra vez
+        if (!r.clave.startsWith('contacto:') && !r.clave.startsWith('par:')) continue;
+        const e = r.evaluar(y);
+        if (e.C < -1e-15) filas.push(e);
+      }
+      if (!filas.length) return;
+      const k = filas.length, A = regularizada(matrizJMJ(filas, masas)), b = filas.map(e => -e.C);
+      const mu = resolver(A, b) ?? [];
+      for (let r = 0; r < k; r++) for (const [i, gx, gy] of filas[r].grad) { y[4 * i] += mu[r] * gx / S.P[i].m; y[4 * i + 1] += mu[r] * gy / S.P[i].m; }
+    }
   };
   resolverSimultaneos(false);
   revisarDespegues();
+  proyectarPosiciones();
 
   // Los eventos del clavo no son monótonos (cambian de forma al entrar en el
   // alcance de la cuerda): con clavos, el paso se acota también por la duración
@@ -889,6 +1073,7 @@ export function simularMecanica(escena) {
     perdidaAnotada = 0;
     resolverSimultaneos(zeno, excluir);
     revisarDespegues();
+    proyectarPosiciones();
     // Energía del instante que no registró ningún choque simultáneo: la del
     // evento principal más la de las proyecciones sin evento
     const resto = K0 - energiaCinetica(S, y) - perdidaAnotada;

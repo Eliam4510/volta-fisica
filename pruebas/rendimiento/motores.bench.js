@@ -28,6 +28,14 @@ describe('Mecánica', () => {
   });
   bench('12 discos en una caja, 5 s', () => { simularMecanica(discos(12, 5, [0, 0])); });
   bench('24 discos en una caja con gravedad, 5 s', () => { simularMecanica(discos(24, 5, [0, -9.8])); }, { iterations: 5 });
+  // Apoyos redundantes: 11 discos en empaquetado hexagonal de pared a pared y uno que cae encima
+  bench('disco que cae sobre un empaquetado hexagonal, 1.5 s', () => {
+    const pared = (id, a, b) => ({ id, tipo: 'segmento', a, b, e: 0.3 }), W = 0.6, P = [];
+    for (let k = 0; k < 6; k++) P.push({ id: 'a' + k, m: 1, p: [-W + 0.1 + 0.2 * k, 0.1], v: [0, 0], radio: 0.1 });
+    for (let k = 0; k < 5; k++) P.push({ id: 'b' + k, m: 1, p: [-W + 0.2 + 0.2 * k, 0.1 + 0.1 * Math.sqrt(3)], v: [0, 0], radio: 0.1 });
+    P.push({ id: 'c', m: 1, p: [0.05, 0.9], v: [0, 0], radio: 0.1 });
+    simularMecanica({ duracion: 1.5, eParticulas: 0.3, particulas: P, superficies: [pared('s', [-W, 0], [W, 0]), pared('o', [-W, 2], [-W, 0]), pared('e', [W, 0], [W, 2])] });
+  }, { iterations: 5 });
 });
 
 describe('Termodinámica', () => {
