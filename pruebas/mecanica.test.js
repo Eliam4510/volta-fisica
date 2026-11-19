@@ -303,3 +303,15 @@ describe('deriva a largo plazo (100 s)', () => {
     for (let k = 1; k <= 100; k++) cerca(energiaMecanica(sim, k).E, E0, 1e-6);
   });
 });
+
+describe('restricciones redundantes', () => {
+  it('varilla y cuerda del mismo largo en el mismo péndulo dan lo mismo que la varilla sola', () => {
+    const esc = extra => ({ duracion: 3, particulas: [{ id: 'P', m: 1, p: [Math.sin(1), -Math.cos(1)], v: [0, 0] }], conectores: [{ id: 'V', tipo: 'varilla', a: 'P', ancla: [0, 0], L: 1 }, ...extra] });
+    const sola = estadoMecanica(simularMecanica(esc([])), 3)[0];
+    for (const extra of [[{ id: 'C', tipo: 'cuerda', a: 'P', ancla: [0, 0], L: 1 }], [{ id: 'V2', tipo: 'varilla', a: 'P', ancla: [0, 0], L: 1 }]]) {
+      const sim = simularMecanica(esc(extra)), s = estadoMecanica(sim, 3)[0];
+      cerca(s.x, sola.x, 1e-9); cerca(s.y, sola.y, 1e-9);
+      expect(sim.eventos).toEqual([]);
+    }
+  });
+});
