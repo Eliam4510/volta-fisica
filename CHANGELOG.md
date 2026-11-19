@@ -7,6 +7,14 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.5.1] - 2026-11-19
+
+### Corregido
+
+- La compilación de Windows de la 0.5.0 se detuvo porque una prueba de
+  choques tardó más que el límite de Vitest en esa máquina: el límite pasa
+  a 30 s. Esta versión trae los ejecutables con el contenido de la 0.5.0.
+
 ## [0.5.0] - 2026-11-19
 
 Ondas y sonido (cuerdas, tubos y Doppler con audio), 19 escenas MEXT más en
@@ -225,7 +233,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.2.0...v0.3.0
