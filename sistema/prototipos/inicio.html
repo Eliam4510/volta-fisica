@@ -112,7 +112,7 @@ import { avisar } from '../componentes/exportar.js';
     ['electrostatica', 'Electrostática', 'Cargas, campo, potencial, conductores, dieléctricos y capacitores.', 3, 18, 'electrostatica.html'],
     ['circuitos', 'Circuitos', 'Corriente continua, redes de capacitores y transitorios RC, RL y LC.', 2, 10, 'circuitos.html'],
     ['magnetismo', 'Magnetismo e inducción', 'Campos de corrientes, fuerza de Lorentz e inducción electromagnética.', 3, 13, null],
-    ['ondas', 'Ondas y sonido', 'Cuerdas, tubos, cubeta de ondas, efecto Doppler y pulsaciones.', 3, 21, null],
+    ['ondas', 'Ondas y sonido', 'Cuerdas, tubos, cubeta de ondas, efecto Doppler y pulsaciones.', 3, 21, 'ondas.html'],
     ['optica', 'Óptica', 'Rayos, refracción, interferencia, películas delgadas y Michelson.', 3, 14, null],
     ['moderna', 'Física moderna', 'Efecto fotoeléctrico y decaimientos nucleares.', 2, 4, null],
   ];
@@ -127,7 +127,7 @@ import { avisar } from '../componentes/exportar.js';
     { t: 'Doble rendija de Young', m: 'Óptica', tipo: 'MEXT', ref: '2023 · P5', mini: 'young', href: null },
     { t: 'Ciclo rectangular', m: 'Termodinámica', tipo: 'MEXT', ref: '2018 · P4', mini: 'ciclo', href: null },
     { t: 'Carga de un capacitor', m: 'Circuitos', tipo: 'Ejemplo', ref: 'Transitorio RC', mini: 'rc', href: 'circuitos.html' },
-    { t: 'Ambulancia que pasa', m: 'Ondas y sonido', tipo: 'MEXT', ref: '2007 · P5', mini: 'doppler', href: null },
+    { t: 'Ambulancia que pasa', m: 'Ondas y sonido', tipo: 'MEXT', ref: '2007 · P5', mini: 'doppler', href: 'ondas-doppler.html?escena=mext-2007-5' },
     { t: 'Mi rampa con fricción', m: 'Mecánica', tipo: 'Propio', ref: 'Editado hoy', mini: 'rampa', href: 'mecanica-laboratorio.html?escena=plano' },
   ];
 
@@ -246,11 +246,12 @@ import { avisar } from '../componentes/exportar.js';
 
   // ---------- Abrir y nueva escena ----------
   // La escena viaja a su pantalla por sessionStorage ("volta.abrir").
-  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html' };
+  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html' };
   function abrir() {
     abrirEscena({}).then(e => {
       // Mecánica tiene dos espacios: el laboratorio abre sus propias escenas
-      const destino = e.modulo === 'mecanica' && e.espacio === 'laboratorio' ? 'mecanica-laboratorio.html' : PANTALLAS[e.modulo];
+      const destino = e.modulo === 'mecanica' && e.espacio === 'laboratorio' ? 'mecanica-laboratorio.html'
+        : e.modulo === 'ondas' && e.espacio === 'doppler' ? 'ondas-doppler.html' : PANTALLAS[e.modulo];
       if (!destino) { avisar(document.body, `El módulo «${e.modulo}» todavía no tiene pantalla.`); return; }
       try { sessionStorage.setItem('volta.abrir', JSON.stringify(e)); } catch { /* sin almacenamiento */ }
       location.href = destino;

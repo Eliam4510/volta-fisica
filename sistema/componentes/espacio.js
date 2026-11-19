@@ -82,6 +82,7 @@
     { nombre: 'Termodinámica', icono: 'm-termodinamica', espacios: [['termodinamica.html', 'Laboratorio de gases', 'o-cilindro']] },
     { nombre: 'Electrostática', icono: 'm-electrostatica', espacios: [['electrostatica.html', 'Cargas y campos', 'o-carga-positiva']] },
     { nombre: 'Circuitos', icono: 'm-circuitos', espacios: [['circuitos.html', 'Transitorios', 'o-capacitor']] },
+    { nombre: 'Ondas y sonido', icono: 'm-ondas', espacios: [['ondas.html', 'Medio 1D', 'o-cuerda'], ['ondas-doppler.html', 'Doppler y acústica', 'o-fuente-sonora']] },
   ];
   function iniciarNavegacion() {
     const migas = document.querySelector('.migas');

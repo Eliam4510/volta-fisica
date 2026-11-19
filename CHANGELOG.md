@@ -9,6 +9,19 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Módulo Ondas y sonido con dos espacios de trabajo:
+  - «Medio 1D»: cuerdas y tubos por diferencias finitas (condición CFL
+    comprobada), uniones entre medios con reflexión y transmisión, cinco
+    tipos de extremo, amortiguamiento, fuentes, sondas, regla, nodos y
+    antinodos, diagrama espacio-tiempo, espectro y curva de respuesta.
+    16 escenas, 8 de ellas MEXT (ondas viajeras y estacionarias).
+  - «Doppler y acústica»: frentes de onda con viento, paredes móviles por
+    fuente imagen, frecuencia recibida, pulsaciones y el botón «Escuchar»,
+    que sintetiza lo que oye cada observador. 12 escenas, 8 MEXT.
+  - Motor puro con 66 pruebas analíticas (rapidez medida, coeficientes de
+    reflexión, modos, energía, orden 2, fórmulas de Doppler y respuestas
+    MEXT).
+
 - Laboratorio de Mecánica: 18 escenas MEXT nuevas de dinámica, energía,
   choques, movimiento circular y oscilaciones (2006 P3; 2007 1-(1);
   2008 P3; 2009 1-(1); 2010 1-D y 1-E; 2012 1-(1) y P3; 2014 1-(1);

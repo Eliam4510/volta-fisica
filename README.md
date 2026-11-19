@@ -52,7 +52,7 @@ Principios del proyecto:
 | Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria |
 | Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC |
 | Magnetismo e inducción | Planeado | Fuerza de Lorentz, inducción electromagnética |
-| Ondas y sonido | Planeado | Cuerdas, tubos, cubeta de ondas, Doppler |
+| Ondas y sonido | Utilizable | Cuerdas y tubos (reflexión, uniones, modos, resonancia) y Doppler con audio; la cubeta 2D, en preparación |
 | Óptica | Planeado | Rayos, refracción, interferencia |
 | Física moderna | Planeado | Efecto fotoeléctrico, núcleo |
 
@@ -74,6 +74,10 @@ El plan completo, con dependencias y orden de implementación, está en
 | Gravitación | Circuitos |
 |---|---|
 | ![Gravitación](docs/diseno/capturas/f6_gravitacion.png) | ![Circuitos](docs/diseno/capturas/f7_circuitos.png) |
+
+| Ondas: medio 1D | Ondas: Doppler y acústica |
+|---|---|
+| ![Ondas](docs/diseno/capturas/f9_ondas.png) | ![Doppler](docs/diseno/capturas/f10_doppler.png) |
 
 ## Instalación
 
