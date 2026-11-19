@@ -133,6 +133,23 @@ análisis de datos:
 | Hecho | Fuerza aplicada constante sin balance de energía | U_F = −F·r en `energiaMecanica` |
 | Hecho | Navegación entre módulos y espacios inexistente | Menús en las migas (`espacio.js`) |
 
+## Autocrítica 4 (2026-11-19 05:45, tras el LCP de contactos y las escenas de Gravitación)
+
+Comparado con Box2D v3 (Soft Step con relajación, islas que duermen,
+fricción y rodadura de cuerpos rígidos), Bullet y PhysX (cuerpos rígidos con
+conos de fricción, solver por bloques), MuJoCo (contacto convexo regularizado
+con energía y trabajo de las restricciones contabilizados) y, para el
+contenido, PhET y el temario MEXT:
+
+| Prioridad | Hallazgo | Tarea |
+|---|---|---|
+| Hecho | Apoyos redundantes daban reacciones arbitrarias y montones que no terminaban | LCP en los instantes, regularización con refinamiento, impulsos simultáneos (DECISIONES 14) |
+| Función | Los discos no giran ni tienen fricción entre ellos; no hay bloques que vuelquen ni cuerpos que lleven a otros encima (MEXT 2016 P3, bloque sobre carrito; M9 estática) | Cuerpo rígido 2D (disco y rectángulo con rotación, fricción de Coulomb en el contacto con cono y adherencia, rodadura). Es lo que más escenas MEXT de Mecánica desbloquea |
+| Exactitud | La energía que disipa la estabilización (y la fricción, el arrastre y los amortiguadores) no se anota: solo se ve como E0 − E | Integrar la potencia de las fuerzas no conservativas y de las restricciones como una componente más del estado, para que E + disipada sea constante a la tolerancia del integrador |
+| Contenido | Escenas MEXT por módulo muy desiguales: Termodinámica 1 de 30 y Electrostática 1 de 18 | Agentes en curso para ambos módulos |
+| Rendimiento | Un montón de 12 discos con un golpe tarda ≈ 0.3 s; 100 discos no son viables con eventos | Modo multitud de paso fijo (Soft Step) aparte, sin tocar el motor de eventos |
+| Pulido | Las marcas de los ejes de las gráficas se cortan a la izquierda con valores grandes (r en Mm alrededor del Sol); v_c y v_e se confunden a 10 px | Unidad adaptable en las gráficas de Gravitación; subíndices más grandes |
+
 ## Problemas conocidos
 
 - Los instrumentos (regla, transportador, cronómetro, fotopuerta) de las
@@ -175,3 +192,4 @@ análisis de datos:
 - 2026-11-19 04:55 — Óptica integrado (menús, Inicio con conteos reales, abrir escenas de otro espacio lleva a su pantalla). v0.6.0 publicada (499 pruebas). Lanzado el agente de Magnetismo e inducción.
 - 2026-11-19 05:15 — Contactos como LCP: regularización con refinamiento, conjunto activo por pivoteo de Murty, impulsos inelásticos simultáneos, post-estabilización de solapes, contacto persistente solo con rapidez relativa lenta. Empaquetado hexagonal en reposo sin eventos (antes agotaba el cálculo en 0.2 ms simulados). 504 pruebas.
 - 2026-11-19 05:20 — Lanzados los agentes de Termodinámica y Electrostática (escenas MEXT: hoy 1 de 30 y 1 de 18). Yo: escenas MEXT de Gravitación.
+- 2026-11-19 05:45 — Seis escenas MEXT de Gravitación (8 de 8) con lecturas y pruebas. Autocrítica 4. 554 pruebas.
