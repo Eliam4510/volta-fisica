@@ -7,6 +7,15 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Laboratorio de Mecánica: seis escenas MEXT nuevas de cinemática y
+  proyectiles, con pruebas de sus respuestas: 2008 1-(1) (alcance a 45° y a
+  30°), 2010 1-C (altura en un instante del vuelo), 2015 1-(1) (alcance de un
+  tiro oblicuo), 2016 1-(1) (coche que acelera desde el reposo), 2018 1-(1)
+  (ángulo de llegada de un tiro horizontal) y 2027 1-(1) (lanzamiento
+  vertical). Mecánica tiene ya 33 escenas MEXT.
+
 ### Corregido
 
 - Las marcas del eje vertical de las gráficas se cortaban a la izquierda con

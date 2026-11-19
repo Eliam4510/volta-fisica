@@ -369,3 +369,52 @@ describe('escenas MEXT: superficies que se mueven y movimiento impuesto', () => 
     cerca(e.E + e.Qc + e.Qi - e.W, e0.E, 1e-9);
   });
 });
+
+describe('escenas MEXT: cinemática y proyectiles (M1, M2)', () => {
+  const llegada = (sim, M, quien) => sim.eventos.find(e => e.clave.startsWith('impacto:') && describirEvento(e, M).includes(quien));
+  const d2r = Math.PI / 180;
+
+  it('2008 · 1-(1): con la misma rapidez, el alcance a 45° es 2/√3 veces el de 30°', () => {
+    const { M, sim } = simular('mext-2008-1-1');
+    const tA = llegada(sim, M, 'A').t, tB = llegada(sim, M, 'B').t;
+    const RA = est(sim, tA, 0).x, RB = est(sim, tB, 1).x;
+    cerca(RA, 100 * Math.sin(90 * d2r) / g, 1e-9);
+    cerca(RB, 100 * Math.sin(60 * d2r) / g, 1e-9);
+    cerca(RA / RB, 2 / Math.sqrt(3), 1e-9);
+  });
+
+  it('2010 · 1-C: en el instante t la altura es h = ½·g·t·(T − t)', () => {
+    const { M, sim } = simular('mext-2010-1c');
+    const T = llegada(sim, M, 'Pelota').t;
+    cerca(T, 2 * 10 * Math.sin(60 * d2r) / g, 1e-9);
+    for (const t of [0.3, 0.8, 1.4]) cerca(est(sim, t).y, 0.5 * g * t * (T - t), 1e-9);
+  });
+
+  it('2015 · 1-(1): el alcance es L = 2v²·sen θ·cos θ/g', () => {
+    const { M, sim } = simular('mext-2015-1-1');
+    const t = llegada(sim, M, 'partícula').t;
+    cerca(est(sim, t).x, 2 * 64 * Math.sin(35 * d2r) * Math.cos(35 * d2r) / g, 1e-9);
+  });
+
+  it('2016 · 1-(1): desde el reposo hasta v en el tiempo t recorre v·t/2', () => {
+    const { sim } = simular('mext-2016-1-1');
+    const s = est(sim, 5);
+    cerca(s.vx, 10, 1e-9);
+    cerca(s.x, 10 * 5 / 2, 1e-9);
+  });
+
+  it('2018 · 1-(1): lanzado en horizontal desde h, llega con tan θ = √(2gh)/v', () => {
+    const { M, sim } = simular('mext-2018-1-1');
+    const e = llegada(sim, M, 'objeto');
+    // Velocidad justo antes del choque (el evento guarda el estado ya tras él)
+    const s = est(sim, e.t - 1e-9);
+    cerca(Math.abs(s.vy) / s.vx, Math.sqrt(2 * g * 5) / 4, 1e-7);
+    cerca(e.t, Math.sqrt(2 * 5 / g), 1e-9);
+  });
+
+  it('2027 · 1-(1): sube 4.9 m si sale a v0 = √(2gh) = 9.8 m/s', () => {
+    const { sim } = simular('mext-2027-1-1');
+    cerca(est(sim, 1).y, 4.9, 1e-9);
+    cerca(est(sim, 1).vy, 0, 1e-9);
+  });
+});

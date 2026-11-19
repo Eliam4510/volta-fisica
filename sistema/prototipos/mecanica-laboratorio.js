@@ -709,6 +709,18 @@ export const ESCENARIOS = [
     }),
   },
   {
+    id: 'mext-2008-1-1', tipo: 'mext', anio: 2008, ref: '2008 · 1-(1)', titulo: 'Alcance a 45° y a 30°',
+    nota: ['Dos pelotas salen a la vez con la misma rapidez, una a 45° y otra a 30°.', 'El alcance es v²·sen 2θ/g: el de 45° es 1/sen 60° = 2/√3 ≈ 1.155 veces el de 30°.', 'Compara en la tabla de eventos dónde llega cada una al suelo.'],
+    crear: () => ({
+      duracion: 1.5,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-1, 0], [16, 0], { e: 0, mu: 0.8 }),
+        P_('p1', 'A (45°)', 0.1, 0, 0, { v: 10, ang: 45 }),
+        P_('p2', 'B (30°)', 0.1, 0, 0, { v: 10, ang: 30 }),
+      ],
+    }),
+  },
+  {
     id: 'mext-2008-p3', tipo: 'mext', anio: 2008, ref: '2008 · P3', titulo: 'Bajada corta por una pared curva',
     nota: ['R₀ = 2 m y θ₀ = 10° (el examen es simbólico).'],
     // h ≈ R₀θ₀²/2, v_max = √(2gh), t̄ = arco/v_max ≈ √(R₀/g); llega abajo en ≈ (π/2)√(R₀/g): t/t̄ ≈ π/2
@@ -736,6 +748,17 @@ export const ESCENARIOS = [
     crear: () => ({
       duracion: 2,
       objetos: [P_('p1', 'Bola', 0.1, 0, -1, { v: Math.sqrt((2 + 3 * Math.sqrt(3) / 2) * g0), ang: 180 }), { id: 'c1', tipo: 'cuerda', nombre: 'Cuerda', a: 'p1', b: null, ancla: [0, 0], L: 1 }],
+    }),
+  },
+  {
+    id: 'mext-2010-1c', tipo: 'mext', anio: 2010, ref: '2010 · 1-C', titulo: 'Altura en un instante del vuelo',
+    nota: ['La pelota sale en diagonal desde el suelo y aterriza en T.', 'En el instante t está a h = ½·g·t·(T − t): pon el cursor en un instante y compara y con esa fórmula.', 'Aquí v = 10 m/s a 60°: T = 2v sen 60°/g ≈ 1.767 s.'],
+    crear: () => ({
+      duracion: 1.85,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-1, 0], [12, 0], { e: 0, mu: 0.8 }),
+        P_('p1', 'Pelota', 0.2, 0, 0, { v: 10, ang: 60 }),
+      ],
     }),
   },
   {
@@ -853,6 +876,17 @@ export const ESCENARIOS = [
     }),
   },
   {
+    id: 'mext-2015-1-1', tipo: 'mext', anio: 2015, ref: '2015 · 1-(1)', titulo: 'Alcance de un tiro oblicuo',
+    nota: ['Una partícula sale con rapidez v a un ángulo θ sobre la horizontal.', 'Llega al suelo a L = 2v²·sen θ·cos θ/g.', 'Aquí v = 8 m/s y θ = 35°: L ≈ 6.14 m.'],
+    crear: () => ({
+      duracion: 1,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-1, 0], [9, 0], { e: 0, mu: 0.8 }),
+        P_('p1', 'Partícula', 0.1, 0, 0, { v: 8, ang: 35 }),
+      ],
+    }),
+  },
+  {
     id: 'mext-2015-p3', tipo: 'mext', anio: 2015, ref: '2015 · P3', titulo: 'Choque y oscilación en un resorte colgante',
     // M cuelga en equilibrio; la bola llega con la rapidez con que, ya pegados,
     // el resorte alcanza su largo natural en lo más alto: v = (g·(M + m)/m)·√(M(M + 2m)/(k(M + m)))
@@ -869,6 +903,17 @@ export const ESCENARIOS = [
         ],
       };
     },
+  },
+  {
+    id: 'mext-2016-1-1', tipo: 'mext', anio: 2016, ref: '2016 · 1-(1)', titulo: 'Coche que acelera desde el reposo',
+    nota: ['El coche parte del reposo con aceleración constante (una fuerza constante sobre un suelo sin fricción) hasta v en el tiempo t.', 'Recorre v·t/2: el área bajo la recta de la gráfica de velocidad.', 'Aquí a = 2 m/s²: a los 5 s va a 10 m/s y ha recorrido 25 m.'],
+    crear: () => ({
+      duracion: 5,
+      objetos: [
+        SEG('s1', 'suelo', 'Carretera', [-2, 0], [32, 0], { e: 0 }),
+        { ...P_('p1', 'Coche', 1000, 0, 0, { sobre: 's1' }), F: 2000, angF: 0 },
+      ],
+    }),
   },
   {
     id: 'mext-2016-1-4', tipo: 'mext', anio: 2016, ref: '2016 · 1-(4)', titulo: '¿Desliza el bloque por el plano?',
@@ -936,6 +981,17 @@ export const ESCENARIOS = [
         SEG('s1', 'suelo', 'Suelo', [-2.4, 0], [2.4, 0], { e: 0.4 }), ARCO('s2', 'Hemisferio', [0, 0], 1, 0, 180, 'exterior'),
         // «Sin velocidad inicial» en la cima es un equilibrio inestable: un empujón de 2 cm/s
         P_('p1', 'Bola', 0.1, 0, 1, { v: 0.02, sobre: 's2' }),
+      ],
+    }),
+  },
+  {
+    id: 'mext-2018-1-1', tipo: 'mext', anio: 2018, ref: '2018 · 1-(1)', titulo: 'Ángulo de llegada de un tiro horizontal',
+    nota: ['El objeto sale en horizontal con rapidez v desde la altura h.', 'Llega al suelo con tan θ = √(2gh)/v: la componente vertical es √(2gh) y la horizontal sigue siendo v.', 'Aquí h = 5 m y v = 4 m/s: tan θ ≈ 2.47, θ ≈ 68°. Activa Componentes de v en el inspector.'],
+    crear: () => ({
+      duracion: 1.1,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-1, 0], [6, 0], { e: 0, mu: 0.8 }),
+        P_('p1', 'Objeto', 0.5, 0, 5, { v: 4, ang: 0 }),
       ],
     }),
   },
@@ -1016,6 +1072,17 @@ export const ESCENARIOS = [
         objetos: [SEG('s1', 'suelo', 'Suelo', [-1.2, 0], [1.2, 0], { e: 1 / 3 }), P_('p1', 'Bola', 0.1, tc, r + Math.sqrt(3) * tc, { v: 2, ang: 240, radio: r })],
       };
     },
+  },
+  {
+    id: 'mext-2027-1-1', tipo: 'mext', anio: 2027, ref: '2027 · 1-(1)', titulo: 'Lanzamiento vertical hasta 4.9 m',
+    nota: ['La pelota se lanza hacia arriba y sube 4.9 m.', 'v0 = √(2gh) = 9.8 m/s: llega arriba en 1 s y vuelve al suelo en 2 s.'],
+    crear: () => ({
+      duracion: 2.2,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-1.5, 0], [1.5, 0], { e: 0 }),
+        P_('p1', 'Pelota', 0.2, 0, 0, { v: 9.8, ang: 90 }),
+      ],
+    }),
   },
   {
     id: 'mext-2027-p2', tipo: 'mext', anio: 2027, ref: '2027 · P2', titulo: 'Choque oblicuo',

@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.6.0 (publicada el 2026-11-19; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.7.0 (publicada el 2026-11-19 con sus dos ejecutables; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -196,3 +196,5 @@ contenido, PhET y el temario MEXT:
 - 2026-11-19 06:40 — Energía disipada continua en el estado (Qc, Qi; balance a 10⁻¹⁰), clavo y notas corregidos. Superficies móviles (`sobre`) y cuerpos cinemáticos con su trabajo W en el motor, con pruebas (2016 P3, 2006 1-(1)). Sesión cortada por límite de uso.
   - PENDIENTE para la próxima sesión: (1) llevar superficies móviles y cuerpos cinemáticos al Laboratorio (objeto «Tabla/carro» y «Mano/ascensor») y crear las escenas MEXT 2016 P3 y 2006 1-(1); (2) los agentes de Magnetismo, Termodinámica y Electrostática se detuvieron sin terminar: sus archivos sin seguimiento (`motores/magnetismo.js`, `prototipos/magnetismo*`, `pruebas/magnetismo.test.js`, y los cambios en `gas.js`, `termodinamica*`, `electrostatica*`) están a medias; revisar con `git status`, correr suite y tipos, completar o descartar, e integrar (MODULOS, Inicio con conteos reales, README, CHANGELOG); (3) publicar v0.7.0 con lo de [Sin publicar] y comprobar ejecutables.
 - 2026-11-19 (reanudado) — Superficies móviles y movimiento impuesto en el Laboratorio; escenas MEXT 2016 P3 y 2006 1-(1) (Mecánica: 27 MEXT). Agentes relanzados para terminar Magnetismo, Termodinámica y Electrostática a partir de lo que dejaron en disco.
+- 2026-11-19 — v0.7.0 publicada (instalador 2 360 428 B, portátil 4 768 256 B). Gráficas con margen adaptable y Gm alrededor del Sol; subíndices de lecturas más grandes. Seis escenas MEXT de cinemática y proyectiles en el Laboratorio (Mecánica: 33 MEXT).
+  - Mecánica MEXT sin escena y por qué: 2025 T5 y 2025 T1 (solo el tema en el banco); 2023 1-(1), 2019 1-(1) y 2017 1-(1) (gráficas v-t prescritas: falta un movimiento impuesto por tramos); 2013 1-(1) (movimiento relativo: falta un sistema de referencia que se mueve); 2013 P3, 2010 1-B y 2007 P3 (estática de cuerpos rígidos); 2010 1-A (fluidos); 2025 T2 (sin enunciado).
