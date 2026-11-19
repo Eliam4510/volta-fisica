@@ -9,6 +9,13 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Laboratorio de Mecánica: 18 escenas MEXT nuevas de dinámica, energía,
+  choques, movimiento circular y oscilaciones (2006 P3; 2007 1-(1);
+  2008 P3; 2009 1-(1); 2010 1-D y 1-E; 2012 1-(1) y P3; 2014 1-(1);
+  2016 1-(4) y 1-(5); 2017 1-(3); 2018 1-(2); 2019 1-(2); 2020 1-(1),
+  1-(2) y P3; 2023 1-(2)), cada una con una prueba que compara la
+  simulación con la respuesta del examen. Ya son 23 escenas MEXT.
+
 - Laboratorio de Mecánica: fuerza constante aplicada a una partícula
   (módulo y dirección), con su vector en el lienzo y su energía potencial
   U_F = −F·r en las lecturas, las gráficas y el CSV, para que su trabajo no

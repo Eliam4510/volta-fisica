@@ -523,6 +523,48 @@ const g0 = 9.8;
 /** Plano que baja hacia la derecha desde `alto` con ángulo θ (°) y largo L: el sólido queda debajo. */
 function planoDesde(alto, th, L) { return [alto, [alto[0] + L * cosd(th), alto[1] - L * sind(th)]]; }
 
+/** Partícula con una fuerza constante aplicada F (N) en la dirección angF (°). */
+const PF = (id, nombre, m, x, y, F, angF, o = {}) => ({ ...P_(id, nombre, m, x, y, o), F, angF });
+/** Resorte de la partícula `a` a un punto fijo `ancla`. */
+const RESORTE = (id, nombre, a, ancla, k, L0) => ({ id, tipo: 'resorte', nombre, a, b: null, ancla, k, L0, amort: 0 });
+/** Cuerda entre dos partículas. */
+const CUERDA = (id, nombre, a, b, L) => ({ id, tipo: 'cuerda', nombre, a, b, L });
+
+/**
+ * Curva y = x²/(4H) entre x0 < 0 y x1 > 0 armada con arcos de circunferencia
+ * (cara interior), n por rama. Cada arco empieza y acaba con la pendiente de
+ * la parábola y baja o sube exactamente lo que ella, así que la curva no tiene
+ * esquinas y la energía y la dirección en cada unión son las exactas; el
+ * ancho de cada tramo difiere un poco del de la parábola. El fondo queda en
+ * (0, 0). El primer arco se alarga `extra` grados hacia atrás para que la bola
+ * pueda empezar en su punto inicial sin quedar en el borde.
+ * @returns {{arcos: any[], inicio: number[], fin: number[]}}
+ */
+function parabolaEnArcos(H, x0, x1, n, extra) {
+  const fi = x => Math.atan(x / (2 * H)) / DEG, alto = x => x * x / (4 * H);
+  // Arco interior (centro arriba) que pasa por p con pendiente φa y llega a la
+  // pendiente φb tras cambiar de altura dy: radio, centro y el otro extremo q
+  const tramo = (p, fa, fb, dy) => {
+    const R = dy / (cosd(fa) - cosd(fb)), c = [p[0] - R * sind(fa), p[1] + R * cosd(fa)];
+    return { R, c, q: [c[0] + R * sind(fb), c[1] - R * cosd(fb)] };
+  };
+  // Las dos ramas se construyen desde O hacia fuera; cada arco se recorre de izquierda a derecha
+  const arcos = [], izquierda = [];
+  let p = [0, 0], fin = p, inicio = p;
+  for (let k = 0; k < n; k++) {
+    const xa = x1 * k / n, xb = x1 * (k + 1) / n, t = tramo(p, fi(xa), fi(xb), alto(xb) - alto(xa));
+    arcos.push({ c: t.c, R: t.R, a0: fi(xa) - 90, a1: fi(xb) - 90 });
+    p = fin = t.q;
+  }
+  p = [0, 0];
+  for (let k = 0; k < n; k++) {
+    const xb = x0 * k / n, xa = x0 * (k + 1) / n, t = tramo(p, fi(xb), fi(xa), alto(xa) - alto(xb));
+    izquierda.unshift({ c: t.c, R: t.R, a0: fi(xa) - 90 - (k === n - 1 ? extra : 0), a1: fi(xb) - 90 });
+    p = inicio = t.q;
+  }
+  return { arcos: [...izquierda, ...arcos], inicio, fin };
+}
+
 export const ESCENARIOS = [
   {
     id: 'caida', tipo: 'tutorial', titulo: 'Caída libre',
@@ -605,22 +647,56 @@ export const ESCENARIOS = [
       objetos: [ARCO('s1', 'Cuenco', [0, 1], 1, 180, 360, 'interior'), P_('p1', 'Bola', 0.2, cosd(205), 1 + sind(205), { sobre: 's1' })],
     }),
   },
+  // MEXT, por año. Cada escena reconstruye la situación del problema; la
+  // fórmula de la respuesta va en el comentario y se comprueba en
+  // pruebas/mecanica-laboratorio-mext.test.js.
   {
-    id: 'mext-2017-p3', tipo: 'mext', anio: 2017, ref: '2017 · P3', titulo: 'Bola que deja el hemisferio',
+    id: 'mext-2006-p3', tipo: 'mext', anio: 2006, ref: '2006 · P3', titulo: 'Objeto que resbala por una esfera',
+    nota: ['R = 1 m y v₀ = 1 m/s (el examen es simbólico).'],
+    // Se despega Y = R/3 − v₀²/(3g) por debajo de la cima (C₁ = 1/3, C₂ = −1/3); luego, parábola acelerada
     crear: () => ({
-      duracion: 3,
+      duracion: 1.6,
       objetos: [
-        SEG('s1', 'suelo', 'Suelo', [-2.4, 0], [2.4, 0], { e: 0.4 }), ARCO('s2', 'Hemisferio', [0, 0], 1, 0, 180, 'exterior'),
-        // «Sin velocidad inicial» en la cima es un equilibrio inestable: un empujón de 2 cm/s
-        P_('p1', 'Bola', 0.1, 0, 1, { v: 0.02, sobre: 's2' }),
+        SEG('s1', 'suelo', 'Suelo', [-2, 0], [3.4, 0], { e: 0.5 }), ARCO('s2', 'Esfera', [0, 1], 1, 0, 360, 'exterior'),
+        P_('p1', 'Objeto', 0.1, 0, 2, { v: 1, sobre: 's2' }),
       ],
     }),
   },
   {
-    id: 'mext-2014-p3', tipo: 'mext', anio: 2014, ref: '2014 · P3', titulo: 'Péndulo con clavo',
+    id: 'mext-2007-1-1', tipo: 'mext', anio: 2007, ref: '2007 · 1-(1)', titulo: 'Bola incrustada en un bloque con resorte',
+    nota: ['Vista desde arriba: la mesa sin fricción es el plano del dibujo (g = 0).', 'Bola de 0.1 kg a 20 m/s; bloque de 1.9 kg; k = 20 N/m (el examen es simbólico).'],
+    // Pegados salen con V = mν/(M + m): compresión máxima mν/√(k(M + m)). La escena
+    // acaba justo antes de que el resorte vuelva a su largo natural (medio periodo)
     crear: () => ({
-      duracion: 2.2,
-      objetos: [P_('p1', 'Bola', 0.1, -1, 0), { id: 'c1', tipo: 'cuerda', nombre: 'Cuerda', a: 'p1', b: null, ancla: [0, 0], L: 1 }, { id: 'n1', tipo: 'clavo', nombre: 'Clavo', x: 0, y: -0.5 }],
+      g: 0, duracion: 1, eParticulas: 0,
+      objetos: [
+        SEG('s1', 'pared', 'Pared', [1.4, -0.4], [1.4, 0.4]),
+        P_('p1', 'Bloque', 1.9, 0.6, 0, { radio: 0.15 }), P_('p2', 'Bola', 0.1, -1, 0, { v: 20, radio: 0.03 }),
+        RESORTE('c1', 'Resorte', 'p1', [1.4, 0], 20, 0.8),
+        { id: 'c2', tipo: 'union', nombre: 'Unión', a: 'p2', b: 'p1' },
+      ],
+    }),
+  },
+  {
+    id: 'mext-2008-p3', tipo: 'mext', anio: 2008, ref: '2008 · P3', titulo: 'Bajada corta por una pared curva',
+    nota: ['R₀ = 2 m y θ₀ = 10° (el examen es simbólico).'],
+    // h ≈ R₀θ₀²/2, v_max = √(2gh), t̄ = arco/v_max ≈ √(R₀/g); llega abajo en ≈ (π/2)√(R₀/g): t/t̄ ≈ π/2
+    crear: () => ({
+      duracion: 3,
+      objetos: [ARCO('s1', 'Pared curva', [0, 2], 2, 235, 305, 'interior'), P_('p1', 'Objeto', 0.1, 2 * sind(10), 2 - 2 * cosd(10), { sobre: 's1' })],
+    }),
+  },
+  {
+    id: 'mext-2009-1-1', tipo: 'mext', anio: 2009, ref: '2009 · 1-(1)', titulo: 'Bola por dentro de un hemisferio',
+    nota: ['r = 0.5 m, m = 0.1 kg y v = 4 m/s (el examen es simbólico).'],
+    // En Q, a la altura del centro, la normal es la centrípeta: N = mv_Q²/r = mv²/r − 2mg
+    crear: () => ({
+      duracion: 1.4,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-1.2, 0], [0, 0]), SEG('s2', 'pared', 'Pared', [-1.2, 0.6], [-1.2, 0]),
+        ARCO('s3', 'Hemisferio', [0, 0.5], 0.5, -90, 90, 'interior', { e: 0.5 }),
+        P_('p1', 'Bola', 0.1, -0.6, 0, { v: 4, sobre: 's1' }),
+      ],
     }),
   },
   {
@@ -629,6 +705,104 @@ export const ESCENARIOS = [
     crear: () => ({
       duracion: 2,
       objetos: [P_('p1', 'Bola', 0.1, 0, -1, { v: Math.sqrt((2 + 3 * Math.sqrt(3) / 2) * g0), ang: 180 }), { id: 'c1', tipo: 'cuerda', nombre: 'Cuerda', a: 'p1', b: null, ancla: [0, 0], L: 1 }],
+    }),
+  },
+  {
+    id: 'mext-2010-1d', tipo: 'mext', anio: 2010, ref: '2010 · 1-D', titulo: 'Masa entre dos resortes verticales',
+    nota: ['Se suelta 10 cm por debajo del equilibrio (el examen no dice cuánto).'],
+    // Equilibrio 20 cm más abajo: 2k·0.2 = mg → k = 12.25 N/m; sube en medio periodo, π√(m/(2k)) ≈ 0.45 s
+    crear: () => {
+      const m = 0.5, k = m * g0 / (2 * 0.2);
+      return {
+        duracion: 1.8,
+        objetos: [
+          SEG('s1', 'suelo', 'Techo', [0.4, 1], [-0.4, 1]), SEG('s2', 'suelo', 'Suelo', [-0.4, 0], [0.4, 0]),
+          P_('p1', 'A', m, 0, 0.2, { radio: 0.04 }),
+          RESORTE('c1', 'Resorte de arriba', 'p1', [0, 1], k, 0.5), RESORTE('c2', 'Resorte de abajo', 'p1', [0, 0], k, 0.5),
+        ],
+      };
+    },
+  },
+  {
+    id: 'mext-2010-1e', tipo: 'mext', anio: 2010, ref: '2010 · 1-E', titulo: 'Tres pistas con la misma caída',
+    nota: ['Cada pista baja h = 1 m en L = 1.6 m de recorrido horizontal (el examen es simbólico).', 'A es cóncava, B recta y C convexa; al final, un tope detiene cada objeto.'],
+    // Sin fricción, K = mg(h − y): a igual x, K_A > K_B > K_C; en B, K crece en línea recta con x
+    crear: () => {
+      const h = 1, L = 1.6, paso = 2.7, objetos = [];
+      // A: arco cóncavo tangente al suelo en Q
+      const RA = (L * L + h * h) / (2 * h), angA = Math.atan2(h - RA, -L) / DEG + 360;
+      // C: arco convexo que forma δ = 14° con la cuerda PQ en cada extremo (con δ mucho
+      // mayor, el objeto se despegaría antes de llegar a Q)
+      const delta = 14, c = Math.hypot(L, h), RC = c / (2 * sind(delta)), nrm = [h / c, L / c];
+      const cC = [L / 2 - nrm[0] * RC * cosd(delta), h / 2 - nrm[1] * RC * cosd(delta)];
+      const angP = Math.atan2(h - cC[1], -cC[0]) / DEG, angQ = Math.atan2(-cC[1], L - cC[0]) / DEG, th = Math.atan2(h, L) / DEG;
+      ['A', 'B', 'C'].forEach((k, i) => {
+        const X = i * paso, s = 3 * i;
+        // Cada pista se alarga un poco por encima de P para que el objeto no empiece en su borde
+        const pista = k === 'A' ? ARCO(`s${s + 1}`, `Pista ${k}`, [X + L, RA], RA, angA - 3, 270, 'interior')
+          : k === 'B' ? SEG(`s${s + 1}`, 'plano', `Pista ${k}`, [X - 0.04 * cosd(th), h + 0.04 * sind(th)], [X + L, 0])
+            : ARCO(`s${s + 1}`, `Pista ${k}`, [X + cC[0], cC[1]], RC, angQ, angP + 2, 'exterior');
+        // El suelo y el tope se cruzan un poco: un objeto puntual que llega justo al
+        // extremo de un segmento lo atravesaría. Los topes tienen alturas distintas:
+        // un objeto que pasa a la vez por detrás del borde de dos topes iguales
+        // agota los eventos del motor
+        objetos.push(
+          pista,
+          SEG(`s${s + 2}`, 'suelo', `Suelo ${k}`, [X + L - 0.05, 0], [X + L + 0.55, 0], { e: 0 }),
+          SEG(`s${s + 3}`, 'pared', `Pared ${k}`, [X + L + 0.5, -0.05], [X + L + 0.5, 0.3 + 0.05 * i], { e: 0 }),
+          P_(`p${i + 1}`, `Objeto ${k}`, 0.2, X, h, { sobre: `s${s + 1}` }),
+        );
+      });
+      return { duracion: 1.4, objetos };
+    },
+  },
+  {
+    id: 'mext-2012-1-1', tipo: 'mext', anio: 2012, ref: '2012 · 1-(1)', titulo: 'Dos bloques unidos por una cuerda',
+    nota: ['m = 1 kg, M = 2 kg y F = 6 N (el examen es simbólico).'],
+    // a = F/(M + m); la cuerda solo arrastra a m: T = mF/(M + m)
+    crear: () => ({
+      duracion: 1.5,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-0.6, 0], [3.6, 0]),
+        P_('p1', 'Bloque m', 1, 0, 0.15, { radio: 0.15, sobre: 's1' }), PF('p2', 'Bloque M', 2, 0.7, 0.15, 6, 0, { radio: 0.15, sobre: 's1' }),
+        CUERDA('c1', 'Cuerda', 'p1', 'p2', 0.7),
+      ],
+    }),
+  },
+  {
+    id: 'mext-2012-p3', tipo: 'mext', anio: 2012, ref: '2012 · P3', titulo: 'Bola que sale de una pista parabólica',
+    nota: ['H = 1 m (el examen es simbólico).', 'La parábola se arma con arcos de circunferencia que coinciden con ella en altura y pendiente en cada unión.'],
+    // v_B = √(2gH) a 45°; y_max = 1.5H; de B a C tarda (1 + √3)√(H/g), avanza (1 + √3)H y llega con 2√(gH)
+    crear: () => {
+      const H = 1, { arcos, inicio, fin } = parabolaEnArcos(H, -2 * Math.SQRT2 * H, 2 * H, 3, 4);
+      return {
+        duracion: 2.45,
+        objetos: [
+          ...arcos.map((a, k) => ARCO(`s${k + 1}`, 'Pista', a.c, a.R, a.a0, a.a1, 'interior')),
+          SEG(`s${arcos.length + 1}`, 'suelo', 'Suelo', [fin[0] + 0.2, 0], [fin[0] + 3.5, 0], { e: 0.4 }),
+          P_('p1', 'Bola', 0.1, inicio[0], inicio[1], { sobre: 's1' }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'mext-2014-1-1', tipo: 'mext', anio: 2014, ref: '2014 · 1-(1)', titulo: 'Dos bolas unidas por un resorte estirado',
+    nota: ['M = 2 kg, m = 1 kg, k = 50 N/m y ℓ = 0.2 m (el examen es simbólico).'],
+    // El momento total es nulo; con el resorte en su largo natural, v_m = √(Mkℓ²/(m(M + m)))
+    crear: () => ({
+      duracion: 1.5,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-0.6, 0], [1.8, 0]),
+        P_('p1', 'Bola M', 2, 0, 0.12, { radio: 0.12, sobre: 's1' }), P_('p2', 'Bola m', 1, 1.2, 0.12, { radio: 0.12, sobre: 's1' }),
+        { id: 'c1', tipo: 'resorte', nombre: 'Resorte', a: 'p1', b: 'p2', k: 50, L0: 1, amort: 0 },
+      ],
+    }),
+  },
+  {
+    id: 'mext-2014-p3', tipo: 'mext', anio: 2014, ref: '2014 · P3', titulo: 'Péndulo con clavo',
+    crear: () => ({
+      duracion: 2.2,
+      objetos: [P_('p1', 'Bola', 0.1, -1, 0), { id: 'c1', tipo: 'cuerda', nombre: 'Cuerda', a: 'p1', b: null, ancla: [0, 0], L: 1 }, { id: 'n1', tipo: 'clavo', nombre: 'Clavo', x: 0, y: -0.5 }],
     }),
   },
   {
@@ -646,6 +820,139 @@ export const ESCENARIOS = [
           { id: 'c1', tipo: 'resorte', nombre: 'Resorte', a: 'p1', b: null, ancla: [0, 0], k, L0, amort: 0 },
           { id: 'c2', tipo: 'union', nombre: 'Unión', a: 'p2', b: 'p1' },
         ],
+      };
+    },
+  },
+  {
+    id: 'mext-2016-1-4', tipo: 'mext', anio: 2016, ref: '2016 · 1-(4)', titulo: '¿Desliza el bloque por el plano?',
+    nota: ['θ = 30°, así que tan θ ≈ 0.577.', 'Plano 1: μs = 0.5 y μ = 0.4. Plano 2: μs = 0.7 y μ = 0.6.'],
+    // Desliza si μs < tan θ, y entonces baja con a = g(sen θ − μ cos θ)
+    crear: () => {
+      const objetos = [];
+      [[0.5, 0.4], [0.7, 0.6]].forEach(([muS, mu], i) => {
+        const [a, b] = planoDesde([3.4 * i, 1.2], 30, 2.4), n = i + 1;
+        objetos.push(
+          SEG(`s${2 * i + 1}`, 'plano', `Plano ${n}`, a, b, { mu, muS }),
+          SEG(`s${2 * i + 2}`, 'suelo', `Suelo ${n}`, [b[0], 0], [b[0] + 1.1, 0], { e: 0, mu: 0.35, muS: 0.4 }),
+          P_(`p${n}`, `Bloque ${n}`, 1, a[0] + 0.4 * cosd(30), a[1] - 0.4 * sind(30), { sobre: `s${2 * i + 1}` }),
+        );
+      });
+      return { duracion: 2.6, objetos };
+    },
+  },
+  {
+    id: 'mext-2016-1-5', tipo: 'mext', anio: 2016, ref: '2016 · 1-(5)', titulo: 'Oscilación de amplitud A y semiperiodo t₀',
+    nota: ['A = 0.2 m y t₀ = 0.5 s (el examen es simbólico).', 'x se mide hacia arriba desde el equilibrio: en t = 0 la masa pasa por él subiendo.'],
+    // x = A sen(πt/t₀): v_max = πA/t₀
+    crear: () => {
+      const m = 0.5, A = 0.2, w = Math.PI / 0.5, k = m * w * w, L0 = 0.5;
+      return {
+        duracion: 2.2,
+        objetos: [
+          SEG('s1', 'suelo', 'Techo', [0.4, 0], [-0.4, 0]),
+          P_('p1', 'Masa', m, 0, -(L0 + m * g0 / k), { v: w * A, ang: 90, radio: 0.05 }), RESORTE('c1', 'Resorte', 'p1', [0, 0], k, L0),
+        ],
+      };
+    },
+  },
+  {
+    id: 'mext-2017-1-3', tipo: 'mext', anio: 2017, ref: '2017 · 1-(3)', titulo: 'Velocidad de un bloque unido a un resorte',
+    nota: ['m = 0.5 kg y k = 50 N/m (ω = 10 rad/s); se estira d = 0.1 m (el examen es simbólico).', 'Pon vx en una gráfica para ver la velocidad contra el tiempo.'],
+    // x = d cos ωt → v = −ωd sen ωt: empieza en 0 y baja primero
+    crear: () => ({
+      duracion: 1.4,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [0, 0], [1.4, 0]), SEG('s2', 'pared', 'Pared', [0, 0.4], [0, 0]),
+        P_('p1', 'Bloque', 0.5, 0.9, 0.1, { radio: 0.1, sobre: 's1' }), RESORTE('c1', 'Resorte', 'p1', [0, 0.1], 50, 0.8),
+      ],
+    }),
+  },
+  {
+    id: 'mext-2017-p3', tipo: 'mext', anio: 2017, ref: '2017 · P3', titulo: 'Bola que deja el hemisferio',
+    crear: () => ({
+      duracion: 3,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-2.4, 0], [2.4, 0], { e: 0.4 }), ARCO('s2', 'Hemisferio', [0, 0], 1, 0, 180, 'exterior'),
+        // «Sin velocidad inicial» en la cima es un equilibrio inestable: un empujón de 2 cm/s
+        P_('p1', 'Bola', 0.1, 0, 1, { v: 0.02, sobre: 's2' }),
+      ],
+    }),
+  },
+  {
+    id: 'mext-2018-1-2', tipo: 'mext', anio: 2018, ref: '2018 · 1-(2)', titulo: 'Giro uniforme sujeto por un resorte',
+    nota: ['Vista desde arriba: la mesa sin fricción es el plano del dibujo (g = 0).', 'm = 0.5 kg, k = 20 N/m, l₀ = 1 m y α = 0.25 (el examen es simbólico).'],
+    // kαl₀ = mv²/((1 + α)l₀) → v = l₀√((1 + α)αk/m)
+    crear: () => {
+      const m = 0.5, k = 20, l0 = 1, al = 0.25;
+      return {
+        g: 0, duracion: 2.4,
+        objetos: [P_('p1', 'Bola', m, (1 + al) * l0, 0, { v: l0 * Math.sqrt((1 + al) * al * k / m), ang: 90, radio: 0.06 }), RESORTE('c1', 'Resorte', 'p1', [0, 0], k, l0)],
+      };
+    },
+  },
+  {
+    id: 'mext-2019-1-2', tipo: 'mext', anio: 2019, ref: '2019 · 1-(2)', titulo: 'Rebotes sucesivos en el suelo',
+    nota: ['h = 2 m y e = 0.8 (el examen es simbólico).'],
+    // Tras el n-ésimo choque la rapidez es eⁿ√(2gh): sube hasta h·e²ⁿ
+    crear: () => ({ duracion: 4, objetos: [P_('p1', 'Bola', 0.1, 0, 2), SEG('s1', 'suelo', 'Suelo', [-0.6, 0], [0.6, 0], { e: 0.8 })] }),
+  },
+  {
+    id: 'mext-2020-1-1', tipo: 'mext', anio: 2020, ref: '2020 · 1-(1)', titulo: 'Tres bloques arrastrados por una fuerza',
+    nota: ['m = 1 kg y F = 12 N (el examen es simbólico).'],
+    // a = F/(6m); la cuerda 1 arrastra a m: T₁ = F/6; la 2 arrastra a m + 2m: T₂ = F/2
+    crear: () => {
+      const r = 0.12;
+      return {
+        duracion: 1.2,
+        objetos: [
+          SEG('s1', 'suelo', 'Suelo', [-0.4, 0], [3.2, 0]),
+          P_('p1', 'Bloque m', 1, 0, r, { radio: r, sobre: 's1' }), P_('p2', 'Bloque 2m', 2, 0.6, r, { radio: r, sobre: 's1' }),
+          PF('p3', 'Bloque 3m', 3, 1.2, r, 12, 0, { radio: r, sobre: 's1' }),
+          CUERDA('c1', 'Cuerda 1', 'p1', 'p2', 0.6), CUERDA('c2', 'Cuerda 2', 'p2', 'p3', 0.6),
+        ],
+      };
+    },
+  },
+  {
+    id: 'mext-2020-1-2', tipo: 'mext', anio: 2020, ref: '2020 · 1-(2)', titulo: 'Choque al pie de una rampa',
+    nota: ['h = 0.8 m y m = 1 kg; B tiene 3 kg (el examen es simbólico).'],
+    // A llega con v = √(2gh) y queda quieta: B sale con v/3, así que e = (v/3)/v = 1/3
+    crear: () => {
+      const r = 0.1, h = 0.8, T = [cosd(240), 1 + sind(240)], s = (h + r - T[1] - r * cosd(30)) / sind(30);
+      return {
+        duracion: 2.4, eParticulas: 1 / 3,
+        objetos: [
+          SEG('s1', 'plano', 'Rampa', [T[0] - 1.6 * cosd(30), T[1] + 1.6 * sind(30)], T), ARCO('s2', 'Rampa', [0, 1], 1, 240, 270, 'interior'),
+          SEG('s3', 'suelo', 'Suelo', [-0.05, 0], [3.4, 0]),
+          // El centro de A queda h por encima del que tendrá en el suelo
+          P_('p1', 'A', 1, T[0] + r * sind(30) - s * cosd(30), T[1] + r * cosd(30) + s * sind(30), { radio: r, sobre: 's1' }),
+          P_('p2', 'B', 3, 1.6, r, { radio: r, sobre: 's3' }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'mext-2020-p3', tipo: 'mext', anio: 2020, ref: '2020 · P3', titulo: 'Choque elástico con un bloque y un resorte',
+    nota: ['m = 1 kg, v = 2 m/s y k = 75 N/m (el examen es simbólico).'],
+    // A sale con −v/2 y B con v/2; ℓ = √(3mv²/(4k)) a los T = (π/2)√(3m/k); en T/2 la compresión es ℓ/√2
+    crear: () => ({
+      duracion: 1.6, eParticulas: 1,
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-1.5, 0], [1.6, 0]), SEG('s2', 'pared', 'Pared', [1.6, 0], [1.6, 0.4]),
+        P_('p1', 'A', 1, -0.4, 0.1, { v: 2, radio: 0.1, sobre: 's1' }), P_('p2', 'B', 3, 0.8, 0.1, { radio: 0.1, sobre: 's1' }),
+        RESORTE('c1', 'Resorte', 'p2', [1.6, 0.1], 75, 0.8),
+      ],
+    }),
+  },
+  {
+    id: 'mext-2023-1-2', tipo: 'mext', anio: 2023, ref: '2023 · 1-(2)', titulo: 'Rebote oblicuo en el suelo',
+    nota: ['Sin gravedad, para que las trayectorias sean rectas como en la figura: el choque solo cambia la componente normal.'],
+    // Llega a 2 m/s con 60° y sale con 30°: e = tan 30°/tan 60° = 1/3
+    crear: () => {
+      const r = 0.05, tc = 0.4;
+      return {
+        g: 0, duracion: 1.2,
+        objetos: [SEG('s1', 'suelo', 'Suelo', [-1.2, 0], [1.2, 0], { e: 1 / 3 }), P_('p1', 'Bola', 0.1, tc, r + Math.sqrt(3) * tc, { v: 2, ang: 240, radio: r })],
       };
     },
   },
@@ -1121,6 +1428,9 @@ function iniciar() {
     if (!esc.nota || !esc.nota.length || notaCerrada) { n.hidden = true; return; }
     n.hidden = false;
     $('#nota-titulo').textContent = esc.titulo;
+    // La nota de un tutorial son sus pasos; la de un ejemplo o una escena MEXT, los datos elegidos
+    $('#nota-tipo').textContent = esc.tipo === 'tutorial' ? 'Tutorial' : 'Nota';
+    $('#nota-ico').setAttribute('href', esc.tipo === 'tutorial' ? '#i-tutorial' : esc.tipo === 'mext' ? '#i-mext' : '#i-info');
     $('#nota-pasos').innerHTML = esc.nota.map(p => `<li>${p.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</li>`).join('');
   }
   $('#nota-cerrar').addEventListener('click', () => { notaCerrada = true; pintarNota(); });
