@@ -7,6 +7,14 @@ de examen. La visión y la plataforma común están en
 `03_vision_y_plataforma.md`; cada módulo, en `modulos/`. Este documento parte
 del análisis en `01_analisis_temario.md`.
 
+> **Estado de la implementación (v0.x).** La aplicación usa Tauri 2 como se
+> propone aquí, pero la física y la interfaz están en JavaScript moderno
+> (módulos ES, sin empaquetador) y no en Rust compilado a WASM: los motores
+> viven en `sistema/motores/` y `sistema/nucleo/`, son puros (sin DOM) y
+> tienen pruebas automáticas, de modo que pueden pasar a Rust/WASM cuando el
+> rendimiento lo pida. Los motivos están en `DECISIONES.md` (decisiones 3 y
+> 4) y la estructura vigente en `PLAN.md`.
+
 ## 1. Qué significa "profesional" en este proyecto
 
 Requisitos medibles, no adjetivos:

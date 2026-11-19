@@ -1,25 +1,64 @@
 /* ==========================================================================
    Volta — exportar datos e imágenes
-   Descarga archivos generados en la página (CSV, PNG). En la aplicación de
-   Windows, WebView2 los guarda en la carpeta de descargas y muestra su aviso
-   de descarga; en el navegador, igual.
+   Guarda archivos generados en la página (CSV, PNG, escenas). Dentro de la
+   aplicación de Windows usa los diálogos nativos «Guardar como» y «Abrir»
+   (plugins de Tauri); en el navegador, la descarga normal.
    ========================================================================== */
 
-/**
- * Descarga un texto como archivo.
- * @param {string} nombre @param {string} texto @param {string} [tipo]
- */
-export function descargarTexto(nombre, texto, tipo = 'text/csv;charset=utf-8') {
-  descargarBlob(nombre, new Blob([texto], { type: tipo }));
+/** Filtros de archivo para los diálogos nativos. */
+export const FILTROS = {
+  csv: [{ name: 'Datos CSV', extensions: ['csv'] }],
+  png: [{ name: 'Imagen PNG', extensions: ['png'] }],
+  volta: [{ name: 'Escena de Volta', extensions: ['volta'] }],
+};
+
+/** API nativa de Tauri si la página corre dentro de la aplicación de Windows. */
+export function nativo() {
+  const t = /** @type {any} */ (window).__TAURI__;
+  return t && t.dialog && t.fs ? t : null;
 }
 
 /**
- * Descarga el contenido de un lienzo como PNG, con el fondo del lienzo
+ * Guarda un archivo: con el diálogo «Guardar como» de Windows dentro de la
+ * aplicación, o como descarga en el navegador.
+ * @param {string} nombre Nombre sugerido
+ * @param {string | Blob} contenido
+ * @param {{tipo?: string, filtros?: any[]}} [o]
+ * @returns {Promise<string | null>} ruta o nombre guardado; null si se canceló
+ */
+export async function guardarArchivo(nombre, contenido, o = {}) {
+  const t = nativo();
+  if (t) {
+    const ruta = await t.dialog.save({ defaultPath: nombre, filters: o.filtros });
+    if (!ruta) return null;
+    if (typeof contenido === 'string') await t.fs.writeTextFile(ruta, contenido);
+    else await t.fs.writeFile(ruta, new Uint8Array(await contenido.arrayBuffer()));
+    return ruta;
+  }
+  descargarBlob(nombre, typeof contenido === 'string' ? new Blob([contenido], { type: o.tipo || 'text/plain;charset=utf-8' }) : contenido);
+  return nombre;
+}
+
+/**
+ * Guarda un texto (CSV por defecto).
+ * @param {string} nombre @param {string} texto @param {string} [tipo]
+ */
+export function descargarTexto(nombre, texto, tipo = 'text/csv;charset=utf-8') {
+  const ext = nombre.split('.').pop();
+  return guardarArchivo(nombre, texto, { tipo, filtros: FILTROS[ext] });
+}
+
+/**
+ * Guarda el contenido de un lienzo como PNG, con el fondo del lienzo
  * (los lienzos de Volta ya pintan su fondo, así que la imagen es fiel).
  * @param {HTMLCanvasElement} canvas @param {string} nombre
+ * @returns {Promise<string | null>}
  */
 export function descargarLienzo(canvas, nombre) {
-  canvas.toBlob(b => { if (b) descargarBlob(nombre, b); }, 'image/png');
+  return new Promise(resolver => canvas.toBlob(b => {
+    if (!b) { resolver(null); return; }
+    guardarArchivo(nombre, b, { filtros: FILTROS.png }).then(resolver, () => resolver(null));
+  }, 'image/png'));
 }
 
 /** @param {string} nombre @param {Blob} blob */

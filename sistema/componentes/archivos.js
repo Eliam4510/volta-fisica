@@ -4,11 +4,15 @@
    abrir; funciona igual en la aplicación de Windows (WebView2).
    ========================================================================== */
 import { serializar, leerEscena, EXTENSION } from '../nucleo/escena.js';
-import { descargarTexto, nombreArchivo } from './exportar.js';
+import { descargarTexto, nombreArchivo, nativo, FILTROS } from './exportar.js';
 
-/** Guarda la escena como archivo .volta. @param {import('../nucleo/escena.js').Escena} escena */
+/**
+ * Guarda la escena como archivo .volta.
+ * @param {import('../nucleo/escena.js').Escena} escena
+ * @returns {Promise<string | null>} ruta guardada, o null si se canceló
+ */
 export function guardarEscena(escena) {
-  descargarTexto(nombreArchivo(escena.titulo) + EXTENSION, serializar(escena), 'application/json;charset=utf-8');
+  return descargarTexto(nombreArchivo(escena.titulo) + EXTENSION, serializar(escena), 'application/json;charset=utf-8');
 }
 
 /**
@@ -17,6 +21,18 @@ export function guardarEscena(escena) {
  * @returns {Promise<import('../nucleo/escena.js').Escena>}
  */
 export function abrirEscena(esperado) {
+  const t = nativo();
+  if (t) {
+    // Diálogo «Abrir» de Windows. Si se cancela, la promesa no se resuelve.
+    return new Promise((resolver, rechazar) => {
+      t.dialog.open({ multiple: false, directory: false, filters: [...FILTROS.volta, { name: 'JSON', extensions: ['json'] }] })
+        .then(async ruta => {
+          if (!ruta) return;
+          try { resolver(leerEscena(await t.fs.readTextFile(ruta), esperado)); }
+          catch (e) { rechazar(e); }
+        }, rechazar);
+    });
+  }
   return new Promise((resolver, rechazar) => {
     const entrada = document.createElement('input');
     entrada.type = 'file'; entrada.accept = `${EXTENSION},.json,application/json`;

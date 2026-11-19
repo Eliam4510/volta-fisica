@@ -298,7 +298,9 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     alfa = 0; t = 0; jugando = false; construirVariables(); recalcular(); registrar();
     avisar(area, 'Escena original restablecida');
   }
-  function guardar() { guardarEscena(escenaActual()); avisar(area, 'Escena guardada'); }
+  function guardar() {
+    guardarEscena(escenaActual()).then(r => { if (r) avisar(area, 'Escena guardada'); }, e => avisar(area, `No se pudo guardar: ${e}`));
+  }
   function abrir() {
     abrirEscena({ modulo: 'mecanica' }).then(e => { aplicarEscena(e); avisar(area, `Escena abierta: ${e.titulo}`); })
       .catch(err => avisar(area, err.message));
@@ -390,12 +392,12 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       return [tt, s.x, s.y, s.vx, s.vy, Math.hypot(s.vx, s.vy), K, U, K + U, s.fase];
     });
     const csv = aCSV(['t (s)', 'x (m)', 'y (m)', 'vx (m/s)', 'vy (m/s)', '|v| (m/s)', 'Ek (J)', 'Ug (J)', 'E (J)', 'fase'], filas);
-    descargarTexto(`${nombreArchivo(TITULO)}-datos.csv`, csv);
-    avisar(area, `Datos exportados: ${filas.length} filas`);
+    descargarTexto(`${nombreArchivo(TITULO)}-datos.csv`, csv)
+      .then(r => { if (r) avisar(area, `Datos exportados: ${filas.length} filas`); }, e => avisar(area, `No se pudo exportar: ${e}`));
   }
   function exportarPNG() {
-    descargarLienzo(lienzo, `${nombreArchivo(TITULO)}-t${fmt(t, 3)}s.png`);
-    avisar(area, 'Imagen del lienzo exportada');
+    descargarLienzo(lienzo, `${nombreArchivo(TITULO)}-t${fmt(t, 3)}s.png`)
+      .then(r => { if (r) avisar(area, 'Imagen del lienzo exportada'); });
   }
   $('#b-exportar').addEventListener('click', exportarCSV);
 
