@@ -7,6 +7,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.11.0] - 2026-11-19
+
+Gravitación con sus tres espacios (Sistema solar y Maniobras, sobre un
+motor de N cuerpos) y Termodinámica como caja de arena: montar escenas
+propias e instrumentos en sus cuatro espacios.
+
 ### Añadido
 
 - Gravitación: espacios nuevos «Sistema solar» (cuerpos colocados
@@ -503,7 +509,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.10.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.7.0...v0.8.0

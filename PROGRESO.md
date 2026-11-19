@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.10.0 (publicada el 2026-11-19 con instalador de 2 851 586 B y portátil de 5 255 680 B; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.11.0 (publicada el 2026-11-19; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -175,7 +175,7 @@ completa) y con PhET, Universe Sandbox y Algodoo:
 
 | Prioridad | Hallazgo | Tarea |
 |---|---|---|
-| Función | Varias pantallas dependen de sus escenas: en Gravitación no se pueden añadir cuerpos ni impulsos (el espacio «Sistema solar» y «Maniobras» de la especificación no existen); en Termodinámica las paletas de objetos siguen como `data-pendiente` | Gravitación: espacios «Sistema solar» (N cuerpos, Kepler, datos reales) y «Maniobras» (impulsos Δv, Hohmann); Termodinámica: paletas para montar escenas propias |
+| Hecho (v0.11.0) | Varias pantallas dependían de sus escenas: en Gravitación no se pueden añadir cuerpos ni impulsos (el espacio «Sistema solar» y «Maniobras» de la especificación no existen); en Termodinámica las paletas de objetos siguen como `data-pendiente` | Gravitación: espacios «Sistema solar» (N cuerpos, Kepler, datos reales) y «Maniobras» (impulsos Δv, Hohmann); Termodinámica: paletas para montar escenas propias |
 | Función | Mecánica sigue sin rotación (sin rodadura, sin vuelco) | Cuerpo rígido 2D con orientación y ω |
 | Función | Instrumentos desiguales: el Laboratorio y Magnetismo los tienen; Gravitación y Termodinámica no | Instrumentos de cada espacio según su especificación |
 | Contenido | 155 escenas MEXT; lo que falta no tiene enunciado en el banco o pide modelos fuera de alcance | — |
@@ -233,3 +233,4 @@ completa) y con PhET, Universe Sandbox y Algodoo:
 - 2026-11-19 — Magnetismo, Electrostática, Termodinámica y Física moderna integrados; v0.9.0 publicada (859 pruebas). Siguiente: Ondas (cubeta 2D, 5 MEXT pendientes), Circuitos (3 de 10 MEXT), Óptica (polarización, espejo parabólico), cuerpo rígido con rotación.
 - 2026-11-19 — Ejecutables de la v0.9.0 comprobados. Agentes en curso: Ondas (cubeta 2D: ondas2d.js, ondas-cubeta*, 2012 P5 en ondas-doppler) y Circuitos (7 escenas MEXT). Al integrar la cubeta: espacio `cubeta` en MODULOS de espacio.js y ESPACIOS de Inicio; conteos de Ondas y Circuitos.
 - 2026-11-19 — Circuitos (10 MEXT) y cubeta de ondas 2D (Ondas 21 MEXT) integrados; v0.10.0 (934 pruebas). Pendientes por módulo: ver las notas de cada uno arriba y las autocríticas.
+- 2026-11-19 — Termodinámica como caja de arena (paletas e instrumentos) y Gravitación con «Sistema solar» y «Maniobras» (motor de N cuerpos); v0.11.0 (992 pruebas).
