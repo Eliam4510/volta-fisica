@@ -1882,10 +1882,15 @@ function iniciar() {
       c += fila('Fuerza aplicada', doble(campo(`${o.id}.F`, o.F || 0, 'fuerza', 'F', 'Fuerza constante sobre la partícula durante toda la simulación; 0 la quita|Applied force'), campo(`${o.id}.angF`, o.angF || 0, 'angulo', 'β', 'Dirección de la fuerza desde el eje x|Direction')));
       c += fila('Movimiento', segmentado(`${o.id}.cinematica`, [['no', 'Libre'], ['si', 'Impuesto']], o.cinematica ? 'si' : 'no'));
       if (o.cinematica && !(o.perfil && o.perfil.length)) c += ayudaFila('Se mueve con su velocidad inicial pase lo que pase, como una mano, una cinta o un ascensor. Su masa no cuenta; el trabajo que hace aparece en la energía.');
-      if (o.cinematica && o.perfil && o.perfil.length) {
-        let t0 = 0;
-        const tramos = o.perfil.map(([tf, ax, ay]) => { const txt = `${fmt(t0, 3)}–${fmt(tf, 3)} s: a = (${fmt(ax, 3)}, ${fmt(ay, 3)}) m/s²`; t0 = tf; return `<li>${txt}</li>`; }).join('');
-        c += ayudaFila(`Sigue un perfil de aceleración por tramos (de la escena); después, velocidad constante:<ul class="perfil">${tramos}</ul>`);
+      if (o.cinematica) {
+        // Perfil de aceleración por tramos: cada fila dice hasta qué instante
+        // dura el tramo y su aceleración; después del último, velocidad constante
+        const pf = o.perfil || [];
+        pf.forEach(([tf, ax, ay], k) => {
+          c += fila(k ? '' : 'Aceleración', `<div class="tramo-perfil">${campo(`${o.id}.pt${k}`, tf, 'tiempo', 't', 'Hasta este instante|Until')}${doble(campo(`${o.id}.pax${k}`, ax, 'aceleracion', 'a<sub>x</sub>'), campo(`${o.id}.pay${k}`, ay, 'aceleracion', 'a<sub>y</sub>'))}</div>`);
+        });
+        c += fila(pf.length ? '' : 'Aceleración', `<div class="formas"><button class="btn btn-compacto" data-accion-insp="perfil-mas">Añadir tramo</button>${pf.length ? '<button class="btn btn-compacto" data-accion-insp="perfil-menos">Quitar el último</button>' : ''}</div>`);
+        if (pf.length) c += ayudaFila('Cada tramo dura hasta su instante t con aceleración constante; después del último, velocidad constante. Así se dibuja una gráfica v–t o un ascensor que arranca y frena.');
       }
       if (o.sobre) c += fila('Apoyo', `<div class="apoyo"><span>Sobre ${conArticulo(nombreDe(o.sobre))}</span><button class="btn btn-compacto" data-accion-insp="soltar" data-ayuda="Deja de seguir a la superficie|Detach">Soltar</button></div>`);
       h += grupo('Condiciones iniciales', c);
@@ -2003,6 +2008,17 @@ function iniciar() {
     }
     const o = objeto(esc, id); if (!o) return;
     if (['e'].includes(prop)) { if (!(v >= 0 && v <= 1)) return 'El coeficiente de restitución va de 0 a 1.'; o.e = v; return; }
+    const tramo = /^(pt|pax|pay)(\d+)$/.exec(prop);
+    if (tramo && o.tipo === 'particula' && o.perfil) {
+      const k = Number(tramo[2]), f = o.perfil[k]; if (!f) return;
+      if (tramo[1] === 'pt') {
+        const antes = k ? o.perfil[k - 1][0] : 0, despues = k + 1 < o.perfil.length ? o.perfil[k + 1][0] : Infinity;
+        if (!(v > antes && v < despues)) return `El tramo tiene que acabar después de ${fmt(antes, 4)} s${Number.isFinite(despues) ? ` y antes de ${fmt(despues, 4)} s` : ''}.`;
+        f[0] = v; return;
+      }
+      if (!(Math.abs(v) <= 1e4)) return 'La aceleración va de −10 000 a 10 000 m/s².';
+      f[tramo[1] === 'pax' ? 1 : 2] = v; return;
+    }
     if (['mu', 'muS'].includes(prop)) { if (!(v >= 0 && v <= 10)) return 'El coeficiente de fricción va de 0 a 10.'; o[prop] = v; return; }
     if (o.tipo === 'particula') {
       if (prop === 'm') { if (!(v > 0)) return 'La masa tiene que ser positiva.'; o.m = v; return; }
@@ -2162,6 +2178,12 @@ function iniciar() {
     const o = objeto(esc, sel); if (!o) return;
     const acc = a.dataset.accionInsp;
     if (acc === 'soltar') o.sobre = null;
+    if (acc === 'perfil-mas') {
+      const pf = o.perfil || [], ultimo = pf.length ? pf[pf.length - 1][0] : 0;
+      if (pf.length >= 12) { aviso('Como mucho 12 tramos.'); return; }
+      o.perfil = [...pf, [Number((ultimo + 1).toFixed(6)), 0, 0]];
+    }
+    if (acc === 'perfil-menos') { o.perfil = (o.perfil || []).slice(0, -1); if (!o.perfil.length) o.perfil = null; }
     if (acc === 'voltear') [o.a, o.b] = [o.b, o.a];
     if (acc === 'hemisferio') { o.a0 = 0; o.a1 = 180; o.cara = 'exterior'; }
     if (acc === 'cuenco') { o.a0 = 180; o.a1 = 360; o.cara = 'interior'; }

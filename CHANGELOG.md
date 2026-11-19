@@ -29,6 +29,9 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   puntos) y «Fotopuerta» (un haz que anota el instante exacto y la rapidez
   de cada paso de un cuerpo; un rombo marca cada paso en el lienzo). No
   afectan a la física.
+- Laboratorio: el perfil de aceleración de un cuerpo con movimiento
+  impuesto se edita en el inspector (tramos con su instante final y su
+  aceleración; añadir y quitar tramos), con validación del orden.
 - Motor de Mecánica: las velocidades iniciales incompatibles con una varilla
   o una prensa se proyectan como un impulso que conserva el momento.
 - Laboratorio: las fuerzas que muestra el inspector incluyen la reacción
