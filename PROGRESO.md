@@ -14,11 +14,18 @@ física > funciones faltantes > rendimiento > pulido.
 - Óptica integrado (geométrica, interferencia y difracción, películas e
   interferómetros; 51 pruebas, 15 escenas MEXT). Falta: espejo parabólico,
   polarización, polígono y capas en la paleta, Michelson con luz blanca.
-- Agente en curso: Magnetismo e inducción (`motores/magnetismo.js`,
-  `pruebas/magnetismo.test.js`, `lienzo/dominios/magnetismo.js`,
-  `prototipos/magnetismo*.html|js`; espacios `campos`, `particulas`,
-  `induccion`). Al integrar: MODULOS en `componentes/espacio.js`, PANTALLAS
-  y ESPACIOS en Inicio, conteos reales de la tarjeta, README, CHANGELOG.
+- Agentes en curso (2026-11-19 05:20), cada uno con sus archivos:
+  - Magnetismo e inducción (`motores/magnetismo.js`,
+    `pruebas/magnetismo.test.js`, `lienzo/dominios/magnetismo.js`,
+    `prototipos/magnetismo*.html|js`; espacios `campos`, `particulas`,
+    `induccion`).
+  - Termodinámica: escenas MEXT y espacios nuevos (`motores/gas.js` y
+    motores nuevos, `prototipos/termodinamica*.html|js`).
+  - Electrostática: escenas MEXT y quizá «Conductores y dieléctricos»
+    (`motores/electrostatica.js`, `prototipos/electrostatica*.html|js`).
+  Al integrar cada uno: revisar suite, tipos y capturas; MODULOS en
+  `componentes/espacio.js`; PANTALLAS y ESPACIOS en Inicio; conteos reales
+  de la tarjeta; README; CHANGELOG.
 - Los conteos de las tarjetas de Inicio son a mano: actualizarlos al añadir
   espacios o escenas MEXT.
 - Ondas y sonido integrado (Medio 1D y Doppler y acústica). Falta la cubeta 2D, el pistón móvil y la escena MEXT 2012 del ventilador.
@@ -166,4 +173,5 @@ análisis de datos:
 - 2026-11-19 07:20 — 19 escenas MEXT nuevas en el Laboratorio (agente + 2010 1-F), cuerda elástica en el motor, extremos de segmento cerrados y silencio acumulado (errores encontrados por el agente). 439 pruebas.
 - 2026-11-19 07:50 — Ondas y sonido integrado. v0.5.0 publicada (439 pruebas).
 - 2026-11-19 04:55 — Óptica integrado (menús, Inicio con conteos reales, abrir escenas de otro espacio lleva a su pantalla). v0.6.0 publicada (499 pruebas). Lanzado el agente de Magnetismo e inducción.
-- 2026-11-19 06:00 — Contactos como LCP: regularización con refinamiento, conjunto activo por pivoteo de Murty, impulsos inelásticos simultáneos, post-estabilización de solapes, contacto persistente solo con rapidez relativa lenta. Empaquetado hexagonal en reposo sin eventos (antes agotaba el cálculo en 0.2 ms simulados). 504 pruebas.
+- 2026-11-19 05:15 — Contactos como LCP: regularización con refinamiento, conjunto activo por pivoteo de Murty, impulsos inelásticos simultáneos, post-estabilización de solapes, contacto persistente solo con rapidez relativa lenta. Empaquetado hexagonal en reposo sin eventos (antes agotaba el cálculo en 0.2 ms simulados). 504 pruebas.
+- 2026-11-19 05:20 — Lanzados los agentes de Termodinámica y Electrostática (escenas MEXT: hoy 1 de 30 y 1 de 18). Yo: escenas MEXT de Gravitación.
