@@ -13,6 +13,8 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   valores grandes: el margen se ajusta ahora a la marca más ancha.
 - Gravitación: alrededor del Sol, las distancias y áreas de las gráficas se
   dan en Gm y Gm² en vez de Mm y Mm².
+- Los subíndices de las lecturas son algo más grandes: v_c y v_e ya no se
+  confunden.
 
 ## [0.7.0] - 2026-11-19
 

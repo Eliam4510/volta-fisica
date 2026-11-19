@@ -295,6 +295,8 @@ a.btn { text-decoration: none; }
 /* ---------- Lecturas en vivo ---------- */
 .lecturas { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; column-gap: var(--e-2); row-gap: 6px; }
 .lecturas .sim { color: var(--texto-2); font-size: 15px; }
+/* A 10 px los subíndices c y e se confundían (v_c, v_e): un poco más grandes en las lecturas */
+.lecturas .sim sub { font-size: 0.76em; }
 .lecturas .v { text-align: right; font-family: var(--fuente-numeros); font-variant-numeric: tabular-nums; color: var(--texto); }
 .lecturas .u { font-size: var(--t-pequeno); min-width: 30px; }
 

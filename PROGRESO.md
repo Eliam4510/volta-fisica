@@ -144,11 +144,11 @@ contenido, PhET y el temario MEXT:
 | Prioridad | Hallazgo | Tarea |
 |---|---|---|
 | Hecho | Apoyos redundantes daban reacciones arbitrarias y montones que no terminaban | LCP en los instantes, regularización con refinamiento, impulsos simultáneos (DECISIONES 14) |
-| Función | Los discos no giran ni tienen fricción entre ellos; no hay bloques que vuelquen ni cuerpos que lleven a otros encima (MEXT 2016 P3, bloque sobre carrito; M9 estática) | Cuerpo rígido 2D (disco y rectángulo con rotación, fricción de Coulomb en el contacto con cono y adherencia, rodadura). Es lo que más escenas MEXT de Mecánica desbloquea |
+| Hecho en parte | Cuerpos que llevan a otros encima (superficies `sobre` un cuerpo, movimiento impuesto; MEXT 2016 P3 y 2006 1-(1)). Siguen sin girar los discos ni haber bloques que vuelquen (M9 estática) | Cuerpo rígido 2D (disco y rectángulo con rotación, fricción de Coulomb en el contacto con cono y adherencia, rodadura). Es lo que más escenas MEXT de Mecánica desbloquea |
 | Exactitud | La energía que disipa la estabilización (y la fricción, el arrastre y los amortiguadores) no se anota: solo se ve como E0 − E | Integrar la potencia de las fuerzas no conservativas y de las restricciones como una componente más del estado, para que E + disipada sea constante a la tolerancia del integrador |
 | Contenido | Escenas MEXT por módulo muy desiguales: Termodinámica 1 de 30 y Electrostática 1 de 18 | Agentes en curso para ambos módulos |
 | Rendimiento | Un montón de 12 discos con un golpe tarda ≈ 0.3 s; 100 discos no son viables con eventos | Modo multitud de paso fijo (Soft Step) aparte, sin tocar el motor de eventos |
-| Pulido | Las marcas de los ejes de las gráficas se cortan a la izquierda con valores grandes (r en Mm alrededor del Sol); v_c y v_e se confunden a 10 px | Unidad adaptable en las gráficas de Gravitación; subíndices más grandes |
+| Hecho | Las marcas de los ejes de las gráficas se cortaban a la izquierda con valores grandes (r en Mm alrededor del Sol); v_c y v_e se confundían a 10 px | Margen según la marca más ancha (`grafica.js`), Gm alrededor del Sol, subíndices de las lecturas a 0.76 em |
 
 ## Problemas conocidos
 
