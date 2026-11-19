@@ -1565,20 +1565,71 @@ function iniciar() {
   }
   const eventosGraf = () => SIM.eventos.filter(e => e.t > 0).map(e => ({ x: e.t }));
 
+  // Gráficas configurables: cada una de las dos primeras muestra la magnitud
+  // que se elija en su cabecera (o la trayectoria y contra x). La elección es
+  // del usuario, no de la escena: se recuerda en este equipo.
+  const MAGNITUDES = {
+    x: { sim: 'x', u: 'm', f: q => q.x, familia: 'tinta', nombre: 'Posición x' },
+    y: { sim: 'y', u: 'm', f: q => q.y, familia: 'tinta', nombre: 'Posición y' },
+    vx: { sim: 'v', sub: 'x', u: 'm/s', f: q => q.vx, familia: 'movimiento', nombre: 'Componente x de la velocidad' },
+    vy: { sim: 'v', sub: 'y', u: 'm/s', f: q => q.vy, familia: 'movimiento', nombre: 'Componente y de la velocidad' },
+    v: { sim: '|v|', u: 'm/s', f: q => Math.hypot(q.vx, q.vy), familia: 'movimiento', nombre: 'Rapidez |v|', positiva: true },
+    tray: { sim: 'y', contra: 'x', u: 'm', familia: 'tinta', nombre: 'Trayectoria y contra x' },
+  };
+  let magGraf = ['y', 'v'];
+  try { const g = JSON.parse(localStorage.getItem('volta.laboratorio.graficas') || 'null'); if (Array.isArray(g) && g.length === 2 && g.every(k => MAGNITUDES[k])) magGraf = g; } catch { /* sin almacenamiento */ }
+  // Para capturas: ?graficas=tray,vy
+  { const q = (new URLSearchParams(location.search).get('graficas') || '').split(','); if (q.length === 2 && q.every(k => MAGNITUDES[k])) magGraf = q; }
+  const simMag = mg => `<span class="sim">${mg.sim}${mg.sub ? `<sub>${mg.sub}</sub>` : ''}</span>`;
+  function cabecerasGraficas() {
+    magGraf.forEach((k, j) => {
+      const mg = MAGNITUDES[k], b = $(`#cab-g${j + 1}`);
+      if (b) b.innerHTML = `${simMag(mg)} contra <span class="sim">${mg.contra || 't'}</span>${ico('i-chevron-abajo')}`;
+    });
+  }
+  document.querySelectorAll('[data-cab-grafica]').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const j = Number(b.dataset.cabGrafica);
+    abrirMenu(b, '<div class="menu-titulo">Qué muestra la gráfica</div>' + Object.entries(MAGNITUDES).map(([k, mg]) =>
+      item(k, mg.contra ? 'i-escena' : 'i-grafica', mg.nombre, '', k === magGraf[j])).join(''), v => {
+      if (!MAGNITUDES[v]) return;
+      magGraf[j] = v;
+      try { localStorage.setItem('volta.laboratorio.graficas', JSON.stringify(magGraf)); } catch { /* sin almacenamiento */ }
+      cabecerasGraficas(); graficas();
+    });
+  }));
+  cabecerasGraficas();
+  function rangoX(series) {
+    let lo = Infinity, hi = -Infinity;
+    for (const sr of series) for (const tr of sr.tramos) for (const [x] of tr) { if (x < lo) lo = x; if (x > hi) hi = x; }
+    if (!Number.isFinite(lo)) { lo = 0; hi = 1; }
+    if (hi - lo < 1e-6) { lo -= 0.5; hi += 0.5; }
+    const m = (hi - lo) * 0.06;
+    return { min: lo - m, max: hi + m };
+  }
+  function graficaConfigurable(j, idx, s, tf) {
+    const mg = MAGNITUDES[magGraf[j]], varias = idx.length > 1, lienzoG = $(`#g${j + 1}`), lect = $(`#l${j + 1}`);
+    const nombre = varias ? ` (${M.particulas[idx[0]].nombre})` : '';
+    if (mg.contra) {
+      const ss = idx.map((i, k) => ({ tramos: serie(m => [m.est[i].x, m.est[i].y]), familia: mg.familia, patron: PATRONES[k], etiqueta: varias ? M.particulas[i].nombre : undefined }));
+      grafica(lienzoG, { x: rangoX(ss), y: rango(ss), series: ss, puntoCursor: [s[idx[0]].x, s[idx[0]].y] });
+      lect.textContent = `(${fmt(s[idx[0]].x, 4)}, ${fmt(s[idx[0]].y, 4)}) m${nombre}`;
+      return;
+    }
+    const ss = idx.map((i, k) => ({ tramos: serie(m => [m.t, mg.f(m.est[i])]), familia: mg.familia, patron: PATRONES[k], etiqueta: varias ? M.particulas[i].nombre : undefined }));
+    const r = rango(ss); if (mg.positiva) r.min = Math.min(0, r.min);
+    grafica(lienzoG, { x: { min: 0, max: tf }, y: r, series: ss, cursor: t, puntoCursor: [t, mg.f(s[idx[0]])], eventos: eventosGraf() });
+    lect.textContent = cantidad(mg.f(s[idx[0]]), mg.u) + nombre;
+  }
+
   function graficas() {
     if (!SIM || !MUESTRAS.length) { ['#g1', '#g2', '#g3', '#g4'].forEach(s => { const c = $(s); c.getContext('2d').clearRect(0, 0, c.width, c.height); }); ['#l1', '#l2', '#l3', '#l4'].forEach(s => { $(s).textContent = ''; }); return; }
-    const tf = tFinal(), idx = graficadas(), varias = idx.length > 1, s = estadoEn(t);
+    const tf = tFinal(), idx = graficadas(), s = estadoEn(t);
     if (!$('#p-graficas').hidden) {
-      const sy = idx.map((i, k) => ({ tramos: serie(m => [m.t, m.est[i].y]), familia: 'tinta', patron: PATRONES[k], etiqueta: varias ? M.particulas[i].nombre : undefined }));
-      grafica($('#g1'), { x: { min: 0, max: tf }, y: rango(sy), series: sy, cursor: t, puntoCursor: [t, s[idx[0]].y], eventos: eventosGraf() });
-      const sv = idx.map((i, k) => ({ tramos: serie(m => [m.t, Math.hypot(m.est[i].vx, m.est[i].vy)]), familia: 'movimiento', patron: PATRONES[k], etiqueta: varias ? M.particulas[i].nombre : undefined }));
-      const rv = rango(sv); rv.min = Math.min(0, rv.min);
-      grafica($('#g2'), { x: { min: 0, max: tf }, y: rv, series: sv, cursor: t, puntoCursor: [t, Math.hypot(s[idx[0]].vx, s[idx[0]].vy)], eventos: eventosGraf() });
+      graficaConfigurable(0, idx, s, tf);
+      graficaConfigurable(1, idx, s, tf);
       const se = seriesEnergia();
       grafica($('#g3'), { x: { min: 0, max: tf }, y: rango(se), series: se, cursor: t, eventos: eventosGraf() });
-      const nombre = varias ? ` (${M.particulas[idx[0]].nombre})` : '';
-      $('#l1').textContent = cantidad(s[idx[0]].y, 'm') + nombre;
-      $('#l2').textContent = cantidad(Math.hypot(s[idx[0]].vx, s[idx[0]].vy), 'm/s') + nombre;
       $('#l3').textContent = cantidad(sinRuido(energiaMecanica(SIM, Math.min(t, tf)).E, escalaEnergia()), 'J');
     }
     if (!$('#p-energia').hidden) energiaPanel();

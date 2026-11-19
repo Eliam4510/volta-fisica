@@ -15,6 +15,9 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   se cuente como energía disipada.
 - Laboratorio de Mecánica: duplicar la selección (Ctrl+D) para partículas,
   superficies y clavos; una partícula apoyada sigue apoyada en la copia.
+- Laboratorio de Mecánica: gráficas configurables. Cada una elige en su
+  cabecera qué muestra (x, y, componentes de la velocidad, rapidez) o la
+  trayectoria y contra x; la elección se recuerda en el equipo.
 
 ## [0.4.0] - 2026-11-19
 

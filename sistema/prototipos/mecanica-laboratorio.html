@@ -11,6 +11,9 @@
 <script src="../iconos/sprite.js"></script>
 <style>
   /* Piezas propias del Laboratorio; todo lo demás viene del sistema */
+  .cab-grafica { display: inline-flex; align-items: center; gap: 3px; padding: 0 var(--e-1); margin-left: calc(-1 * var(--e-1)); border: 0; border-radius: var(--r-casilla); background: none; color: inherit; font: inherit; cursor: pointer; }
+  .cab-grafica:hover { background: var(--campo-hover); }
+  .cab-grafica .ico { width: 12px; height: 12px; color: var(--texto-3); }
   .escena-btn { gap: var(--e-2); color: var(--texto-3); max-width: 440px; min-width: 0; }
   .escena-btn b { color: var(--texto-2); font-weight: var(--peso-medio); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .escena-btn .ico { color: var(--texto-3); }
@@ -176,8 +179,8 @@
     </div>
     <div class="linea-tiempo"><canvas id="tl"></canvas></div>
     <div class="graficas" id="p-graficas" data-grupo="pest">
-      <div class="grafica"><div class="grafica-cab"><span><span class="sim">y</span> contra <span class="sim">t</span></span><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
-      <div class="grafica"><div class="grafica-cab"><span><span class="sim">|v|</span> contra <span class="sim">t</span></span><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><button class="cab-grafica" id="cab-g1" data-cab-grafica="0" aria-haspopup="menu" data-ayuda="Elegir qué muestra la gráfica|Plot quantity"><span class="sim">y</span> contra <span class="sim">t</span></button><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><button class="cab-grafica" id="cab-g2" data-cab-grafica="1" aria-haspopup="menu" data-ayuda="Elegir qué muestra la gráfica|Plot quantity"><span class="sim">|v|</span> contra <span class="sim">t</span></button><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
       <div class="grafica"><div class="grafica-cab"><span class="leyenda"><span style="color:var(--f-movimiento)"><i></i><span class="sim">E<sub class="r">k</sub></span></span><span style="color:var(--f-cambio)"><i></i><span class="sim">U<sub class="r">g</sub></span></span><span style="color:var(--f-electrico)"><i></i><span class="sim">U<sub class="r">e</sub></span></span><span class="ley-uf" style="color:var(--f-interaccion)" hidden><i></i><span class="sim">U<sub class="r">F</sub></span></span><span style="color:var(--f-termico)"><i class="discontinua"></i><span class="sim">Q</span></span></span><span class="lect" id="l3"></span></div><canvas id="g3"></canvas></div>
     </div>
     <div class="energia" id="p-energia" data-grupo="pest" hidden>

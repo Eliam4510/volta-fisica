@@ -99,7 +99,7 @@ análisis de datos:
 | Prioridad | Hallazgo | Tarea |
 |---|---|---|
 | Función | El Laboratorio solo tiene partículas y discos que no giran: no hay bloques que vuelquen ni rodadura (Algodoo, Box2D) | Motor de cuerpo rígido 2D (disco y rectángulo con rotación, fricción en el contacto y rodadura sin deslizar), validado contra I·α = τ y rodadura en un plano |
-| Función | Las gráficas del Laboratorio son fijas (y, \|v\|, energías); Logger Pro deja elegir la magnitud y la partícula de cada eje | Gráficas configurables: magnitud (x, y, vx, vy, \|v\|, ax, ay, energías) y partícula por gráfica, y una gráfica y contra x |
+| Hecho | Las gráficas del Laboratorio eran fijas | Magnitud elegible por gráfica (x, y, vx, vy, \|v\|) y trayectoria y contra x; faltan aceleración y elegir partícula por gráfica |
 | Función | Sin instrumentos en el Laboratorio (regla, cronómetro, fotopuerta, transportador), que PhET sí tiene | Instrumentos con su lectura en el lienzo |
 | Función | Sin panel de variables en el Laboratorio: no se puede ligar una magnitud a una variable ni barrerla con un deslizador | Variables ligadas como en Electrostática |
 | Rendimiento | Montones de discos inelásticos: miles de eventos | Reposo agrupado (islas que duermen) |
