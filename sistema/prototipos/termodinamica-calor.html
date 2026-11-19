@@ -22,6 +22,8 @@
   .grafica-cab .sim sub, .lecturas .sim .r { font-style: normal; }
   .aviso-lienzo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fila .segmentado { justify-self: start; }
+  .campo select { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--texto); font-size: var(--t-base); outline: none; cursor: pointer; }
+  .campo select option { background: var(--panel); color: var(--texto); }
   .fila .segmentado button { padding: 0 7px; }
   .acciones-fila { display: flex; gap: var(--e-1); flex-wrap: wrap; padding: 0 var(--e-3) var(--e-2); }
   .lecturas .sim.palabra { font-style: normal; font-family: var(--fuente-interfaz); font-size: var(--t-pequeno); }
@@ -82,15 +84,21 @@
     <div class="desplaza">
       <div class="seccion">
         <div class="panel-cab">Objetos</div>
-        <div class="paleta" data-exclusivo data-pendiente="Cada escena trae sus cuerpos, contactos y calentadores; cámbialos con las variables y las acciones del inspector. Colocar cuerpos propios llega en una próxima versión.">
-          <button class="herr" data-ayuda="Cuerpo con masa, calor específico y temperatura|Thermal body"><svg class="ico"><use href="#o-cuerpo-termico"/></svg><span>Cuerpo</span></button>
-          <button class="herr" data-ayuda="Calorímetro: vaso aislado|Calorimeter"><svg class="ico"><use href="#o-calorimetro"/></svg><span>Calorímetro</span></button>
-          <button class="herr" data-ayuda="Calentador (resistencia)|Heater"><svg class="ico"><use href="#o-calentador"/></svg><span>Calentador</span></button>
-          <button class="herr" data-ayuda="Baño o aire a temperatura fija|Heat bath"><svg class="ico"><use href="#o-bano-termico"/></svg><span>Baño térmico</span></button>
+        <div class="paleta" id="paleta-objetos">
+          <button class="herr" data-herr="cuerpo" data-ayuda="Cuerpo con masa, calor específico y temperatura: clic donde va|Thermal body"><svg class="ico"><use href="#o-cuerpo-termico"/></svg><span>Cuerpo</span></button>
+          <button class="herr" data-herr="calorimetro" data-ayuda="Calorímetro: vaso aislado con agua|Calorimeter"><svg class="ico"><use href="#o-calorimetro"/></svg><span>Calorímetro</span></button>
+          <button class="herr" data-herr="calentador" data-ayuda="Calentador (resistencia): clic sobre un cuerpo|Heater"><svg class="ico"><use href="#o-calentador"/></svg><span>Calentador</span></button>
+          <button class="herr" data-herr="bano" data-ayuda="Baño a temperatura fija: los cuerpos que lo tocan intercambian calor con él|Heat bath"><svg class="ico"><use href="#o-bano-termico"/></svg><span>Baño térmico</span></button>
         </div>
       </div>
       <div class="seccion">
-        <div class="panel-cab">Escena</div>
+        <div class="panel-cab">Instrumentos</div>
+        <div class="paleta" id="paleta-instrumentos">
+          <button class="herr" data-herr="termometro" data-ayuda="Termómetro: clic sobre el cuerpo que quieres medir|Thermometer"><svg class="ico"><use href="#n-termometro"/></svg><span>Termómetro</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Escena<span class="sp"></span><button class="btn btn-compacto btn-icono" id="b-vacia" data-ayuda="Escena vacía|New empty scene"><svg class="ico"><use href="#i-mas"/></svg></button></div>
         <div class="arbol" id="arbol"></div>
       </div>
     </div>

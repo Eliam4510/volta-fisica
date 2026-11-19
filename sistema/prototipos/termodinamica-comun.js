@@ -98,6 +98,60 @@ export function construirVariables(cont, VAR, alCambiar, alEmpezar = () => {}) {
 }
 const global = () => /** @type {any} */ (window).Volta;
 
+// ---------------------------------------------------------------------------
+// Inspector de las escenas propias: filas editables a partir de los
+// parámetros de cada pieza (termodinamica-montaje.js)
+// ---------------------------------------------------------------------------
+/** Número con los decimales de su paso («0.50», «300»), con signo menos verdadero. */
+export function numTexto(v, paso) {
+  if (!Number.isFinite(v)) return '';
+  const dec = !(paso > 0) || paso >= 1 ? 0 : Math.min(6, Math.ceil(-Math.log10(paso) - 1e-9));
+  return v.toFixed(dec).replace('-', '−');
+}
+/**
+ * Filas del inspector para editar los parámetros de una pieza: campo con su
+ * unidad, control segmentado (hasta tres opciones) o lista desplegable.
+ * @param {any[]} specs @param {Record<string, any>} holder
+ */
+export function filasParametros(specs, holder) {
+  return specs.map(s => {
+    const v = holder[s.k], ayuda = s.ayuda ? ` data-ayuda="${s.ayuda}"` : '';
+    let control;
+    if (s.opciones && s.opciones.length <= 3) control = `<div class="segmentado texto" data-param="${s.k}"${ayuda}>${s.opciones.map(([x, txt]) => `<button data-v="${x}" aria-pressed="${x === v}">${txt}</button>`).join('')}</div>`;
+    else if (s.opciones) control = `<div class="campo texto"${ayuda}><select data-param="${s.k}" aria-label="${s.etq}">${s.opciones.map(([x, txt]) => `<option value="${x}"${x === v ? ' selected' : ''}>${txt}</option>`).join('')}</select></div>`;
+    else control = `<div class="campo"${ayuda}><input data-param="${s.k}" value="${numTexto(v, s.paso)}" inputmode="decimal" aria-label="${s.etq}"><span class="u">${s.u}</span></div>`;
+    return `<div class="fila"><span class="etq">${s.etq}</span>${control}</div>`;
+  }).join('');
+}
+/**
+ * Avisa de cada cambio de un parámetro: alCambiar(clave, valor) con el texto
+ * del campo o la opción elegida.
+ * @param {HTMLElement} cont @param {(k: string, v: string) => void} alCambiar
+ */
+export function enlazarParametros(cont, alCambiar) {
+  cont.querySelectorAll('input[data-param]').forEach(i => {
+    i.addEventListener('change', () => alCambiar(i.dataset.param, i.value));
+    i.addEventListener('keydown', ev => { if (ev.key === 'Enter') i.blur(); });
+  });
+  cont.querySelectorAll('select[data-param]').forEach(i => i.addEventListener('change', () => alCambiar(i.dataset.param, i.value)));
+  cont.querySelectorAll('.segmentado[data-param]').forEach(g => g.addEventListener('click', ev => {
+    const b = ev.target instanceof Element ? ev.target.closest('button') : null;
+    if (b && b.getAttribute('aria-pressed') !== 'true') alCambiar(g.dataset.param, b.dataset.v);
+  }));
+}
+/** Botón «Quitar» del inspector (Supr). */
+export const botonQuitar = (txt = 'Quitar') => `<div class="fila"><span class="etq"></span><button class="btn btn-secundario btn-compacto" id="b-quitar-pieza" data-ayuda="Quitar de la escena|Delete|Supr"><svg class="ico"><use href="#i-borrar"/></svg><span>${txt}</span></button></div>`;
+
+/**
+ * Paleta de objetos o instrumentos que coloca en el lienzo: un botón pulsado
+ * es la herramienta activa (otro clic o Esc la sueltan).
+ * @param {string} selector @param {(h: string|null) => void} alElegir
+ */
+export function iniciarPaleta(selector, alElegir) {
+  document.querySelectorAll(`${selector} .herr[data-herr]`).forEach(b => b.addEventListener('click', () => alElegir(b.dataset.herr)));
+  return h => document.querySelectorAll(`${selector} .herr[data-herr]`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.herr === h)));
+}
+
 /** Fila de lectura: símbolo (HTML), valor y unidad. */
 export const filaLectura = ([sim, val, u, ayuda]) => `<span class="sim${/^[A-ZÁÉÍÓÚ][a-záéíóúñ]{3,}/.test(sim) ? ' palabra' : ''}"${ayuda ? ` data-ayuda="${ayuda}"` : ''}>${sim}</span><span class="v">${typeof val === 'string' ? val : Number.isFinite(val) ? fmt(val, 4) : '—'}</span><span class="u">${u || ''}</span>`;
 

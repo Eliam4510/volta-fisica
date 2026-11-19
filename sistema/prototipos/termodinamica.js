@@ -22,7 +22,11 @@ import { descargarTexto, avisar as avisarLienzo } from '../componentes/exportar.
 import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, residuoGas, residuoEmbolo, R_GAS } from '../motores/gas.js';
 import { simularRecipientes, simularAbierto, simularBurbuja, estadoRecipientes, estadoMuestras } from '../motores/recipientes.js';
 import { ESCENAS_LAB, escenaPorClave, guionDe, entradaCilindro, examenDe } from './termodinamica-escenas.js';
-import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, examenHTML, filaLectura, chipDe, ICONO_TIPO } from './termodinamica-comun.js';
+import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, examenHTML, filaLectura, chipDe, ICONO_TIPO, filasParametros, enlazarParametros, botonQuitar, iniciarPaleta } from './termodinamica-comun.js';
+import {
+  PARAMS_LAB, PARAMS_INSTR, montajeLabVacio, colocarLab, quitarLab, ajustarLab, reordenarLab, piezaLab, escenaLab, sanearLab, firmaRecipientes, guionValidoLab,
+  montajeDesdeCilindro, montajeDesdeRecipientes, montajeDesdeGlobo, montajeDesdeBurbuja, nuevoInstrumento, sanearInstrumentos, lecturaCronometro, ponerParametro,
+} from './termodinamica-montaje.js';
 
 (function () {
   'use strict';
@@ -49,7 +53,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   }
 
   function simularCilindro(guionUsado) {
-    const p = { ...entradaCilindro(ESC, vals()), especie, hMax: H_MAX };
+    const p = { ...entradaCilindro(ESC, vals()), especie: ESC.propio ? ESC.especie : especie, hMax: H_MAX };
     const sim = simularGas(p, guionUsado, { modelo: motor, duracion: DUR, dt: DT, muestra: MUESTRA, tauCarga: TAU_Q, ...(ESC.opciones || {}) });
     const Rcil = Math.sqrt(sim.A / Math.PI);       // radio del cilindro (dibujo)
     fasesMoleculas(sim, Rcil);
@@ -84,6 +88,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   let SIM, ESCA, FILAS = [];   // simulación, escalas fijas de la corrida y examen
   function simular() {
     if (!guionPropio) guion = guionDe(ESC, vals());
+    if (MONT === 'vacio') { SIM = null; FILAS = []; GIRA = false; REC = null; return; }
     if (MONT === 'cilindro') SIM = simularCilindro(guion);
     else if (MONT === 'recipientes') { SIM = simularRecipientes(ESC.construir(vals()), guion, { duracion: DUR, dt: 0.002, muestra: 0.02, modo: modoValvula }); prepararRecipientes(); }
     else if (MONT === 'abierto') { SIM = simularAbierto(ESC.construir(vals()), guion, { duracion: DUR, dt: 0.01, muestra: 0.05 }); fasesMoleculas(SIM, 1, () => 1); }
@@ -128,24 +133,29 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   // ---------------------------------------------------------------------
   const geo = () => { const R = SIM.Rcil; return { R, Rt: R + GEO.colchon, xc: Math.min(0.075, 0.6 * R), anchoPesa: Math.min(0.18, 1.4 * R) }; };
   function encuadrar() {
-    if (MONT === 'cilindro' && girado()) encuadrarGirado();
-    else if (MONT === 'cilindro') { const { Rt } = geo(); tz.vista.encuadrar({ x0: -Rt - 0.21, x1: Rt + 0.36, y0: -0.06, y1: GEO.Hc + 0.14 }, { x: 0, y: 40, w: tz.w, h: tz.h - 80 }, 36); }
+    if (!SIM) tz.vista.encuadrar({ x0: -0.6, x1: 0.6, y0: -0.1, y1: 0.8 }, { x: 0, y: 40, w: tz.w, h: tz.h - 80 }, 36);
+    else if (MONT === 'cilindro' && girado()) encuadrarGirado();
+    else if (MONT === 'cilindro') { const { Rt } = geo(), fichas = INSTR.some(o => o.tipo === 'termometro' || o.tipo === 'manometro') ? 0.24 : 0; tz.vista.encuadrar({ x0: -Rt - 0.21, x1: Rt + 0.36 + fichas, y0: -0.06, y1: GEO.Hc + 0.14 }, { x: 0, y: 40, w: tz.w, h: tz.h - 80 }, 36); }
     else if (MONT === 'recipientes') tz.vista.encuadrar(cajaRecipientes(), { x: 0, y: 40, w: tz.w, h: tz.h - 80 }, 36);
     else if (MONT === 'abierto') encuadrarAbierto(0);
     else encuadrarBurbuja();
     encuadreHecho = true;
   }
-  const hayPesa = () => !!VAR.M && VAR.M.val > 0;
+  const hayPesa = () => (ESC.propio ? !!(cilM() && cilM().pesa) : !!VAR.M && VAR.M.val > 0);
   const hayCal = () => MONT === 'cilindro' && (entradaCilindro(ESC, vals()).Fc ?? 0) > 0;
   const pesaPrevista = () => hayPesa() && !banderas(guion, t).pesa && guion.some(a => a.tipo === 'pesa' && a.valor && a.t > t + 1e-9);
 
   function dibujar() {
-    if (!SIM) return;
     if (!encuadreHecho) encuadrar();
-    if (MONT === 'recipientes') { dibujarRecipientes(); return; }
-    if (MONT === 'abierto') { dibujarAbierto(); return; }
-    if (MONT === 'burbuja') { dibujarBurbuja(); return; }
-    if (girado()) { dibujarGirado(); return; }
+    if (!SIM) dibujarVacio();
+    else if (MONT === 'recipientes') dibujarRecipientes();
+    else if (MONT === 'abierto') dibujarAbierto();
+    else if (MONT === 'burbuja') dibujarBurbuja();
+    else if (girado()) dibujarGirado();
+    else dibujarCilindro();
+    capaEdicion();
+  }
+  function dibujarCilindro() {
     const v = tz.vista, s = estado(t), fl = banderas(guion, t), { R, Rt, xc, anchoPesa } = geo();
     const tipo = fl.adiab ? 'adiabatica' : 'conductora', anchoP = tz.anchoPared(tipo);
     const hp = s.h, ySup = hp + GEO.ep;
@@ -205,7 +215,8 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     }
 
     // 8 · Instrumentos: manómetro con tubo y termómetro con sonda en el gas
-    if (capas.instrumentos) {
+    // (los de la escena; en una escena propia solo están los que se colocan)
+    if (capas.instrumentos && !ESC.propio) {
       const Xi = v.X(Rt + 0.075);
       const Ym = v.Y(0.05);
       tz.tuboPx([[v.X(R) - 1, Ym], [Xi - 11, Ym]]);
@@ -339,8 +350,8 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     const b = tz.vista, xg = b.mx(28), yg = b.my(120);
     tz.vector([xg, yg], [0, -1], { familia: 'cambio', escalaPx: 44, simbolo: 'g' });
     tz.compuesto([{ t: 'α', f: 'sim', tam: 14 }, { t: ` = ${fmt(ang, 3)}°`, f: 'num', tam: 11.5, color: 'texto-2' }], b.X(xg) + 18, b.Y(yg) - 4, {});
-    // Instrumentos a la derecha, con línea guía al gas
-    if (capas.instrumentos) {
+    // Instrumentos a la derecha, con línea guía al gas (los de la escena)
+    if (capas.instrumentos && !ESC.propio) {
       const centro = G(v.P([0, hp / 2])), Xi = tz.w - 230;
       let Yi = 92;
       tz.lineaPx([centro, [Xi - 12, Yi + 16]], { color: 'texto-3', grosor: 1, patron: 'auxiliar' });
@@ -372,18 +383,26 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     const e = ESC.construir(vals()), V0 = e.compartimientos.map(c => c.V), k = 0.86 / V0.reduce((a, b) => a + b, 0);
     REC = { e, k, nombres: ESC.nombres || e.compartimientos.map((_, i) => String(i + 1)), nMax: Math.max(1e-12, ...SIM.muestras.map(m => Math.max(...m.n))) };
   }
-  /** Rectángulos (mundo) de cada recipiente en t: anchos ∝ V; las válvulas dejan un hueco con su tubo. */
+  /**
+   * Rectángulos (mundo) de cada recipiente en t: anchos ∝ V; las válvulas
+   * dejan un hueco con su tubo. En una escena propia el dibujo está a escala:
+   * cada recipiente es una caja de sección S (cara de √S × √S) y ancho V/S,
+   * así que la regla mide longitudes reales (el desplazamiento de un émbolo).
+   */
   function layoutRec(s) {
-    const { e, k } = REC, rects = [];
+    const { e, k } = REC, rects = [], sec = ESC.secciones;
     let x = 0;
     e.compartimientos.forEach((c, i) => {
-      const w = k * s.V[i];
-      rects.push({ x0: x, x1: x + w, y0: 0.06, y1: 0.06 + ALTO_REC });
-      x += w + (e.separadores[i] && e.separadores[i].tipo === 'valvula' ? 0.16 : 0);
+      const w = sec ? s.V[i] / sec[i] : k * s.V[i], alto = sec ? Math.sqrt(sec[i]) : ALTO_REC;
+      rects.push({ x0: x, x1: x + w, y0: 0.06, y1: 0.06 + alto });
+      x += w + (e.separadores[i] && e.separadores[i].tipo === 'valvula' ? (sec ? 0.12 : 0.16) : 0);
     });
     return rects;
   }
-  function cajaRecipientes() { const r = layoutRec(SIM.muestras[0]); return { x0: r[0].x0 - 0.12, x1: r[r.length - 1].x1 + 0.12, y0: -0.06, y1: 0.06 + ALTO_REC + 0.2 }; }
+  function cajaRecipientes() {
+    const r = layoutRec(SIM.muestras[0]), alto = Math.max(...r.map(q => q.y1 - q.y0)), conFichas = INSTR.some(o => o.tipo === 'termometro' || o.tipo === 'manometro');
+    return { x0: r[0].x0 - 0.12, x1: r[r.length - 1].x1 + 0.12, y0: conFichas ? -0.16 : -0.06, y1: 0.06 + alto + 0.2 };
+  }
   function banderasRec(tt) {
     const e = REC.e, b = { valvulas: e.separadores.map(s => s.tipo === 'valvula' && !!s.abierta), cal: e.compartimientos.map(() => false), bano: e.compartimientos.map(c => (c.Gb ?? 0) > 0 && c.bano !== false) };
     for (const a of [...guion].sort((p, q) => p.t - q.t)) {
@@ -418,6 +437,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
       tz.termoCaja(r0.x0, r0.y0, r1.x1, r1.y1, { tipo: [...Array(i - i0 + 1).keys()].every(q => aislado(i0 + q)) ? 'adiabatica' : 'conductora', grueso: hover === 'r' + i0 });
       i0 = i + 1;
     }
+    let finEtq = -Infinity, fila = 0;
     e.compartimientos.forEach((c, i) => {
       const r = rects[i], nn = s.n[i];
       // Gas: más moléculas cuanto más gas
@@ -433,8 +453,11 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
           if (F > 0.01) { const Y = v.Y(r.y0 + 0.03) - 10; for (const dx of [-0.6, 0, 0.6]) tz.flechaCalor(v.X(xm + dx * xc2), Y, v.X(xm + dx * xc2), Y - 22); tz.etiquetaCalor(v.X(xm), Y - 30, 'cal', F, 'center'); }
         }
       }
-      // Lecturas encima
-      const X = v.X(r.x0), Y = v.Y(r.y1) - 12;
+      // Lecturas encima (una fila más arriba si no caben al lado de las del vecino)
+      const X = v.X(r.x0);
+      fila = X < finEtq + 12 ? fila + 1 : 0;
+      const Y = v.Y(r.y1) - 12 - fila * 34;
+      tz.ctx.save(); tz.ctx.font = Volta.FUENTE.num(11); finEtq = X + tz.ctx.measureText(`T = ${cantidad(s.T[i] || 0, 'K', 4)}  n = ${cantidad(nn, 'mol', 3)}`).width + 16; tz.ctx.restore();
       tz.compuesto([{ t: REC.nombres[i] + '  ', f: 'ui', tam: 12, peso: 600 }, { t: 'P', f: 'sim', tam: 13 }, { t: ' = ' + cantidad(s.P[i] / 1e3, 'kPa', 4), f: 'num', tam: 11, color: 'texto-2' }], X, Y - 15, {});
       if (nn > 1e-9) tz.compuesto([{ t: 'T', f: 'sim', tam: 13, color: 'termico' }, { t: ' = ' + cantidad(s.T[i], 'K', 4) + '  ', f: 'num', tam: 11, color: 'texto-2' }, { t: 'n', f: 'sim', tam: 13 }, { t: ' = ' + cantidad(nn, 'mol', 3), f: 'num', tam: 11, color: 'texto-2' }], X, Y, {});
     });
@@ -455,11 +478,18 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     if (rec) {
       const r = rects[Math.min(rec.i, N - 1)], p = rec.tipo === 'valvula' ? [(r.x1 + rects[rec.i + 1].x0) / 2, r.y1 - 0.02] : [(r.x0 + r.x1) / 2, r.y0 + 0.04];
       const [ax, ay] = tz.eventoAnillo(p);
-      tz.ficha(ax + 14, v.Y(0.06 + ALTO_REC) - 104, [[{ t: nombreAccion(rec.tipo, rec.valor, rec.i), f: 'ui', tam: 11.5 }], [{ t: 't', f: 'sim', tam: 13 }, { t: ' = ' + cantidad(rec.t, 's'), f: 'num', tam: 11.5 }]], { ancla: [ax + 5, ay - 5] });
+      tz.ficha(ax + 14, v.Y(Math.max(...rects.map(q => q.y1))) - 104, [[{ t: nombreAccion(rec.tipo, rec.valor, rec.i), f: 'ui', tam: 11.5 }], [{ t: 't', f: 'sim', tam: 13 }, { t: ' = ' + cantidad(rec.t, 's'), f: 'num', tam: 11.5 }]], { ancla: [ax + 5, ay - 5] });
     }
     // Selección
-    if (/^r\d+$/.test(sel)) { const r = rects[+sel.slice(1)]; if (r) { const [X, Y, W, H] = tz.rectPx(r.x0, r.y0, r.x1, r.y1); tz.seleccionRegion(X, Y, W, H, { dentroX: true, dentroY: true }); } }
-    else if (/^s\d+$/.test(sel)) { const j = +sel.slice(1), a = rects[j]; if (a) { const [X, Y, W, H] = tz.rectPx(a.x1 - 0.02, a.y0, (e.separadores[j].tipo === 'valvula' ? rects[j + 1].x0 : a.x1 + 0.02), a.y1); tz.seleccionCaja(X, Y, W, H); } }
+    if (/^[rg]\d+$/.test(sel)) { const r = rects[+sel.slice(1)]; if (r) { const [X, Y, W, H] = tz.rectPx(r.x0, r.y0, r.x1, r.y1); tz.seleccionRegion(X, Y, W, H, { dentroX: true, dentroY: true }); } }
+    else if (/^b\d+$/.test(sel)) { const r = rects[+sel.slice(1)]; if (r) { const [X, Y, W, H] = tz.rectPx(r.x0 + 0.01, 0, r.x1 - 0.01, 0.06); tz.seleccionCaja(X, Y, W, H); } }
+    else if (/^c\d+$/.test(sel)) { const r = rects[+sel.slice(1)]; if (r) { const xm = (r.x0 + r.x1) / 2, xc2 = Math.min(0.04, (r.x1 - r.x0) * 0.3), [X, Y, W, H] = tz.rectPx(xm - xc2, r.y0, xm + xc2, r.y0 + 0.03); tz.seleccionCaja(X, Y, W, H); } }
+    else if (/^s\d+$/.test(sel)) { const j = +sel.slice(1), a = rects[j]; if (a && rects[j + 1]) { const [X, Y, W, H] = tz.rectPx(a.x1 - 0.02, a.y0, (e.separadores[j].tipo === 'valvula' ? rects[j + 1].x0 : a.x1 + 0.02), a.y1); tz.seleccionCaja(X, Y, W, H); } }
+    // Recipiente que se arrastra: su contorno previsto donde se suelte
+    if (arrastre && arrastre.tipo === 'rec' && arrastre.movido) {
+      const r = rects[arrastre.i], dx = arrastre.x - arrastre.desde[0];
+      if (r) { const [X, Y, W, H] = tz.rectPx(r.x0 + dx, r.y0, r.x1 + dx, r.y1); tz.lineaPx([[X, Y], [X + W, Y], [X + W, Y + H], [X, Y + H], [X, Y]], { color: 'texto-2', grosor: 1.5, patron: 'previsto' }); }
+    }
     tz.barraEscala(16, tz.h - 56);
   }
 
@@ -481,6 +511,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
       const R = radioGlobo(), z = s.z;
       tz.superficie([[-R * 5, 0], [R * 6, 0]]);
       const g = tz.termoGlobo(0, z + 0.2, R, { grueso: hover === 'globo' });
+      ULT.globo = g;
       if (capas.moleculas) { const [X, Y] = g.centro, r = g.r * 0.92, cuantas = Math.round(110 * s.n / SIM.n0), lst = Termo.posicionesMoleculas(MOL.slice(0, cuantas), s.fx, s.fy * 0.7); tz.ctx.save(); tz.ctx.beginPath(); tz.ctx.arc(X, Y, r, 0, 2 * Math.PI); tz.ctx.clip(); tz.moleculas({ x0: v.mx(X - r), x1: v.mx(X + r), y0: v.my(Y + r), y1: v.my(Y - r) }, lst); tz.ctx.restore(); }
       // Quemador: calor hacia la boca
       if (cal && capas.vectores && $('#m-q').checked && s.Fq > 0) { const [bx, by] = g.boca; tz.flechaCalor(bx, by + 30, bx, by + 4); tz.etiquetaMagnitud(bx + 10, by + 22, { simbolo: 'Φ', sub: 'q', subRecto: true, valor: s.Fq, unidad: 'W', color: 'termico', prefijo: true }); }
@@ -555,12 +586,18 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
 
   // Objeto bajo el cursor (px de pantalla)
   function objetoEn(x, y) {
+    const ins = instrumentoEn(x, y); if (ins) return ins.id;
     if (!SIM) return null;
     const v = tz.vista;
     if (MONT === 'recipientes') {
       const w = [v.mx(x), v.my(y)], rects = layoutRec(estado(t));
       for (let j = 0; j < rects.length - 1; j++) { const a = rects[j], b2 = rects[j + 1], sp = REC.e.separadores[j]; if (w[1] >= a.y0 && w[1] <= a.y1 && w[0] >= a.x1 - 0.02 && w[0] <= (sp.tipo === 'valvula' ? b2.x0 : a.x1 + 0.02)) return 's' + j; }
-      for (let i = 0; i < rects.length; i++) { const r = rects[i]; if (w[0] >= r.x0 && w[0] <= r.x1 && w[1] >= r.y0 - 0.06 && w[1] <= r.y1) return (REC.e.compartimientos[i].Fc ?? 0) > 0 && w[1] < r.y0 + 0.05 ? 'c' + i : 'r' + i; }
+      for (let i = 0; i < rects.length; i++) {
+        const r = rects[i], c = REC.e.compartimientos[i];
+        if (w[0] < r.x0 || w[0] > r.x1 || w[1] < r.y0 - 0.06 || w[1] > r.y1) continue;
+        if (w[1] < r.y0) return (c.Gb ?? 0) > 0 ? 'b' + i : 'r' + i;
+        return (c.Fc ?? 0) > 0 && w[1] < r.y0 + 0.05 ? 'c' + i : 'r' + i;
+      }
       return null;
     }
     if (MONT === 'abierto') {
@@ -588,15 +625,405 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   }
 
   // ---------------------------------------------------------------------
+  // Escena propia: lo que se monta con la paleta (termodinamica-montaje.js).
+  // Una escena del catálogo se convierte en propia al colocar, quitar o
+  // arrastrar un objeto; los instrumentos se pueden poner en cualquiera.
+  // ---------------------------------------------------------------------
+  /** @type {any} */ let MONTAJE = null;     // montaje de la escena propia (null: escena del catálogo)
+  /** @type {any[]} */ let INSTR = [];        // instrumentos colocados
+  let herramienta = null, arrastre = null, trazo = null;
+  const ULT = { globo: null, zonas: [] };     // geometría dibujada que necesita el ratón
+  const INSTRUMENTOS = ['termometro', 'manometro', 'regla', 'cronometro'];
+  const NOMBRE_HERR = {
+    cilindro: 'Cilindro', recipiente: 'Recipiente', embolo: 'Émbolo', tabique: 'Tabique', valvula: 'Válvula', pesa: 'Pesa', calentador: 'Calentador', bano: 'Baño térmico',
+    gas: 'Gas', resorte: 'Resorte', globo: 'Globo', columna: 'Columna de líquido', termometro: 'Termómetro', manometro: 'Manómetro', regla: 'Regla', cronometro: 'Cronómetro',
+  };
+  const PISTA_HERR = {
+    cilindro: 'clic en el lienzo', recipiente: 'clic donde va en la fila de recipientes', embolo: 'clic en el hueco entre dos recipientes', tabique: 'clic en el hueco entre dos recipientes',
+    valvula: 'clic en el hueco entre dos recipientes', pesa: 'clic sobre el cilindro', calentador: 'clic sobre el cilindro o un recipiente', bano: 'clic sobre el cilindro o un recipiente',
+    gas: 'clic sobre un recipiente vacío', globo: 'clic en el lienzo', columna: 'clic en el lienzo', termometro: 'clic en el gas que quieres medir', manometro: 'clic en el gas que quieres medir',
+    regla: 'arrastra de un extremo al otro', cronometro: 'clic donde va',
+  };
+  const FEMENINO = new Set(['pesa', 'valvula', 'columna', 'regla']);
+  const participio = (h, raiz) => `${NOMBRE_HERR[h]} ${raiz}${FEMENINO.has(h) ? 'a' : 'o'}`;
+  const ICONO_INSTR = { termometro: 'n-termometro', manometro: 'n-manometro', regla: 'n-regla', cronometro: 'n-cronometro' };
+  const cilM = () => (MONTAJE ? MONTAJE.objetos.find(o => o.tipo === 'cilindro') : null);
+  const recM = () => (MONTAJE ? MONTAJE.objetos.filter(o => o.tipo === 'recipiente') : []);
+  const esInstr = s => /^i\d+$/.test(String(s));
+
+  /** Pone un montaje propio como escena (sin simular). */
+  function ponerMontaje(m, titulo) {
+    MONTAJE = copia(m); ESC = escenaLab(MONTAJE, titulo || 'Escena propia'); MONT = ESC.montaje; DUR = ESC.duracion; VAR = {};
+    if (MONT === 'cilindro') { GEO = geoDe(ESC); H_MAX = GEO.yTope - GEO.ep; especie = ESC.especie || 'mono'; }
+    lt.duracion = DUR; ponerTitulo(ESC, 'Laboratorio de gases');
+  }
+  /** Montaje de la escena actual: el propio o el de la escena del catálogo (null si la paleta no lo sabe montar). */
+  function montajeDeEscena() {
+    if (ESC.propio) return MONTAJE;
+    const m = montajeCatalogo();
+    if (m) m.escena.duracion = Math.min(300, Math.max(2, Math.round(DUR)));
+    return m;
+  }
+  function montajeCatalogo() {
+    const v = vals();
+    if (MONT === 'cilindro') return montajeDesdeCilindro({ ...entradaCilindro(ESC, v), especie }, { Hc: GEO.Hc, hMax: H_MAX, tanque: GEO.tanque });
+    if (MONT === 'recipientes') return montajeDesdeRecipientes(ESC.construir(v), ESC.seccion || 0);
+    if (MONT === 'abierto') return esGlobo() ? montajeDesdeGlobo(ESC.construir(v)) : null;
+    if (MONT === 'burbuja') return montajeDesdeBurbuja(ESC.construir(v));
+    return null;
+  }
+  // Identidad de las piezas en el montaje (el convertido numera c1, r1, r2…, g1 y l1)
+  const idCilindro = () => (ESC.propio ? (cilM() || {}).id : 'c1');
+  const idRecipiente = i => (ESC.propio ? (recM()[i] || {}).id : 'r' + (i + 1));
+  /**
+   * Cambia el montaje con fn(montaje) → {montaje, sel}. Una escena del
+   * catálogo pasa a ser propia (o empieza una vacía si la paleta no sabe
+   * montarla). Lo que el motor no sabe simular no se hace: se avisa por qué.
+   */
+  function cambiarMontaje(fn, mensaje, o = {}) {
+    let base = montajeDeEscena(), titulo = ESC.propio ? ESC.titulo : `${ESC.titulo} (modificada)`, nueva = false;
+    if (!base) { base = montajeLabVacio(); titulo = 'Escena propia'; nueva = true; }
+    let r;
+    try { r = fn(base); } catch (e) { avisar(e.message); return false; }
+    const firma = firmaRecipientes(base), eraPropia = !!ESC.propio;
+    guardarHistorial();
+    if (nueva) guion = [];
+    ponerMontaje(r.montaje, titulo);
+    guion = guionValidoLab(MONTAJE, guion.filter(a => a.t <= DUR + 1e-9), firma);
+    guionPropio = true;
+    if (r.sel) sel = selPantalla(r.sel);
+    if (o.encuadrar !== false) { encuadreHecho = false; vistaManual = false; }
+    construirVariables(); recalcular(); inspector();
+    if (o.encuadrar !== false) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); todo(); }
+    if (mensaje) avisar((typeof mensaje === 'function' ? mensaje(r) : mensaje) + (eraPropia ? '' : nueva ? ' · escena propia nueva' : ' · la escena pasa a ser propia'));
+    return true;
+  }
+  /** Selección del montaje → la de la pantalla (cilindro, gas, r0, c0, g0, b0, s0, globo…). */
+  function selPantalla(ms) {
+    if (ms === 'atm' || ms === 'escena') return ms;
+    if (/^sep:\d+$/.test(ms)) return 's' + ms.slice(4);
+    const [id, parte] = ms.split('/'), o = MONTAJE.objetos.find(x => x.id === id);
+    if (!o) return 'escena';
+    if (o.tipo === 'cilindro') return parte || 'cilindro';
+    if (o.tipo === 'recipiente') { const i = recM().indexOf(o); return ({ calentador: 'c', gas: 'g', bano: 'b' }[parte] || 'r') + i; }
+    return o.tipo === 'globo' ? 'globo' : 'burbuja';
+  }
+  /** Selección de la pantalla → la pieza del montaje m (null si no es una pieza). */
+  function selMontaje(s, m = MONTAJE) {
+    if (!m) return null;
+    if (s === 'atm' || s === 'escena') return s;
+    const c = m.objetos.find(o => o.tipo === 'cilindro'), rs = m.objetos.filter(o => o.tipo === 'recipiente');
+    if (c && (s === 'cilindro' || s === 'paredes')) return c.id;
+    if (c && ['gas', 'embolo', 'pesa', 'calentador', 'bano'].includes(s)) return `${c.id}/${s}`;
+    let mm = /^([rcgb])(\d+)$/.exec(s);
+    if (mm && rs[+mm[2]]) { const id = rs[+mm[2]].id; return mm[1] === 'r' ? id : `${id}/${{ c: 'calentador', g: 'gas', b: 'bano' }[mm[1]]}`; }
+    mm = /^s(\d+)$/.exec(s); if (mm) return 'sep:' + mm[1];
+    if ((s === 'globo' || s === 'burbuja') && m.objetos[0]) return m.objetos[0].id;
+    return null;
+  }
+  const selPorOmision = () => (ESC.propio || MONT === 'recipientes' ? 'escena' : MONT === 'cilindro' ? 'gas' : MONT === 'abierto' ? (esGlobo() ? 'globo' : 'recinto') : 'burbuja');
+  function selValida(s) {
+    if (esInstr(s)) return INSTR.some(o => o.id === s);
+    if (ESC.propio) { const ms = selMontaje(s); return !!(ms && piezaLab(MONTAJE, ms)); }
+    return true;
+  }
+  /** Escena propia vacía. */
+  function escenaVacia() {
+    guardarHistorial();
+    ponerMontaje(montajeLabVacio(), 'Escena propia'); guion = []; guionPropio = true; INSTR = []; sel = 'escena';
+    encuadreHecho = false; vistaManual = false; t = 0; jugando = false;
+    construirVariables(); recalcular(); inspector(); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); todo();
+    avisar('Escena vacía: elige un objeto en la paleta y haz clic en el lienzo');
+  }
+
+  // Herramienta de la paleta
+  const marcarHerr = iniciarPaleta('.panel-izq', h => ponerHerramienta(herramienta === h ? null : h));
+  function ponerHerramienta(h) {
+    if (h === 'resorte') { herramienta = null; marcarHerr(null); try { colocarLab(montajeLabVacio(), 'resorte'); } catch (e) { avisar(e.message); } return; }
+    herramienta = h; marcarHerr(h);
+    lienzo.style.cursor = h ? 'crosshair' : 'default';
+    if (h) avisar(`${NOMBRE_HERR[h]}: ${PISTA_HERR[h]} · Mayús para poner varios · Esc termina`);
+    dibujar();
+  }
+  /** Qué hay bajo el punto de colocación: objeto, hueco entre recipientes y posición en la fila. */
+  function dondeLab(X, Y, w) {
+    const d = { x: w[0] };
+    if (!SIM) return d;
+    const ob = objetoEn(X, Y);
+    if (MONT === 'cilindro' && ob && !esInstr(ob)) d.obj = idCilindro();
+    if (MONT === 'recipientes') {
+      const rects = layoutRec(estado(t));
+      let mm;
+      if (ob && (mm = /^[rcgb](\d+)$/.exec(ob))) d.obj = idRecipiente(+mm[1]);
+      if (ob && (mm = /^s(\d+)$/.exec(ob))) d.hueco = +mm[1];
+      if (d.hueco == null && !d.obj) for (let j = 0; j < rects.length - 1; j++) if (w[0] >= rects[j].x1 - 0.03 && w[0] <= rects[j + 1].x0 + 0.03) d.hueco = j;
+      d.indice = rects.filter(r => (r.x0 + r.x1) / 2 < w[0]).length;
+    }
+    return d;
+  }
+  function colocar(X, Y, ev) {
+    const w = [tz.vista.mx(X), tz.vista.my(Y)], h = herramienta;
+    if (INSTRUMENTOS.includes(h)) colocarInstrumento(h, w);
+    else if (cambiarMontaje(m => colocarLab(m, h, dondeLab(X, Y, w)), h === 'pesa' ? `Pesa sobre el émbolo en t = ${cantidad(t, 's')}` : h === 'calentador' ? `Calentador colocado: enciéndelo en Acciones${MONT === 'cilindro' || (MONTAJE && MONTAJE.objetos.some(o => o.tipo === 'cilindro')) ? ' (tecla C)' : ''}` : participio(h, 'colocad'), { encuadrar: !['pesa', 'calentador', 'bano', 'gas', 'embolo', 'tabique', 'valvula'].includes(h) }) && h === 'pesa') {
+      // La pesa se pone sobre el émbolo en este instante (una acción más del guion)
+      guion = guion.filter(a => !(a.tipo === 'pesa' && Math.abs(a.t - t) < 1e-9)); guion.push({ t, tipo: 'pesa', valor: true }); guion.sort((p, q) => p.t - q.t);
+      recalcular(); inspector();
+    }
+    if (!ev.shiftKey) ponerHerramienta(null);
+  }
+  function colocarInstrumento(tipo, w, b) {
+    const redondo = p => p.map(x => Number(x.toPrecision(5)));
+    const donde = tipo === 'regla' ? { a: redondo(w), b: redondo(b || [w[0], w[1] + 120 / tz.vista.escala]) } : tipo === 'cronometro' ? { x: w[0], y: w[1] } : regionEn(w);
+    let o;
+    try { o = nuevoInstrumento(INSTR, tipo, donde); } catch (e) { avisar(e.message); return; }
+    guardarHistorial(); INSTR.push(o); sel = o.id;
+    inspector(); todo(); guardarAuto();
+    const L = SIM && (tipo === 'termometro' || tipo === 'manometro') ? lecturaInstr(o, estado(t)) : null;
+    avisar(`${participio(tipo, 'colocad')}${L ? ` en ${L.donde}` : ''}`);
+  }
+  function guardarAuto() { if (autoguardar) autoguardado.guardar('termodinamica', escenaActual()); }
+  /** Quita lo seleccionado (Supr): un instrumento o una pieza del montaje. */
+  function quitarSeleccion() {
+    if (esInstr(sel)) {
+      const i = INSTR.findIndex(o => o.id === sel); if (i < 0) return;
+      guardarHistorial(); const tipo = INSTR[i].tipo; INSTR.splice(i, 1); sel = selPorOmision();
+      inspector(); todo(); guardarAuto(); avisar(participio(tipo, 'quitad')); return;
+    }
+    const ms = selMontaje(sel, montajeDeEscena());
+    if (!ms || ms === 'escena') { avisar('Selecciona en el lienzo o en el árbol lo que quieres quitar'); return; }
+    const p = piezaLab(montajeDeEscena(), ms);
+    cambiarMontaje(m => quitarLab(m, ms), `Se quita: ${p ? p.nombre.toLowerCase() : 'el objeto'}`, { encuadrar: !/\//.test(ms) });
+  }
+
+  // Instrumentos: regiones de gas, lecturas y dibujo
+  const alLocal = (ang, [x, y]) => { const c = Math.cos(ang * RAD), s2 = Math.sin(ang * RAD); return [x * c - y * s2, x * s2 + y * c]; };
+  /** Regiones de gas en t (mundo): id, rectángulo y si está en el marco girado del cilindro. */
+  function regiones(s) {
+    if (!SIM) return [];
+    if (MONT === 'cilindro') return [{ id: 'gas', r: [-SIM.Rcil, 0, SIM.Rcil, s.h], local: girado() }];
+    if (MONT === 'recipientes') return layoutRec(s).map((q, i) => ({ id: 'r' + i, r: [q.x0, q.y0, q.x1, q.y1] }));
+    if (MONT === 'abierto' && esGlobo() && ULT.globo) { const g = ULT.globo, v = tz.vista; return [{ id: 'globo', r: [v.mx(g.centro[0] - g.r), v.my(g.centro[1] + g.r), v.mx(g.centro[0] + g.r), v.my(g.centro[1] - g.r)] }]; }
+    if (MONT === 'abierto' && !esGlobo()) { const L = Math.cbrt(SIM.e.V); return [{ id: 'recinto', r: [0, 0, L, L] }]; }
+    return [];
+  }
+  /** Ancla de un instrumento soltado en w: la región de gas que lo contiene (u, w relativos) o el punto libre. */
+  function regionEn(w) {
+    const s = SIM ? estado(t) : null;
+    for (const g of s ? regiones(s) : []) {
+      const p = g.local ? alLocal(s.ang, w) : w, [x0, y0, x1, y1] = g.r;
+      if (p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) return { en: g.id, u: (p[0] - x0) / ((x1 - x0) || 1), w: (p[1] - y0) / ((y1 - y0) || 1) };
+    }
+    return { x: w[0], y: w[1] };
+  }
+  function puntoInstr(o, s) {
+    if (!o.en) return [o.x, o.y];
+    const g = regiones(s).find(q => q.id === o.en); if (!g) return null;
+    const p = [g.r[0] + o.u * (g.r[2] - g.r[0]), g.r[1] + o.w * (g.r[3] - g.r[1])];
+    return g.local ? alMundo(s.ang, p) : p;
+  }
+  /** Presión, temperatura y lugar que mide un termómetro o un manómetro en t. */
+  function lecturaInstr(o, s) {
+    const p = puntoInstr(o, s); if (!p) return null;
+    if (o.en === 'gas') return { P: s.P, T: s.T, donde: 'el gas', corto: 'gas' };
+    if (/^r\d$/.test(o.en || '')) { const i = +o.en.slice(1); return { P: s.P[i], T: s.n[i] > 1e-9 ? s.T[i] : NaN, donde: `el recipiente ${REC.nombres[i]}`, corto: REC.nombres[i] }; }
+    if (o.en === 'globo') return { P: s.P, T: s.T, donde: 'el aire del globo', corto: 'globo' };
+    if (o.en === 'recinto') return { P: SIM.e.P0, T: s.T, donde: 'la habitación', corto: 'habitación' };
+    const [x, y] = p, atm = MONTAJE ? MONTAJE.atm : { P0: 101.325, T0: 300 };
+    if (MONT === 'cilindro') {
+      if (GEO.tanque && !girado() && Math.abs(x) <= geo().Rt && y >= 0 && y <= GEO.nivel) return { P: SIM.P0 + 1000 * SIM.g * (GEO.nivel - y), T: SIM.T0, donde: 'el agua del baño', corto: 'baño' };
+      return { P: SIM.P0, T: ESC.propio ? atm.T0 : SIM.T0, donde: 'el aire', corto: 'aire' };
+    }
+    if (MONT === 'burbuja') {
+      const e = SIM.e, a = e.prof * 0.16;
+      if (Math.abs(x) <= a && y <= 0 && y >= -e.prof) { const z = -y; return { P: e.P0 + e.rho * e.g * z, T: e.Tsup + (e.Tfondo - e.Tsup) * z / e.prof, donde: `el agua a ${fmt(z, 3)} m`, corto: 'agua' }; }
+      return { P: e.P0, T: e.Tsup, donde: 'el aire', corto: 'aire' };
+    }
+    if (MONT === 'abierto') { const e = SIM.e; return { P: e.P0 * Math.exp(-Math.max(0, y) / (e.H || Infinity)), T: e.T0, donde: 'el aire', corto: 'aire' }; }
+    if (MONT === 'recipientes') {
+      const rects = layoutRec(s);
+      for (let i = 0; i < rects.length; i++) { const c = REC.e.compartimientos[i], r = rects[i]; if ((c.Gb ?? 0) > 0 && x >= r.x0 && x <= r.x1 && y >= 0 && y < r.y0) return { P: atm.P0 * 1e3, T: c.Tb, donde: `el baño de ${REC.nombres[i]}`, corto: 'baño' }; }
+    }
+    return { P: atm.P0 * 1e3, T: atm.T0, donde: 'el aire', corto: 'aire' };
+  }
+  /** Ancho en px de una ficha (el mismo cálculo que Trazo.ficha). */
+  function anchoFicha(lineas) {
+    const c = tz.ctx; let a = 0; c.save();
+    for (const segs of lineas) { let w = 0; for (const sg of segs) { c.font = tz._fuente(sg.f, sg.tam || 11.5); w += c.measureText(sg.t).width; } a = Math.max(a, w); }
+    c.restore(); return a + 16;
+  }
+  function dibujarInstrumentos() {
+    ULT.zonas = [];
+    if (!capas.instrumentos) return;
+    const v = tz.vista, s = SIM ? estado(t) : null;
+    // Termómetros y manómetros: la sonda donde mide y su ficha fuera de la escena,
+    // con una línea guía: en una columna a la derecha del cilindro, en una fila
+    // bajo el suelo con recipientes o junto al borde derecho del lienzo
+    const fila = MONT === 'recipientes', orden = s ? INSTR.filter(o => o.tipo === 'termometro' || o.tipo === 'manometro').map(o => [o, puntoInstr(o, s)]).filter(q => q[1]) : [];
+    if (fila) orden.sort((a, b) => a[1][0] - b[1][0]);
+    let cx = fila ? 16 : MONT === 'cilindro' && !girado() ? v.X(geo().Rt) + 118 : tz.w - 210, cy = fila ? v.Y(0) + 44 : 96;
+    const ranura = new Map();
+    for (const [o] of orden) {
+      const L = lecturaInstr(o, s), termo = o.tipo === 'termometro', W = anchoFicha(lineasInstr(o, L)), alto = termo ? 44 : 34;
+      if (fila) { const X = v.X(puntoInstr(o, s)[0]), gx = Math.min(tz.w - 8 - W - 18, Math.max(cx + 12, X - 10)); ranura.set(o.id, [gx, cy]); cx = gx + 18 + W + 14; }
+      else { const gx = Math.min(cx + 12, tz.w - 8 - W - 18); ranura.set(o.id, [gx, cy]); cy += alto + 10; }
+    }
+    for (const o of INSTR) {
+      const grueso = hover === o.id, elegido = sel === o.id;
+      if (o.tipo === 'regla') {
+        const [xa, ya] = v.P(o.a), [xb, yb] = v.P(o.b), L = Math.hypot(xb - xa, yb - ya);
+        if (L < 2) continue;
+        const ux = (xb - xa) / L, uy = (yb - ya) / L, nx = -uy, ny = ux, Lm = Math.hypot(o.b[0] - o.a[0], o.b[1] - o.a[1]);
+        tz.lineaPx([[xa, ya], [xb, yb]], { color: 'texto-2', grosor: 1.5 + (grueso ? 0.5 : 0) });
+        for (const [x, y] of [[xa, ya], [xb, yb]]) tz.lineaPx([[x - nx * 6, y - ny * 6], [x + nx * 6, y + ny * 6]], { color: 'texto-2', grosor: 1.5 });
+        const paso = Volta.pasoAgradable(Lm / 8), k = paso * v.escala;
+        if (k > 5) for (let d = k; d < L - 2; d += k) tz.lineaPx([[xa + ux * d, ya + uy * d], [xa + ux * d + nx * 3.5, ya + uy * d + ny * 3.5]], { color: 'texto-3', grosor: 1 });
+        // El largo, debajo de una regla tumbada y a la izquierda de una de pie
+        const tumbada = Math.abs(ny) > Math.abs(nx), lado = tumbada ? (ny > 0 ? 1 : -1) : (nx < 0 ? 1 : -1);
+        tz.compuesto([{ t: cantidad(Lm, 'm', 4), f: 'num', tam: 11.5 }], (xa + xb) / 2 + nx * 14 * lado, (ya + yb) / 2 + ny * 14 * lado + (tumbada ? 8 : 4), { alinear: tumbada ? 'center' : 'right', color: 'texto-2', halo: true });
+        if (elegido) { tz.asa(xa, ya); tz.asa(xb, yb); }
+        ULT.zonas.push({ id: o.id, parte: 'a', c: [xa, ya, 8] }, { id: o.id, parte: 'b', c: [xb, yb, 8] }, { id: o.id, parte: 'todo', seg: [xa, ya, xb, yb] });
+        continue;
+      }
+      if (o.tipo === 'cronometro') {
+        const [X, Y] = v.P([o.x, o.y]), tc = lecturaCronometro(o, t), lin = [[{ t: 'Cronómetro', f: 'ui', tam: 11.5 }], [{ t: 't', f: 'sim', tam: 13 }, { t: ' = ' + cantidad(tc, 's', 4), f: 'num', tam: 11.5 }]];
+        tz.termoCronometro(X, Y, tc / 60, { grueso });
+        const W = anchoFicha(lin), izq = X + 18 + W > tz.w - 8, fx = izq ? X - 18 - W : X + 18;
+        const f = tz.ficha(fx, Y - 18, lin);
+        if (elegido) tz.seleccionCirculo(X, Y - 1, 15);
+        ULT.zonas.push({ id: o.id, parte: 'todo', c: [X, Y, 14] }, { id: o.id, parte: 'todo', r: [fx, Y - 18, f.w, f.h] });
+        continue;
+      }
+      if (!s) continue;
+      const p = puntoInstr(o, s); if (!p) continue;
+      const L = lecturaInstr(o, s), [X, Y] = v.P(p), termo = o.tipo === 'termometro', lin = lineasInstr(o, L);
+      const [gx, gy0] = ranura.get(o.id), gy = gy0 + (termo ? 34 : 14), fx = gx + 16, fy = gy0;
+      // Línea guía de la sonda al instrumento (en arrastre, la sonda sigue al ratón)
+      tz.lineaPx([[X, Y], [gx + (X > gx ? 4 : -4), termo ? gy - 6 : gy]], { color: 'linea-fuerte', grosor: 1 });
+      tz.sondaTermica(X, Y);
+      if (termo) tz.termometro(gx, gy, Number.isFinite(L.T) ? (L.T - 200) / 400 : 0, { grueso });
+      else tz.manometro(gx, gy, L.P / 300e3, { grueso });
+      const f = tz.ficha(fx, fy, lin);
+      if (elegido) { tz.seleccionCirculo(X, Y, 7); tz.seleccionCaja(gx - 10, fy, f.w + 26, Math.max(f.h, termo ? 40 : 26)); }
+      ULT.zonas.push({ id: o.id, parte: 'todo', c: [X, Y, 8] }, { id: o.id, parte: 'todo', r: [gx - 12, fy, f.w + 28, Math.max(f.h, termo ? 40 : 26)] });
+    }
+  }
+  /** Ficha de un termómetro o un manómetro: lugar y lectura. */
+  function lineasInstr(o, L) {
+    const termo = o.tipo === 'termometro';
+    return [[{ t: `${termo ? 'Termómetro' : 'Manómetro'} · ${L.corto}`, f: 'ui', tam: 11.5 }],
+      termo ? [{ t: 'T', f: 'sim', tam: 13, color: 'termico' }, { t: ' = ' + (Number.isFinite(L.T) ? cantidad(L.T, 'K', 4) : '—'), f: 'num', tam: 11.5 }]
+        : [{ t: 'P', f: 'sim', tam: 13 }, { t: ' = ' + cantidad(L.P / 1e3, 'kPa', 4), f: 'num', tam: 11.5 }]];
+  }
+  /** Instrumento bajo el cursor (px): {id, parte}. */
+  function instrumentoEn(X, Y) {
+    for (let k = ULT.zonas.length - 1; k >= 0; k--) {
+      const z = ULT.zonas[k];
+      if (z.c && Math.hypot(X - z.c[0], Y - z.c[1]) <= z.c[2]) return z;
+      if (z.r && X >= z.r[0] && X <= z.r[0] + z.r[2] && Y >= z.r[1] && Y <= z.r[1] + z.r[3]) return z;
+      if (z.seg) { const [a, b, c, d] = z.seg, dx = c - a, dy = d - b, L2 = dx * dx + dy * dy || 1, u = Math.max(0, Math.min(1, ((X - a) * dx + (Y - b) * dy) / L2)); if (Math.hypot(a + u * dx - X, b + u * dy - Y) < 6) return z; }
+    }
+    return null;
+  }
+  function dibujarVacio() {
+    tz.limpiar(); tz.cuadricula();
+    tz.superficie([[tz.vista.mx(40), 0], [tz.vista.mx(tz.w - 40), 0]]);
+    const X = tz.w / 2, Y = tz.h / 2 - 30;
+    tz.texto('Escena vacía', X, Y, { tam: 14, color: 'texto-2', alinear: 'center', halo: true });
+    tz.texto('Elige un objeto en la paleta y haz clic en el lienzo:', X, Y + 22, { tam: 12, color: 'texto-3', alinear: 'center', halo: true });
+    tz.texto('un cilindro, recipientes, un globo o una columna de líquido.', X, Y + 40, { tam: 12, color: 'texto-3', alinear: 'center', halo: true });
+    tz.barraEscala(16, tz.h - 56);
+  }
+  /** Capa 10 · edición: instrumentos, regla o topes que se arrastran y pista de la herramienta. */
+  function capaEdicion() {
+    dibujarInstrumentos();
+    const v = tz.vista;
+    if (trazo) { const [xa, ya] = v.P(trazo.a), [xb, yb] = v.P(trazo.b); tz.lineaPx([[xa, ya], [xb, yb]], { color: 'texto-2', grosor: 1.5, patron: 'previsto' }); tz.ficha(xb + 10, yb - 10, [[{ t: cantidad(Math.hypot(trazo.b[0] - trazo.a[0], trazo.b[1] - trazo.a[1]), 'm', 4), f: 'num', tam: 11.5 }]]); }
+    if (arrastre && arrastre.tipo === 'topes' && arrastre.y != null) {
+      const R = SIM.Rcil, Y = v.Y(arrastre.y + GEO.ep);
+      tz.guia([[v.X(-R) - 10, Y], [v.X(R) + 24, Y]], `Topes: ${cantidad(arrastre.y, 'm', 3)}`);
+    }
+    if (herramienta && cursorPx) tz.ficha(cursorPx[0] + 14, cursorPx[1] + 14, [[{ t: `${NOMBRE_HERR[herramienta]}: ${PISTA_HERR[herramienta]}`, f: 'ui', tam: 11.5 }]]);
+  }
+
+  // Inspector de una pieza del montaje o de un instrumento
+  function estadoPieza(p, s) {
+    const fl = MONT === 'cilindro' && SIM ? banderas(guion, t) : null, b = MONT === 'recipientes' && SIM ? banderasRec(t) : null, h = p.holder;
+    const i = /^[rcgb](\d+)$/.exec(sel) ? +sel.slice(1) : -1;
+    switch (p.clase) {
+      case 'escena': return `${MONTAJE.objetos.length ? `${MONTAJE.objetos.length} objeto${MONTAJE.objetos.length > 1 ? 's' : ''}` : 'Vacía'} · ${fmt(DUR, 3)} s`;
+      case 'atm': return `Presión y temperatura del aire de fuera`;
+      case 'cilindro': return `${h.angulo ? `Inclinado ${fmt(h.angulo, 3)}°` : 'Vertical'} · paredes ${fl && fl.adiab ? 'adiabáticas' : 'conductoras'}`;
+      case 'gasCil': return `Gas ideal ${h.especie === 'di' ? 'diatómico' : 'monoatómico'} · ${fmt(h.n, 3)} mol`;
+      case 'emboloCil': return s ? `Cuerpo rígido · ${s.h >= H_MAX - 1e-6 ? 'en los topes' : Math.abs(s.v) > 2e-3 ? (s.v > 0 ? 'se aleja del fondo' : 'se acerca al fondo') : 'en reposo'}` : 'Cuerpo rígido';
+      case 'pesa': return `Cuerpo rígido · ${fl && fl.pesa ? 'sobre el émbolo' : 'retirada'}`;
+      case 'calCil': return `Resistencia · ${fl && fl.cal ? 'encendido' : 'apagado'}`;
+      case 'banoCil': return `Agua a temperatura fija · ${fl && fl.adiab ? 'aislado' : 'en contacto'}`;
+      case 'recipiente': return `Recipiente rígido · ${h.gas && h.gas.n > 0 ? 'con gas' : 'vacío'}`;
+      case 'gasRec': return `Gas ideal · ${fmt(h.n, 3)} mol`;
+      case 'calRec': return `Resistencia · ${b && i >= 0 && b.cal[i] ? 'encendido' : 'apagado'}`;
+      case 'banoRec': return `Temperatura fija · ${b && i >= 0 && b.bano[i] ? 'en contacto' : 'aislado'}`;
+      case 'valvula': return b ? (b.valvulas[+sel.slice(1)] ? 'Abierta' : 'Cerrada') : 'Cerrada';
+      case 'tabique': return h.G > 0 ? 'Fijo · conduce calor' : 'Fijo · aislante';
+      case 'emboloLibre': return 'Sin masa ni fricción';
+      case 'globo': return s ? (s.enSuelo ? 'En el suelo' : `En el aire a ${fmt(s.z, 3)} m`) : 'En el suelo';
+      case 'columna': return s ? `Burbuja a ${fmt(s.z, 3)} m de profundidad` : 'Agua quieta';
+      default: return '';
+    }
+  }
+  const AYUDA_PIEZA = {
+    escena: 'Escena propia: coloca objetos con la paleta, arrástralos y cambia sus valores aquí. Las acciones (pesa, calentador, válvulas) se programan en la línea de tiempo.',
+    recipiente: 'Arrástralo para cambiar su sitio en la fila. Una válvula, un tabique o un émbolo libre se ponen en el hueco entre dos recipientes.',
+    cilindro: 'Arrastra los topes (las marcas de dentro) para cambiar su altura.',
+    emboloLibre: 'Sin masa ni fricción: las presiones a los dos lados son iguales en todo momento y el trabajo de un lado lo recibe el otro.',
+  };
+  function objetoPropio() {
+    let ms = selMontaje(sel), p = ms && piezaLab(MONTAJE, ms);
+    if (!p) { sel = 'escena'; ms = 'escena'; p = piezaLab(MONTAJE, 'escena'); }
+    const quitable = !['escena', 'atm', 'emboloCil'].includes(p.clase) && !(p.clase === 'gasCil') && !(p.clase === 'valvula');
+    return {
+      ico: p.ico, nombre: p.nombre,
+      props: () => (AYUDA_PIEZA[p.clase] ? `<p class="ayuda-fila" style="margin:2px 0 8px">${AYUDA_PIEZA[p.clase]}</p>` : '') + filasParametros(PARAMS_LAB[p.clase] || [], p.holder) + (quitable ? botonQuitar() : ''),
+      estado: s => estadoPieza(p, s),
+      enlazar: (k, v) => cambiarMontaje(m => ({ montaje: ajustarLab(m, ms, k, v), sel: ms }), null, { encuadrar: ['A', 'V', 'S', 'Hc', 'hTopes', 'angulo', 'prof'].includes(k) }),
+    };
+  }
+  function objetoInstrumento(o) {
+    const nom = NOMBRE_HERR[o.tipo];
+    return {
+      ico: ICONO_INSTR[o.tipo], nombre: nom,
+      props: () => (o.tipo === 'cronometro' ? filasParametros(PARAMS_INSTR.cronometro, o)
+        + `<div class="fila"><span class="etq"></span><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-secundario btn-compacto" id="b-crono-0"><svg class="ico"><use href="#i-reproducir"/></svg><span>Arrancar aquí</span></button><button class="btn btn-secundario btn-compacto" id="b-crono-1"><svg class="ico"><use href="#i-pausar"/></svg><span>Parar aquí</span></button></div></div>`
+        : `<p class="ayuda-fila" style="margin:2px 0 8px">${o.tipo === 'regla' ? 'Arrastra sus extremos para medir otra distancia, o la regla entera para moverla.' : 'Arrástralo hasta el gas que quieras medir; fuera de los recipientes mide el aire o el baño.'}</p>`) + botonQuitar(),
+      estado: s => { if (o.tipo === 'regla') return 'Mide la distancia entre sus extremos'; if (o.tipo === 'cronometro') return o.t1 > o.t0 ? `De ${fmt(o.t0, 3)} s a ${fmt(o.t1, 3)} s` : `Desde ${fmt(o.t0, 3)} s`; const L = SIM && s ? lecturaInstr(o, s) : null; return L ? `Mide ${L.donde}` : 'Fuera de la escena'; },
+      enlazar: (k, v) => { const n = copia(o); if (!ponerParametro(n, PARAMS_INSTR.cronometro, k, v)) { avisar('Ese valor no es válido'); inspector(); return; } guardarHistorial(); Object.assign(o, n); inspector(); todo(); guardarAuto(); },
+    };
+  }
+  function lecturasInstrumento(o) {
+    const s = SIM ? estado(t) : null;
+    if (o.tipo === 'regla') { const dx = o.b[0] - o.a[0], dy = o.b[1] - o.a[1]; return [['<span class="sim">L</span>', Math.hypot(dx, dy), 'm'], ['Δ<span class="sim">x</span>', dx, 'm'], ['Δ<span class="sim">y</span>', dy, 'm']]; }
+    if (o.tipo === 'cronometro') return [['<span class="sim">t</span>', lecturaCronometro(o, t), 's', 'Tiempo que marca|Stopwatch reading']];
+    const L = s ? lecturaInstr(o, s) : null;
+    if (!L) return [];
+    return o.tipo === 'termometro' ? [['<span class="sim">T</span>', L.T, 'K'], ['<span class="sim">T</span>', L.T - 273.15, '°C']] : [['<span class="sim">P</span>', L.P / 1e3, 'kPa'], ['<span class="sim">P</span> − <span class="sim">P</span><sub class="r">0</sub>', (L.P - (SIM.P0 ?? SIM.e?.P0 ?? (MONTAJE ? MONTAJE.atm.P0 * 1e3 : 101325))) / 1e3, 'kPa', 'Presión manométrica|Gauge pressure']];
+  }
+
+  // ---------------------------------------------------------------------
   // Acciones (crean un evento en t) y deshacer
   // ---------------------------------------------------------------------
   const historial = [], porRehacer = [];
-  const instantanea = () => ({ clave: ESC.clave, guion: guion.map(a => ({ ...a })), guionPropio, vars: vals(), motor, especie, modoValvula });
+  const instantanea = () => ({ clave: ESC.propio ? 'propia' : ESC.clave, titulo: ESC.titulo, montaje: ESC.propio ? copia(MONTAJE) : null, instr: copia(INSTR),
+    guion: guion.map(a => ({ ...a })), guionPropio, vars: vals(), motor, especie, modoValvula });
   function guardarHistorial() { historial.push(instantanea()); if (historial.length > 200) historial.shift(); porRehacer.length = 0; }
-  function restaurar(e) {
-    const cambia = e.clave !== ESC.clave;
-    if (cambia) cargarEscena(escenaPorClave(e.clave));
-    guion = e.guion; guionPropio = !!e.guionPropio; for (const k in e.vars) if (VAR[k]) VAR[k].val = e.vars[k]; motor = e.motor; especie = e.especie; modoValvula = e.modoValvula || 'gradual';
+  /** Pone el estado de una instantánea (o de un archivo ya saneado) sin simular. forzar: cargar la escena aunque sea la misma. */
+  function aplicarDatos(e, forzar = false) {
+    if (e.montaje) ponerMontaje(e.montaje, e.titulo);
+    else { if (forzar || e.clave !== ESC.clave || ESC.propio) cargarEscena(escenaPorClave(e.clave)); MONTAJE = null; }
+    guion = e.guion.map(a => ({ ...a })); guionPropio = !!e.guionPropio; for (const k in e.vars) if (VAR[k]) VAR[k].val = e.vars[k]; motor = e.motor; especie = e.especie; modoValvula = e.modoValvula || 'gradual';
+    INSTR = copia(e.instr || []);
+    if (!selValida(sel)) sel = selPorOmision();
+  }
+  function restaurar(e, forzar = false) {
+    aplicarDatos(e, forzar);
     construirVariables(); inspector(); recalcular();
   }
   function deshacer() { if (!historial.length) return; porRehacer.push(instantanea()); restaurar(historial.pop()); ocultarAviso(); }
@@ -675,6 +1102,9 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
       estado: (s, fl) => `Agua a temperatura fija · ${fl.adiab ? 'aislado' : 'en contacto'}` },
   };
   function objetoActual() {
+    const ins = esInstr(sel) ? INSTR.find(o => o.id === sel) : null;
+    if (ins) return objetoInstrumento(ins);
+    if (ESC.propio) return objetoPropio();
     if (MONT === 'cilindro') return OBJETOS_CIL[sel] || OBJETOS_CIL.gas;
     if (MONT === 'recipientes') {
       const e = REC.e;
@@ -708,6 +1138,9 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     $('#insp-ico').setAttribute('href', '#' + o.ico);
     $('#insp-nombre').textContent = o.nombre;
     $('#propiedades').innerHTML = o.props();
+    if (o.enlazar) enlazarParametros($('#propiedades'), o.enlazar);
+    const bq = $('#b-quitar-pieza'); if (bq) bq.addEventListener('click', quitarSeleccion);
+    for (const k of [0, 1]) { const b = $('#b-crono-' + k); if (b) b.addEventListener('click', () => { const ins = INSTR.find(x => x.id === sel); if (ins) o.enlazar(k ? 't1' : 't0', t); }); }
     const pe = $('#p-especie');
     if (pe) pe.addEventListener('click', ev => { const b = ev.target.closest('button'); if (b) cambiarEspecie(b.dataset.v); });
     const pm = $('#p-modo');
@@ -716,6 +1149,32 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     document.querySelectorAll('[data-var]').forEach(e => { if (VAR[e.dataset.var]) e.textContent = fmtVar(VAR[e.dataset.var]); });
   }
   function seleccionar(s) { if (s && s !== sel) { sel = s; inspector(); todo(); } }
+  function arbolPropio(nodo) {
+    const m = MONTAJE, fl = MONT === 'cilindro' && SIM ? banderas(guion, t) : null;
+    let h = nodo('escena', 'i-escena', 'Escena propia', m.objetos.length ? cantidad(DUR, 's', 3) : 'vacía');
+    const c = cilM();
+    if (c) {
+      h += nodo('cilindro', 'o-cilindro', 'Cilindro', cantidad(c.A, 'cm²', 3)) + nodo('gas', 'o-gas', 'Gas', cantidad(c.gas.n, 'mol', 3)) + nodo('embolo', 'o-embolo', 'Émbolo', cantidad(c.embolo.m, 'kg', 3));
+      if (c.pesa) h += nodo('pesa', 'o-pesa', 'Pesa', cantidad(c.pesa.M, 'kg', 3));
+      if (c.calentador) h += nodo('calentador', 'o-calentador', 'Calentador', fl && fl.cal ? cantidad(c.calentador.Fc, 'W', 3) : 'apagado');
+      if (c.bano) h += nodo('bano', 'o-bano-termico', 'Baño térmico', cantidad(c.bano.T, 'K', 3));
+    }
+    recM().forEach((r, i) => {
+      const n = 'ABCDEFGH'[i];
+      h += nodo('r' + i, 'o-recipiente', `Recipiente ${n}`, cantidad(r.V, 'L', 3));
+      if (r.gas && r.gas.n > 0) h += nodo('g' + i, 'o-gas', `Gas de ${n}`, cantidad(r.gas.n, 'mol', 3));
+      if (r.calentador) h += nodo('c' + i, 'o-calentador', `Calentador de ${n}`, cantidad(r.calentador.Fc, 'W', 3));
+      if (r.bano) h += nodo('b' + i, 'o-bano-termico', `Baño de ${n}`, cantidad(r.bano.Tb, 'K', 3));
+      const sp = m.separadores[i];
+      if (sp) h += nodo('s' + i, sp.tipo === 'valvula' ? 'o-valvula' : sp.tipo === 'embolo' ? 'o-embolo' : 'o-tabique', sp.tipo === 'valvula' ? 'Válvula' : sp.tipo === 'embolo' ? 'Émbolo libre' : 'Tabique', `${n} | ${'ABCDEFGH'[i + 1]}`);
+    });
+    for (const o of m.objetos) {
+      if (o.tipo === 'globo') h += nodo('globo', 'o-globo', 'Globo', cantidad(o.V, 'm³', 3));
+      if (o.tipo === 'columna') h += nodo('burbuja', 'o-columna-liquido', 'Columna de líquido', cantidad(o.prof, 'm', 3));
+    }
+    h += nodo('atm', 'o-atmosfera', 'Atmósfera', cantidad(m.atm.P0, 'kPa', 4));
+    return h;
+  }
 
   function arbol() {
     const nodo = (s, ico, nom, dato = '', clase = '') => `<div class="nodo${clase}"${s ? ` data-sel="${s}" aria-selected="${sel === s}"` : ''}><svg class="ico"><use href="#${ico}"/></svg><span class="nombre">${nom}</span><span class="dato"${s === 'pesa' ? ' id="arbol-pesa"' : s === 'calentador' ? ' id="arbol-cal"' : s === 'bano' ? ' id="arbol-bano"' : ''}>${dato}</span></div>`;
@@ -729,13 +1188,21 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
       REC.e.compartimientos.forEach((c, i) => { h += nodo('r' + i, 'o-recipiente', `Recipiente ${REC.nombres[i]}`, cantidad(c.V * 1e3, 'L', 3)); });
       REC.e.separadores.forEach((sp, j) => { h += nodo('s' + j, sp.tipo === 'valvula' ? 'o-valvula' : sp.tipo === 'embolo' ? 'o-embolo' : 'o-tabique', sp.tipo === 'valvula' ? 'Válvula' : sp.tipo === 'embolo' ? 'Émbolo libre' : 'Tabique', `${REC.nombres[j]} | ${REC.nombres[j + 1]}`); });
     } else if (MONT === 'abierto') h = nodo(esGlobo() ? 'globo' : 'recinto', esGlobo() ? 'o-globo' : 'o-recipiente', esGlobo() ? 'Globo' : 'Habitación') + nodo('', 'o-atmosfera', 'Atmósfera', cantidad(SIM.e.P0 / 1e3, 'kPa', 4), ' global');
-    else h = nodo('burbuja', 'o-gas', 'Burbuja') + nodo('', 'o-columna-liquido', 'Columna de agua', cantidad(SIM.e.prof, 'm', 3), ' global');
+    else if (MONT === 'burbuja') h = nodo('burbuja', 'o-gas', 'Burbuja') + nodo('', 'o-columna-liquido', 'Columna de agua', cantidad(SIM.e.prof, 'm', 3), ' global');
+    if (ESC.propio) h = arbolPropio(nodo);
+    for (const o of INSTR) h += nodo(o.id, ICONO_INSTR[o.tipo], NOMBRE_HERR[o.tipo], o.tipo === 'regla' ? cantidad(Math.hypot(o.b[0] - o.a[0], o.b[1] - o.a[1]), 'm', 3) : o.tipo === 'cronometro' ? cantidad(lecturaCronometro(o, t), 's', 3) : '');
     $('#arbol').innerHTML = h;
   }
   $('#arbol').addEventListener('click', ev => { const n = ev.target instanceof Element ? ev.target.closest('.nodo[data-sel]') : null; if (n) seleccionar(n.dataset.sel); });
 
   // Acciones de los montajes que no son el cilindro
   function acciones() {
+    if (!SIM) {
+      $('#acciones-cilindro').hidden = true; $('#acciones-otro').hidden = false;
+      ['#c-m-f', '#c-m-v', '#c-m-r'].forEach(id => { $(id).hidden = true; });
+      $('#acciones-otro').innerHTML = '<p class="ayuda-fila" style="margin-left:0">Sin objetos no hay acciones: coloca un cilindro, recipientes, un globo o una columna de líquido.</p>';
+      return;
+    }
     const cil = MONT === 'cilindro';
     $('#acciones-cilindro').hidden = !cil; $('#acciones-otro').hidden = cil;
     $('#fila-pesa').hidden = !hayPesa();
@@ -776,6 +1243,23 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   // ---------------------------------------------------------------------
   const lectura = ([a, b, val, u, rec = true]) => `<span class="sim">${a}${b ? `<sub${rec ? ' class="r"' : ''}>${b}</sub>` : ''}</span><span class="v">${fmt(val, 4)}</span><span class="u">${u}</span>`;
   function lecturas() {
+    if (!SIM) { lecturasVacio(); return; }
+    lecturasEscena();
+    const ins = esInstr(sel) ? INSTR.find(o => o.id === sel) : null;
+    if (ins) $('#lecturas').innerHTML = lecturasInstrumento(ins).map(filaLectura).join('');
+  }
+  function lecturasVacio() {
+    $('#reloj').innerHTML = `<span class="sim">t</span>${fmt(t, 4).padStart(6, ' ')}<span class="u">s</span>`;
+    $('#lect-titulo').textContent = `Lecturas en t = ${fmt(t, 4)} s`;
+    $('#acc-titulo').textContent = 'Acciones';
+    $('#insp-estado').textContent = objetoActual().estado(null, null);
+    $('#grupo-examen').hidden = true;
+    $('#b-deshacer').disabled = !historial.length; $('#b-rehacer').disabled = !porRehacer.length;
+    const atm = MONTAJE ? MONTAJE.atm : { P0: 101.3, T0: 300 };
+    const ins = esInstr(sel) ? INSTR.find(o => o.id === sel) : null;
+    $('#lecturas').innerHTML = (ins ? lecturasInstrumento(ins) : [['<span class="sim">P</span><sub class="r">0</sub>', atm.P0, 'kPa', 'Presión del aire|Air pressure'], ['<span class="sim">T</span><sub class="r">0</sub>', atm.T0, 'K', 'Temperatura del aire|Air temperature']]).map(filaLectura).join('');
+  }
+  function lecturasEscena() {
     const s = estado(t);
     $('#reloj').innerHTML = `<span class="sim">t</span>${fmt(t, 4).padStart(6, ' ')}<span class="u">s</span>`;
     $('#lect-titulo').textContent = `Lecturas en t = ${fmt(t, 4)} s`;
@@ -811,7 +1295,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   function lecturasOtro(s) {
     let filas = [];
     if (MONT === 'recipientes') {
-      const i = /^[rc]\d+$/.test(sel) ? +sel.slice(1) : -1;
+      const i = /^[rcgb]\d+$/.test(sel) ? +sel.slice(1) : -1;
       if (i >= 0) filas = [['<span class="sim">P</span>', s.P[i] / 1e3, 'kPa'], ['<span class="sim">V</span>', s.V[i] * 1e3, 'L'], ['<span class="sim">T</span>', s.n[i] > 1e-9 ? s.T[i] : NaN, 'K'], ['<span class="sim">n</span>', s.n[i], 'mol'], ['<span class="sim">U</span>', s.U[i], 'J']];
       else filas = [['<span class="sim">U</span><sub class="r">total</sub>', s.Utot, 'J', 'Energía interna total: aislados, se conserva|Total internal energy'], ['<span class="sim">Q</span><sub class="r">exterior</sub>', s.Qext, 'J', 'Calor de baños y calentadores|Heat from outside'], ['Δ<span class="sim">S</span>', s.dS, 'J/K', 'Entropía creada|Entropy change']];
       const pv = REC.e.compartimientos.reduce((a, c, k) => a + s.P[k] * s.V[k], 0);
@@ -844,6 +1328,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
       }
       pintar(); cont.appendChild(f);
     }
+    if (!Object.keys(VAR).length && ESC.propio) cont.innerHTML = '<p class="ayuda-fila" style="margin:2px 12px 10px">En una escena propia cada valor se cambia en el inspector del objeto.</p>';
   }
 
   const lt = new LineaTiempo($('#tl'), { duracion: DUR, eventos: [], alCambiar: nt => { t = nt; jugando = false; todo(); } });
@@ -860,6 +1345,11 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   const PATRONES = ['continuo', 'discontinuo', 'punteado'];
 
   function graficas() {
+    if (!SIM) {
+      for (const k of ['1', '2', '3']) { $('#t' + k).textContent = ''; $('#l' + k).textContent = ''; grafica($('#g' + k), { x: { min: 0, max: DUR }, y: { min: 0, max: 1 }, series: [], eventos: [] }); }
+      if ($('#p-energia').hidden === false) { $('#e-gas').innerHTML = ''; $('#e-embolo').innerHTML = ''; grafica($('#g4'), { x: { min: 0, max: DUR }, y: { min: 0, max: 1 }, series: [], eventos: [] }); }
+      return;
+    }
     if ($('#p-graficas').hidden === false) {
       if (MONT !== 'cilindro') graficasOtro();
       else {
@@ -890,8 +1380,10 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
       grafica($('#g3'), { x: X, y: rango(SIM.muestras.flatMap(q => (pistones ? q.V.map(x => x * 1e3) : q.n))), cursor: t, eventos: ev, series: multi(N, (q, i) => (pistones ? q.V[i] * 1e3 : q.n[i]), 'tinta', nom) });
       $('#t1').innerHTML = '<span class="sim">P</span> (kPa) contra <span class="sim">t</span>'; $('#t2').innerHTML = '<span class="sim">T</span> (K) contra <span class="sim">t</span>';
       $('#t3').innerHTML = pistones ? '<span class="sim">V</span> (L) contra <span class="sim">t</span>' : '<span class="sim">n</span> (mol) contra <span class="sim">t</span>';
-      $('#l1').textContent = s.P.map(p => fmt(p / 1e3, 4)).join(' · ') + ' kPa'; $('#l2').textContent = s.T.map(x => (Number.isFinite(x) ? fmt(x, 4) : '—')).join(' · ') + ' K';
-      $('#l3').textContent = pistones ? s.V.map(x => fmt(x * 1e3, 4)).join(' · ') + ' L' : s.n.map(x => fmt(x, 3)).join(' · ') + ' mol';
+      // Con tres recipientes o más no caben todas las lecturas: la del recipiente elegido, con su nombre
+      const iL = N >= 3 ? Math.max(0, /^[rcgb]\d+$/.test(sel) ? +sel.slice(1) : 0) : -1, lista = (xs, f) => (iL >= 0 ? `${nom[iL]}: ${f(xs[iL])}` : xs.map(f).join(' · '));
+      $('#l1').textContent = lista(s.P, p => fmt(p / 1e3, 4)) + ' kPa'; $('#l2').textContent = lista(s.T, x => (Number.isFinite(x) ? fmt(x, 4) : '—')) + ' K';
+      $('#l3').textContent = pistones ? lista(s.V, x => fmt(x * 1e3, 4)) + ' L' : lista(s.n, x => fmt(x, 3)) + ' mol';
     } else if (MONT === 'abierto') {
       grafica($('#g1'), { x: X, y: rango(SIM.muestras.map(q => q.T)), cursor: t, eventos: ev, series: [{ tramos: [serie(q => [q.t, q.T], t)], familia: 'termico' }] });
       $('#t1').innerHTML = '<span class="sim">T</span> (K) contra <span class="sim">t</span>'; $('#l1').textContent = cantidad(s.T, 'K', 4);
@@ -1030,6 +1522,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   }
 
   function tablas() {
+    if (!SIM) { $('#t-eventos').innerHTML = ''; $('#t-datos').innerHTML = ''; return; }
     if (MONT !== 'cilindro') { tablasOtro(); return; }
     $('#t-eventos').innerHTML = '<tr><th>Evento</th><th>t (s)</th><th>P (kPa)</th><th>V (L)</th><th>T (K)</th><th>Q (J)</th><th>W (J)</th></tr>' +
       SIM.eventos.map(e => `<tr class="${Math.abs(e.t - t) < 0.006 ? 'actual' : ''}"><td style="font-family:var(--fuente-interfaz)">${e.nombre}</td><td>${fmt(e.t, 4)}</td><td>${fmt(e.P / 1e3, 5)}</td><td>${fmt(e.V * 1e3, 5)}</td><td>${fmt(e.T, 5)}</td><td>${fmt(e.Q, 4)}</td><td>${fmt(e.W, 4)}</td></tr>`).join('');
@@ -1067,7 +1560,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     try { simular(); }
     catch (e) { avisar(e.message); return; }
     lt.duracion = DUR; lt.simulado = DUR;
-    lt.eventos = SIM.eventos.filter(e => e.t > 0).map(e => ({ t: e.t, nombre: e.nombre }));
+    lt.eventos = SIM ? SIM.eventos.filter(e => e.t > 0).map(e => ({ t: e.t, nombre: e.nombre })) : [];
     if (t > DUR) t = DUR;
     todo();
     if (autoguardar) autoguardado.guardar('termodinamica', escenaActual());
@@ -1078,7 +1571,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   // ---------------------------------------------------------------------
   /** Pone una escena del catálogo (sin simular). */
   function cargarEscena(e) {
-    ESC = e; MONT = e.montaje; DUR = e.duracion;
+    ESC = e; MONT = e.montaje; DUR = e.duracion; MONTAJE = null;
     VAR = copia(e.variables || {});
     GEO = geoDe(e); H_MAX = GEO.yTope - GEO.ep;
     guionPropio = false; guion = guionDe(e, vals());
@@ -1103,20 +1596,31 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   }
   // Valida y acota lo que viene de un archivo antes de usarlo. Las escenas
   // guardadas antes del menú (sin clave) son el recorrido libre original.
-  function datosSeguros(d = {}) {
-    const base = ESCENAS_LAB.find(e => e.clave === d.clave) || escenaPorClave('recorrido');
-    const vars = Object.fromEntries(Object.entries(base.variables).map(([k, def]) => [k, numero(d.vars?.[k], def.val, def.min, def.max)]));
-    const acciones = Array.isArray(d.guion) ? d.guion : null;
-    const guionOk = acciones ? acciones
-      .filter(a => a && TIPOS_ACCION[a.tipo] && typeof a.valor === TIPOS_ACCION[a.tipo] && Number.isFinite(a.t) && a.t >= 0 && a.t <= base.duracion)
+  /** Acciones de un archivo: tipos conocidos, valores del tipo correcto y dentro de la duración. */
+  function sanearGuion(acciones, dur) {
+    return acciones
+      .filter(a => a && TIPOS_ACCION[a.tipo] && typeof a.valor === TIPOS_ACCION[a.tipo] && Number.isFinite(a.t) && a.t >= 0 && a.t <= dur)
       .filter(a => a.tipo !== 'paredes' || a.valor === 'adiabaticas' || a.valor === 'conductoras')
       .filter(a => a.tipo !== 'giro' || (a.valor >= -180 && a.valor <= 180))
       .slice(0, 400)
-      .map(a => ({ t: a.t, tipo: a.tipo, valor: a.valor, ...(Number.isInteger(a.i) && a.i >= 0 && a.i < 8 ? { i: a.i } : {}) })) : null;
+      .map(a => ({ t: a.t, tipo: a.tipo, valor: a.valor, ...(Number.isInteger(a.i) && a.i >= 0 && a.i < 8 ? { i: a.i } : {}) }));
+  }
+  function datosSeguros(d = {}) {
+    const instr = sanearInstrumentos(d.instr, INSTRUMENTOS), modoValvula = d.modoValvula === 'instantaneo' ? 'instantaneo' : 'gradual';
+    const motorOk = d.motor === 'cuasiestatico' ? 'cuasiestatico' : 'dinamico';
+    if (d.clave === 'propia') {
+      // Escena propia: el montaje se sanea y se valida como el resto
+      const { montaje, error } = sanearLab(d.montaje), e = escenaLab(montaje);
+      const g = guionValidoLab(montaje, sanearGuion(Array.isArray(d.guion) ? d.guion : [], e.duracion));
+      return { clave: 'propia', titulo: texto(d.titulo, 'Escena propia', 90), montaje, instr, guion: g, guionPropio: true, vars: {}, motor: motorOk, especie: e.especie || 'mono', modoValvula, error };
+    }
+    const base = ESCENAS_LAB.find(e => e.clave === d.clave) || escenaPorClave('recorrido');
+    const vars = Object.fromEntries(Object.entries(base.variables).map(([k, def]) => [k, numero(d.vars?.[k], def.val, def.min, def.max)]));
+    const guionOk = Array.isArray(d.guion) ? sanearGuion(d.guion, base.duracion) : null;
     return {
-      clave: base.clave, guion: guionOk || guionDe(base, vars), guionPropio: d.clave ? !!d.guionPropio && !!guionOk : !!guionOk, vars,
+      clave: base.clave, guion: guionOk || guionDe(base, vars), guionPropio: d.clave ? !!d.guionPropio && !!guionOk : !!guionOk, vars, instr, montaje: null,
       motor: d.motor === 'cuasiestatico' ? 'cuasiestatico' : d.motor === 'dinamico' ? 'dinamico' : base.modelo || 'dinamico',
-      especie: d.especie === 'di' ? 'di' : d.especie === 'mono' ? 'mono' : base.especie || 'mono', modoValvula: d.modoValvula === 'instantaneo' ? 'instantaneo' : 'gradual',
+      especie: d.especie === 'di' ? 'di' : d.especie === 'mono' ? 'mono' : base.especie || 'mono', modoValvula,
     };
   }
   function guardar() {
@@ -1125,7 +1629,8 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   function abrir() {
     abrirEscena({ modulo: 'termodinamica' }).then(e => {
       if (aOtroEspacio(e, ESPACIO)) return;
-      guardarHistorial(); const d = datosSeguros(e.datos); cargarEscena(escenaPorClave(d.clave)); restaurar(d); irA(0); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); avisar(`Escena abierta: ${texto(e.titulo, 'sin título', 60)}`);
+      guardarHistorial(); const d = datosSeguros(e.datos); restaurar(d, true); encuadreHecho = false; vistaManual = false; irA(0); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); todo();
+      avisar(d.error ? `Escena abierta sin su montaje: ${d.error}` : `Escena abierta: ${texto(e.titulo, 'sin título', 60)}`);
     }).catch(err => avisar(err.message));
   }
 
@@ -1133,6 +1638,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   // Piezas compartidas: CSV con precisión completa y BOM (nucleo/csv.js) y
   // diálogo nativo «Guardar como» en la aplicación (componentes/exportar.js)
   $('#b-exportar').addEventListener('click', () => {
+    if (!SIM) { avisar('No hay datos: la escena está vacía'); return; }
     let cols, filas;
     if (MONT === 'cilindro') { cols = ['t (s)', 'P (Pa)', 'V (m³)', 'T (K)', 'U (J)', 'Q (J)', 'W (J)', 'h (m)', 'v (m/s)']; filas = SIM.muestras.map(q => [q.t, q.P, q.V, q.T, q.U, Qtot(q), q.W, q.h, q.v]); }
     else if (MONT === 'recipientes') { cols = ['t (s)', ...REC.nombres.flatMap(n => [`P ${n} (Pa)`, `V ${n} (m³)`, `T ${n} (K)`, `n ${n} (mol)`])]; filas = SIM.muestras.map(q => [q.t, ...q.P.flatMap((p, i) => [p, q.V[i], q.T[i], q.n[i]])]); }
@@ -1181,7 +1687,18 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   lienzo.addEventListener('pointerdown', ev => {
     const r = lienzo.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
     if (ev.button === 1 || ev.button === 2 || espacioPulsado) { paneo = [x, y, tz.vista.ox, tz.vista.oy]; lienzo.setPointerCapture(ev.pointerId); return; }
+    const w = [tz.vista.mx(x), tz.vista.my(y)];
+    // Herramienta de la paleta: colocar (la regla se traza arrastrando)
+    if (herramienta === 'regla') { trazo = { a: w, b: w }; lienzo.setPointerCapture(ev.pointerId); return; }
+    if (herramienta) { colocar(x, y, ev); return; }
+    // Instrumentos: se seleccionan y se arrastran
+    const zi = instrumentoEn(x, y);
+    if (zi) { seleccionar(zi.id); arrastre = { tipo: 'instr', id: zi.id, parte: zi.parte, desde: w, movido: false }; lienzo.setPointerCapture(ev.pointerId); return; }
+    // Topes del cilindro (con el cilindro seleccionado): se arrastran
+    if (cercaTopes(y, w)) { arrastre = { tipo: 'topes', y: null, desde: w, movido: false }; lienzo.setPointerCapture(ev.pointerId); return; }
     const ob = objetoEn(x, y);
+    // Recipientes: se seleccionan y se arrastran para cambiar su sitio en la fila
+    if (ob && MONT === 'recipientes' && /^r\d+$/.test(ob) && REC.e.compartimientos.length > 1) { seleccionar(ob); arrastre = { tipo: 'rec', i: +ob.slice(1), desde: w, x: w[0], movido: false }; lienzo.setPointerCapture(ev.pointerId); return; }
     if (ob && MONT === 'cilindro' && ACCION_CLIC[ob]) { ACCION_CLIC[ob](); seleccionar(ob === 'paredes' ? 'cilindro' : ob); return; }
     if (ob && MONT === 'recipientes' && /^s\d+$/.test(ob) && REC.e.separadores[+ob.slice(1)].tipo === 'valvula') { seleccionar(ob); accion('valvula', !banderasRec(t).valvulas[+ob.slice(1)], +ob.slice(1)); return; }
     if (ob) { seleccionar(ob); return; }
@@ -1191,13 +1708,64 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     const r = lienzo.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
     $('#cx').textContent = cantidad(tz.vista.mx(x), 'm', 4); $('#cy').textContent = cantidad(tz.vista.my(y), 'm', 4);
     if (paneo) { tz.vista.ox = paneo[2] + x - paneo[0]; tz.vista.oy = paneo[3] + y - paneo[1]; vistaManual = true; dibujar(); return; }
+    const w = [tz.vista.mx(x), tz.vista.my(y)];
+    cursorPx = [x, y];
+    if (trazo) { trazo.b = w; dibujar(); return; }
+    if (arrastre) { moverArrastre(w); return; }
     const ob = objetoEn(x, y), antes = hover;
-    hover = ob; cursorPx = [x, y];
-    lienzo.style.cursor = ob ? 'pointer' : 'default';
-    if (ob !== antes || (ob && PISTAS[ob])) dibujar();
+    hover = ob;
+    const topes = cercaTopes(y, w);
+    lienzo.style.cursor = herramienta ? 'crosshair' : topes ? 'ns-resize' : ob && (esInstr(ob) || (MONT === 'recipientes' && /^r\d+$/.test(ob))) ? 'grab' : ob ? 'pointer' : 'default';
+    if (ob !== antes || (ob && PISTAS[ob]) || herramienta) dibujar();
   });
-  lienzo.addEventListener('pointerup', () => { paneo = null; });
-  lienzo.addEventListener('pointerleave', () => { if (hover) { hover = null; dibujar(); } });
+  /** Cursor sobre los topes del cilindro seleccionado (vertical): se pueden arrastrar. */
+  const cercaTopes = (y, w) => !!(SIM && MONT === 'cilindro' && sel === 'cilindro' && Math.abs(estado(t).ang) < 1e-9 && Math.abs(y - tz.vista.Y(GEO.yTope)) < 7 && Math.abs(w[0]) <= SIM.Rcil + 0.01);
+  /** Arrastre en curso: instrumento, regla, recipiente o topes. */
+  function moverArrastre(w) {
+    const a = arrastre, d = [w[0] - a.desde[0], w[1] - a.desde[1]];
+    if (!a.movido && Math.hypot(d[0], d[1]) * tz.vista.escala < 3) return;
+    if (a.tipo === 'instr') {
+      const o = INSTR.find(q => q.id === a.id); if (!o) return;
+      if (!a.movido) guardarHistorial();
+      if (o.tipo === 'regla') {
+        if (a.parte === 'a' || a.parte === 'todo') o.a = [o.a[0] + d[0], o.a[1] + d[1]];
+        if (a.parte === 'b' || a.parte === 'todo') o.b = [o.b[0] + d[0], o.b[1] + d[1]];
+      } else {
+        if (o.en) { const p = puntoInstr(o, estado(t)) || [0, 0]; delete o.en; delete o.u; delete o.w; o.x = p[0]; o.y = p[1]; }
+        o.x += d[0]; o.y += d[1];
+      }
+      a.desde = w;
+    } else if (a.tipo === 'rec') a.x = w[0];
+    else if (a.tipo === 'topes') a.y = Math.max(0.05, Math.min(GEO.Hc - 0.08, w[1] - GEO.ep));
+    a.movido = true; dibujar();
+  }
+  lienzo.addEventListener('pointerup', ev => {
+    paneo = null;
+    if (trazo) {
+      const { a, b } = trazo; trazo = null;
+      colocarInstrumento('regla', a, Math.hypot(b[0] - a[0], b[1] - a[1]) * tz.vista.escala < 8 ? null : b);
+      if (!ev.shiftKey) ponerHerramienta(null);
+      return;
+    }
+    const a = arrastre; arrastre = null;
+    if (!a || !a.movido) return;
+    if (a.tipo === 'instr') {
+      const o = INSTR.find(q => q.id === a.id);
+      if (o && o.tipo === 'regla') { o.a = o.a.map(x => Number(x.toPrecision(5))); o.b = o.b.map(x => Number(x.toPrecision(5))); }
+      else if (o && o.tipo !== 'cronometro') { const r = regionEn([o.x, o.y]); delete o.x; delete o.y; Object.assign(o, r); }
+      inspector(); todo(); guardarAuto();
+    } else if (a.tipo === 'rec') {
+      const rects = layoutRec(estado(t)), r = rects[a.i], cx = (r.x0 + r.x1) / 2 + a.x - a.desde[0];
+      const k = rects.filter((q, j) => j !== a.i && (q.x0 + q.x1) / 2 < cx).length;
+      if (k === a.i) { dibujar(); return; }
+      const id = idRecipiente(a.i);
+      cambiarMontaje(m => ({ montaje: reordenarLab(m, id, k), sel: id }), 'Recipiente movido en la fila');
+    } else if (a.tipo === 'topes') {
+      const id = idCilindro(), h = Number(a.y.toFixed(2));
+      cambiarMontaje(m => ({ montaje: ajustarLab(m, id, 'hTopes', h), sel: id }), `Topes a ${cantidad(h, 'm', 3)}`, { encuadrar: false });
+    }
+  });
+  lienzo.addEventListener('pointerleave', () => { cursorPx = null; if (hover || herramienta) { hover = null; dibujar(); } });
   lienzo.addEventListener('contextmenu', ev => ev.preventDefault());
   lienzo.addEventListener('wheel', ev => {
     ev.preventDefault();
@@ -1213,6 +1781,7 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   $('#b-zoom-mas').addEventListener('click', () => zoomCentro(1.25));
   $('#b-zoom-menos').addEventListener('click', () => zoomCentro(0.8));
   $('#b-encuadrar').addEventListener('click', encuadrarTodo);
+  $('#b-vacia').addEventListener('click', escenaVacia);
 
   // ---------------------------------------------------------------------
   // Menú de escenas, teclado y paleta de comandos
@@ -1228,7 +1797,10 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
       ['o-cilindro', 'Cambiar las paredes: conductoras o adiabáticas', 'A', alternarParedes],
       ['o-embolo', 'Modelo cuasiestático o dinámico', '', () => cambiarMotor(motor === 'dinamico' ? 'cuasiestatico' : 'dinamico')],
     ] : []),
-    ['i-historial', 'Restaurar las acciones de la escena', '', () => { guardarHistorial(); guionPropio = false; recalcular(); inspector(); }],
+    ...(ESC.propio ? [] : [['i-historial', 'Restaurar las acciones de la escena', '', () => { guardarHistorial(); guionPropio = false; recalcular(); inspector(); }]]),
+    ['i-mas', 'Escena vacía', '', escenaVacia],
+    ['i-borrar', 'Quitar lo seleccionado', 'Supr', quitarSeleccion],
+    ...Object.keys(NOMBRE_HERR).filter(h => h !== 'resorte').map(h => [INSTRUMENTOS.includes(h) ? ICONO_INSTR[h] : `o-${{ bano: 'bano-termico', columna: 'columna-liquido' }[h] || h}`, `Colocar: ${NOMBRE_HERR[h].toLowerCase()}`, '', () => ponerHerramienta(h), 'Paleta']),
     ['i-encuadrar', 'Encuadrar todo', 'F', encuadrarTodo],
     ['i-tema-oscuro', 'Cambiar tema claro u oscuro', '', () => Volta.ponerTema(document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')],
     ['i-exportar', 'Exportar datos a CSV', '', () => $('#b-exportar').click()],
@@ -1271,7 +1843,9 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     if (mod && tecla === 'o') { ev.preventDefault(); abrir(); return; }
     if (mod && tecla === 'z') { ev.preventDefault(); deshacer(); return; }
     if (mod && tecla === 'y') { ev.preventDefault(); rehacer(); return; }
-    if ((ev.target instanceof Element && ev.target.matches('input:not([type=checkbox]), textarea')) || mod) return;
+    if ((ev.target instanceof Element && ev.target.matches('input:not([type=checkbox]), textarea, select')) || mod) return;
+    if (ev.key === 'Delete' || ev.key === 'Backspace') { ev.preventDefault(); quitarSeleccion(); return; }
+    if (ev.key === 'Escape' && (herramienta || trazo)) { trazo = null; ponerHerramienta(null); return; }
     if (ev.code === 'Space') { ev.preventDefault(); if (!ev.repeat) alternar(); espacioPulsado = true; }
     else if (ev.key === 'ArrowRight') irA(t + DUR / 2520);
     else if (ev.key === 'ArrowLeft') irA(t - DUR / 2520);
@@ -1288,7 +1862,9 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
   // Arranque. Parámetros para capturas: ?escena=…&t=12&sel=embolo&pestana=energia&modelo=cuasiestatico
   // ---------------------------------------------------------------------
   Volta.alCambiarTema(() => { tz.temas(); todo(); });
-  window.addEventListener('resize', () => { tz.ajustar(); if (!vistaManual && SIM) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); } if (SIM) todo(); });
+  // Antes del arranque no hay escena que dibujar; después, también la vacía se vuelve a encuadrar
+  let arrancado = false;
+  window.addEventListener('resize', () => { tz.ajustar(); if (!arrancado) return; if (!vistaManual) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); } todo(); });
   document.fonts.ready.then(() => {
     const q = new URLSearchParams(location.search);
     // Escena abierta desde Inicio, o la última sesión (no en capturas ni con parámetros)
@@ -1299,11 +1875,19 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     const pedida = q.has('escena') ? escenaPorClave(q.get('escena')) : null;
     if (pedida && pedida.espacio !== ESPACIO) { irAEscenaDeOtroEspacio(pedida); return; }
     if (pedida) cargarEscena(pedida);
-    else if (previa) { const d = datosSeguros(previa.datos); cargarEscena(escenaPorClave(d.clave)); guion = d.guion; guionPropio = d.guionPropio; for (const k in d.vars) if (VAR[k]) VAR[k].val = d.vars[k]; motor = d.motor; especie = d.especie; modoValvula = d.modoValvula; }
+    else if (previa) aplicarDatos(datosSeguros(previa.datos), true);
+    else if (q.has('montaje')) {
+      // Escena propia para capturas: ?montaje=<JSON>&guion=<JSON>&instr=<JSON> (se sanea como un archivo)
+      const json = k => { try { return JSON.parse(q.get(k) || 'null'); } catch { return null; } };
+      const d = datosSeguros({ clave: 'propia', titulo: 'Escena propia', montaje: json('montaje'), guion: json('guion') || [], instr: json('instr') || [] });
+      aplicarDatos(d, true);
+    } else if (q.has('vacia')) { ponerMontaje(montajeLabVacio(), 'Escena propia'); guion = []; guionPropio = true; sel = 'escena'; }
     else cargarEscena(ESC);
+    if (q.has('instr') && !q.has('montaje')) { try { INSTR = sanearInstrumentos(JSON.parse(q.get('instr')), INSTRUMENTOS); } catch { INSTR = []; } }
     if (q.get('modelo') === 'cuasiestatico') motor = 'cuasiestatico';
     if (q.get('especie') === 'di') especie = 'di';
     if (q.has('sel')) sel = q.get('sel');
+    if (!selValida(sel)) sel = selPorOmision();
     if (q.has('mostrar')) q.get('mostrar').split(',').forEach(k => { const c = $('#m-' + k); if (c) c.checked = true; });
     autoguardar = limpio || !!previa;
     simular(); construirVariables(); inspector();
@@ -1312,5 +1896,6 @@ import { ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, 
     tz.ajustar(); encuadrar(); escala0 = tz.vista.escala;
     recalcular(); zoomTexto();
     requestAnimationFrame(a => { ultimo = a; requestAnimationFrame(cuadro); });
+    arrancado = true;
   });
 })();

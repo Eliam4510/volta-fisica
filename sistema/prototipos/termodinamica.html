@@ -43,6 +43,9 @@
   .ex-u { color: var(--texto-3); font-size: 11px; }
   .ex-op { color: var(--texto-3); font-family: var(--fuente-numeros); font-size: 11px; text-align: right; }
   #acciones-otro .fila .btn-secundario, #acciones-otro .fila .conmutador { justify-self: start; }
+  /* Listas desplegables del inspector (escenas propias) */
+  .campo select { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--texto); font-size: var(--t-base); outline: none; cursor: pointer; }
+  .campo select option { background: var(--panel); color: var(--texto); }
 </style>
 </head>
 <body>
@@ -85,32 +88,32 @@
     <div class="desplaza">
       <div class="seccion">
         <div class="panel-cab">Objetos</div>
-        <div class="paleta" data-exclusivo data-pendiente="Cada escena trae su montaje (cilindro con émbolo, recipientes con válvulas, globo o columna de líquido); cámbialo con las variables y las acciones del inspector. Colocar objetos propios llega en una próxima versión.">
-          <button class="herr" data-ayuda="Cilindro|Cylinder"><svg class="ico"><use href="#o-cilindro"/></svg><span>Cilindro</span></button>
-          <button class="herr" data-ayuda="Recipiente rígido|Rigid vessel"><svg class="ico"><use href="#o-recipiente"/></svg><span>Recipiente</span></button>
-          <button class="herr" data-ayuda="Émbolo|Piston"><svg class="ico"><use href="#o-embolo"/></svg><span>Émbolo</span></button>
-          <button class="herr" data-ayuda="Tabique interior|Partition"><svg class="ico"><use href="#o-tabique"/></svg><span>Tabique</span></button>
-          <button class="herr" data-ayuda="Válvula o llave|Valve"><svg class="ico"><use href="#o-valvula"/></svg><span>Válvula</span></button>
-          <button class="herr" data-ayuda="Pesa|Weight"><svg class="ico"><use href="#o-pesa"/></svg><span>Pesa</span></button>
-          <button class="herr" data-ayuda="Calentador|Heater"><svg class="ico"><use href="#o-calentador"/></svg><span>Calentador</span></button>
-          <button class="herr" data-ayuda="Baño térmico|Heat bath"><svg class="ico"><use href="#o-bano-termico"/></svg><span>Baño térmico</span></button>
-          <button class="herr" data-ayuda="Gas ideal|Ideal gas"><svg class="ico"><use href="#o-gas"/></svg><span>Gas</span></button>
-          <button class="herr" data-ayuda="Resorte|Spring"><svg class="ico"><use href="#o-resorte"/></svg><span>Resorte</span></button>
-          <button class="herr" data-ayuda="Globo aerostático|Hot-air balloon"><svg class="ico"><use href="#o-globo"/></svg><span>Globo</span></button>
-          <button class="herr" data-ayuda="Columna de líquido|Liquid column"><svg class="ico"><use href="#o-columna-liquido"/></svg><span>Columna de líquido</span></button>
+        <div class="paleta" id="paleta-objetos">
+          <button class="herr" data-herr="cilindro" data-ayuda="Cilindro con su gas y su émbolo: clic en el lienzo|Cylinder"><svg class="ico"><use href="#o-cilindro"/></svg><span>Cilindro</span></button>
+          <button class="herr" data-herr="recipiente" data-ayuda="Recipiente rígido con gas: clic donde va en la fila|Rigid vessel"><svg class="ico"><use href="#o-recipiente"/></svg><span>Recipiente</span></button>
+          <button class="herr" data-herr="embolo" data-ayuda="Émbolo libre entre dos recipientes: clic en el hueco entre ellos|Free piston"><svg class="ico"><use href="#o-embolo"/></svg><span>Émbolo</span></button>
+          <button class="herr" data-herr="tabique" data-ayuda="Tabique fijo entre dos recipientes|Partition"><svg class="ico"><use href="#o-tabique"/></svg><span>Tabique</span></button>
+          <button class="herr" data-herr="valvula" data-ayuda="Válvula o llave entre dos recipientes|Valve"><svg class="ico"><use href="#o-valvula"/></svg><span>Válvula</span></button>
+          <button class="herr" data-herr="pesa" data-ayuda="Pesa sobre el émbolo del cilindro|Weight"><svg class="ico"><use href="#o-pesa"/></svg><span>Pesa</span></button>
+          <button class="herr" data-herr="calentador" data-ayuda="Calentador en el cilindro o en un recipiente|Heater"><svg class="ico"><use href="#o-calentador"/></svg><span>Calentador</span></button>
+          <button class="herr" data-herr="bano" data-ayuda="Baño térmico del cilindro o de un recipiente|Heat bath"><svg class="ico"><use href="#o-bano-termico"/></svg><span>Baño térmico</span></button>
+          <button class="herr" data-herr="gas" data-ayuda="Gas ideal para un recipiente vacío|Ideal gas"><svg class="ico"><use href="#o-gas"/></svg><span>Gas</span></button>
+          <button class="herr" data-herr="resorte" data-ayuda="Resorte: el motor del cilindro aún no lo simula|Spring"><svg class="ico"><use href="#o-resorte"/></svg><span>Resorte</span></button>
+          <button class="herr" data-herr="globo" data-ayuda="Globo aerostático con quemador|Hot-air balloon"><svg class="ico"><use href="#o-globo"/></svg><span>Globo</span></button>
+          <button class="herr" data-herr="columna" data-ayuda="Columna de líquido con una burbuja que sube|Liquid column"><svg class="ico"><use href="#o-columna-liquido"/></svg><span>Columna de líquido</span></button>
         </div>
       </div>
       <div class="seccion">
         <div class="panel-cab">Instrumentos</div>
-        <div class="paleta" data-exclusivo data-pendiente="Los instrumentos llegan en una próxima versión. Mientras, el inspector y el diagrama P-V dan presión, volumen y temperatura en cada instante.">
-          <button class="herr" data-ayuda="Termómetro|Thermometer"><svg class="ico"><use href="#n-termometro"/></svg><span>Termómetro</span></button>
-          <button class="herr" data-ayuda="Manómetro|Pressure gauge"><svg class="ico"><use href="#n-manometro"/></svg><span>Manómetro</span></button>
-          <button class="herr" data-ayuda="Regla|Ruler"><svg class="ico"><use href="#n-regla"/></svg><span>Regla</span></button>
-          <button class="herr" data-ayuda="Cronómetro|Stopwatch"><svg class="ico"><use href="#n-cronometro"/></svg><span>Cronómetro</span></button>
+        <div class="paleta" id="paleta-instrumentos">
+          <button class="herr" data-herr="termometro" data-ayuda="Termómetro: clic en el gas que quieres medir|Thermometer"><svg class="ico"><use href="#n-termometro"/></svg><span>Termómetro</span></button>
+          <button class="herr" data-herr="manometro" data-ayuda="Manómetro: clic en el gas que quieres medir|Pressure gauge"><svg class="ico"><use href="#n-manometro"/></svg><span>Manómetro</span></button>
+          <button class="herr" data-herr="regla" data-ayuda="Regla: arrastra de un extremo al otro|Ruler"><svg class="ico"><use href="#n-regla"/></svg><span>Regla</span></button>
+          <button class="herr" data-herr="cronometro" data-ayuda="Cronómetro: clic donde va|Stopwatch"><svg class="ico"><use href="#n-cronometro"/></svg><span>Cronómetro</span></button>
         </div>
       </div>
       <div class="seccion">
-        <div class="panel-cab">Escena<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir objeto|Add object"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+        <div class="panel-cab">Escena<span class="sp"></span><button class="btn btn-compacto btn-icono" id="b-vacia" data-ayuda="Escena vacía|New empty scene"><svg class="ico"><use href="#i-mas"/></svg></button></div>
         <div class="arbol" id="arbol"></div>
       </div>
     </div>

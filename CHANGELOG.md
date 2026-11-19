@@ -7,6 +7,20 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Termodinámica es una caja de arena en sus cuatro espacios: las paletas
+  colocan, arrastran y quitan objetos (cilindro con pesa, calentador y
+  baño; filas de recipientes con válvulas, tabiques o émbolos; globo;
+  columna de líquido; caja molecular con bombas de varias especies,
+  tabique con orificio y émbolo; cuerpos de ocho materiales, calorímetro,
+  calentador y baño), con inspector con unidades, deshacer y guardado.
+  Instrumentos con lectura: termómetro, manómetro, regla, cronómetro,
+  histograma con Maxwell–Boltzmann y molécula marcada. En Ciclos, los
+  estados se arrastran en el diagrama P-V según lo que deja libre cada
+  tramo. Lo que el motor no sabe simular junto se impide con un mensaje.
+  20 pruebas nuevas.
+
 ## [0.10.0] - 2026-11-19
 
 Cubeta de ondas 2D y Circuitos con sus 10 escenas MEXT: 155 escenas MEXT

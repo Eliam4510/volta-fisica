@@ -13,8 +13,12 @@ import { estadoCalor, residuoCalor } from '../motores/calor.js';
 import { ESCENAS_CALOR, valores, examenDe, escenaPorClave, simularEscena, guionDe } from './termodinamica-escenas.js';
 import {
   ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, construirVariables, filaLectura, examenHTML,
-  crearAvisador, iniciarComandos, crearReproductor, pintarReloj, ICONO_TIPO, chipDe,
+  crearAvisador, iniciarComandos, crearReproductor, pintarReloj, ICONO_TIPO, chipDe, filasParametros, enlazarParametros, botonQuitar, iniciarPaleta,
 } from './termodinamica-comun.js';
+import {
+  PARAMS_CALOR, colocarCalor, quitarCalor, ajustarCalor, moverCalor, piezaCalor, escenaCalor, montajeCalorVacio, sanearCalor, guionValidoCalor, entradaCalor, rectCalor,
+  nuevoInstrumento, sanearInstrumentos,
+} from './termodinamica-montaje.js';
 import { aCSV } from '../nucleo/csv.js';
 import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
@@ -49,6 +53,14 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   const vals = () => Object.fromEntries(Object.entries(VAR).map(([k, d]) => [k, d.val]));
   const copia = o => JSON.parse(JSON.stringify(o));
   const DIB = () => ESC.dibujo || [];
+  // Escena propia (termodinamica-montaje.js) e instrumentos colocados
+  /** @type {any} */ let MONTAJE = null;
+  /** @type {any[]} */ let INSTR = [];
+  let herramienta = null, arrastre = null, cursorPx = null;
+  const ULT = { zonas: [] };
+  const NOMBRE_HERR = { cuerpo: 'Cuerpo', calorimetro: 'Calorímetro', calentador: 'Calentador', bano: 'Baño térmico', termometro: 'Termómetro' };
+  const PISTA_HERR = { cuerpo: 'clic donde va (dentro del agua, se sumerge)', calorimetro: 'clic donde va', calentador: 'clic sobre un cuerpo', bano: 'clic donde va', termometro: 'clic sobre el cuerpo que quieres medir' };
+  const esInstr = x => /^i\d+$/.test(String(x));
   const esAuto = () => !!(E && E.vehiculo);
 
   // ---------------------------------------------------------------------
@@ -57,6 +69,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   function simular() {
     if (!guionPropio) guion = guionDe(ESC, vals());
     E = ESC.construir(vals());
+    if (!E) { SIM = null; FILAS = []; return; }
     SIM = simularEscena(ESC, vals(), guion);
     FILAS = guionPropio ? [] : examenDe(ESC, SIM, vals());
     // Posición del vehículo: integral de su rapidez
@@ -91,6 +104,9 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (esAuto()) return { x0: -3.4, x1: 3.4, y0: -0.6, y1: 2.6 };
     const d = DIB(); let x0 = Infinity, x1 = -Infinity, y1 = 0;
     d.forEach(q => { x0 = Math.min(x0, q.x - q.w / 2 - (q.separado || 0)); x1 = Math.max(x1, q.x + q.w / 2 + (q.separado || 0)); y1 = Math.max(y1, q.y + q.h + (q.cae ? 0.12 : 0)); });
+    if (MONTAJE && MONTAJE.bano) { const r = rectCalor(MONTAJE.bano); x0 = Math.min(x0, r.x0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
+    if (MONTAJE && MONTAJE.calentadores.length) x0 -= 0.14;   // sitio para la etiqueta Φ de un calentador en un vaso
+    if (!Number.isFinite(x0)) return { x0: -0.4, x1: 0.4, y0: -0.06, y1: 0.4 };
     return { x0: x0 - 0.08, x1: x1 + 0.24, y0: -0.06, y1: y1 + 0.08 };
   }
   function encuadrar() { tz.vista.encuadrar(caja(), { x: 0, y: 40, w: tz.w, h: tz.h - 84 }, 36); }
@@ -109,12 +125,22 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
 
   let t = 0;
   function dibujar() {
-    if (!SIM) return;
-    if (esAuto()) { dibujarAuto(); return; }
+    ULT.zonas = [];
+    if (!SIM) { dibujarVacio(); edicion(); return; }
+    if (esAuto()) { dibujarAuto(); dibujarTermometros(); return; }
     const v = tz.vista, s = est(t), b = banderas(t), d = DIB();
     tz.limpiar(); tz.cuadricula();
     const cj = caja();
     tz.superficie([[cj.x0 + 0.02, 0], [cj.x1 - 0.02, 0]]);
+    // Baño (escena propia): depósito de líquido a temperatura fija
+    if (MONTAJE && MONTAJE.bano) {
+      const r = rectCalor(MONTAJE.bano), [X, Y, W, H] = tz.rectPx(r.x0, r.y0, r.x1, r.y1);
+      tz.fluidoPx(X + 1, X + W - 1, Y + H * 0.12, Y + H - 1);
+      tz.superficie([[r.x0, r.y1], [r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1]], { grueso: hover === 'bano' });
+      tz.compuesto([{ t: 'Baño  ', f: 'ui', tam: 11.5, color: 'texto-3' }, { t: 'T', f: 'sim', tam: 13, color: 'termico' }, { t: 'b', f: 'simRecta', tam: 9, dy: 3, color: 'termico' }, { t: ' = ' + cantidad(MONTAJE.bano.T, '°C', 3), f: 'num', tam: 11.5, color: 'texto-2' }], X + W, Y - 8, { alinear: 'right' });
+      if (sel === 'bano') tz.seleccionCaja(X, Y, W, H);
+      ULT.bano = [X, Y, W, H];
+    } else ULT.bano = null;
     // Orden de capas: vaso (geometría), agua (medio), cuerpos (materia)
     const capa = f => ({ vaso: 0, agua: 1 })[f] ?? 2;
     const orden = d.map((q, i) => i).sort((a, c) => capa(d[a].forma) - capa(d[c].forma));
@@ -140,11 +166,19 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     // Calentadores en su cuerpo
     (E.calentadores || []).forEach((c, k) => {
       const r = rect(c.cuerpo, t); if (!r) return;
-      tz.calentador(r.cx - 0.05, r.cx + 0.05, r.y0 + 0.03, r.y0, { grueso: hover === 'h' + k });
+      // En un líquido de una escena propia, el calentador va a un lado del fondo (en medio suele haber un cuerpo)
+      const hw = ESC.propio ? Math.min(0.03, (r.x1 - r.x0) * 0.12) : Math.min(0.05, (r.x1 - r.x0) * 0.35), hh = Math.min(0.03, (r.y1 - r.y0) * 0.45);
+      const xh = ESC.propio && DIB()[c.cuerpo].forma === 'agua' ? r.x0 + hw + 0.01 : r.cx, ah = Math.min(0.03, hw * 0.6);
+      const bb = tz.calentador(xh - hw, xh + hw, r.y0 + hh, r.y0, { grueso: hover === 'h' + k });
+      if (bb) { ULT.zonas.push({ id: 'h' + k, r: bb }); if (sel === 'h' + k) tz.seleccionCaja(...bb); }
       if (b.calentadores[k] && capas.flujos) {
-        const Y = v.Y(r.y0 + 0.03) - 8;
-        for (const dx of [-0.03, 0, 0.03]) tz.flechaCalor(v.X(r.cx + dx), Y, v.X(r.cx + dx), Y - 26);
-        etiquetaPhi(v.X(r.cx + 0.06), Y - 18, 'cal', c.P, 'left');
+        const Y = v.Y(r.y0 + hh) - 8;
+        for (const dx of [-ah, 0, ah]) tz.flechaCalor(v.X(xh + dx), Y, v.X(xh + dx), Y - 26);
+        // Escena propia: la etiqueta fuera del vaso que contiene el líquido (a su izquierda), o encima de las flechas
+        const q = DIB()[c.cuerpo], vaso = q.forma === 'agua' ? DIB().map((o2, j) => (o2.forma === 'vaso' ? rect(j, t) : null)).find(o2 => o2 && o2.x0 <= r.x0 + 1e-9 && o2.x1 >= r.x1 - 1e-9) : null;
+        if (!ESC.propio) etiquetaPhi(v.X(xh + 0.06), Y - 18, 'cal', c.P, 'left');
+        else if (vaso) { const Xv = v.X(vaso.x0) - tz.anchoPared('adiabatica') - 8; tz.lineaPx([[Xv + 2, Y - 13], [v.X(xh - hw) - 3, Y - 13]], { color: 'linea-fuerte', grosor: 1 }); etiquetaPhi(Xv, Y - 9, 'cal', c.P, 'right'); }
+        else etiquetaPhi(v.X(xh), Y - 34, 'cal', c.P, 'center');
       }
     });
     // Flujos de calor por los contactos (del cuerpo caliente al frío)
@@ -168,13 +202,21 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       tz.flechaCalor(x1, y1, x2, y2);
       etiquetaPhi(Math.min(x1, x2), y1 - 10, corto(de), Math.abs(f), 'left');
     });
+    // Termómetros antes que las etiquetas: el halo de cada texto tapa las líneas guía que lo cruzan
+    dibujarTermometros();
     // Temperatura de cada cuerpo (el vaso, a su lado)
     if (capas.temperaturas) d.forEach((q, i) => {
+      if (INSTR.some(o => o.en === 'c' + i)) return;   // ya lo dice su termómetro
       const r = rect(i, t), [X, Y, W, H] = tz.rectPx(r.x0, r.y0, r.x1, r.y1);
       let x, y, al = 'left';
       if (q.forma === 'vaso') { x = X + W + 14; y = Y + H * 0.45; }
       else if (q.forma === 'agua') { x = X + 8; y = Y + H - 9; }
-      else { x = X + W / 2; y = Y - 8; al = 'center'; }
+      else {
+        x = X + W / 2; y = Y - 8; al = 'center';
+        // Escena propia: un cuerpo sumergido lleva su temperatura encima de la superficie del líquido (no entre las flechas del calentador)
+        const liq = ESC.propio ? d.map((o2, j) => (o2.forma === 'agua' && j !== i ? rect(j, t) : null)).find(o2 => o2 && r.x0 >= o2.x0 - 1e-9 && r.x1 <= o2.x1 + 1e-9 && r.y0 >= o2.y0 - 1e-9 && r.y1 <= o2.y1 + 1e-9) : null;
+        if (liq) y = v.Y(liq.y1) - 8;
+      }
       const segs = [{ t: 'T', f: 'sim', tam: 13, color: 'termico' }, { t: ' = ' + gradC(s.T[i]), f: 'num', tam: 11.5, color: 'texto-2' }];
       if (q.forma === 'vaso') segs.unshift({ t: E.cuerpos[i].nombre + '  ', f: 'ui', tam: 11.5, color: 'texto-3' });
       if (q.forma === 'agua') segs.unshift({ t: E.cuerpos[i].nombre + '  ', f: 'ui', tam: 11.5, color: 'texto-3' });
@@ -184,6 +226,47 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     });
     eventoReciente();
     seleccion(cajas);
+    edicion();
+  }
+  function dibujarVacio() {
+    tz.limpiar(); tz.cuadricula();
+    tz.superficie([[tz.vista.mx(40), 0], [tz.vista.mx(tz.w - 40), 0]]);
+    const X = tz.w / 2, Y = tz.h / 2 - 30;
+    tz.texto('Escena vacía', X, Y, { tam: 14, color: 'texto-2', alinear: 'center', halo: true });
+    tz.texto('Coloca cuerpos, un calorímetro o un baño con la paleta de objetos.', X, Y + 22, { tam: 12, color: 'texto-3', alinear: 'center', halo: true });
+  }
+  /** Termómetros: sonda en su cuerpo, termómetro al lado y ficha con la temperatura. */
+  function dibujarTermometros() {
+    if (!SIM || !capas.temperaturas && !INSTR.length) return;
+    const v = tz.vista, s = est(t);
+    for (const o of INSTR) {
+      const i = /^c(\d+)$/.test(o.en || '') ? +o.en.slice(1) : -1, r = i >= 0 ? rect(i, t) : null;
+      if (!r) continue;
+      const [X, Y] = v.P([r.x0 + o.u * (r.x1 - r.x0), r.y0 + o.w * (r.y1 - r.y0)]), lin = [[{ t: `Termómetro · ${E.cuerpos[i].nombre}`, f: 'ui', tam: 11.5 }], [{ t: 'T', f: 'sim', tam: 13, color: 'termico' }, { t: ' = ' + gradC(s.T[i]), f: 'num', tam: 11.5 }]];
+      tz.ctx.save(); let wf = 0; for (const segs of lin) { let w = 0; for (const sg of segs) { tz.ctx.font = tz._fuente(sg.f, sg.tam); w += tz.ctx.measureText(sg.t).width; } wf = Math.max(wf, w + 16); } tz.ctx.restore();
+      // La ficha va donde iría la etiqueta de temperatura del cuerpo (que ya no se escribe):
+      // encima de un bloque, encima del vaso para el agua de dentro, a la derecha de un vaso
+      const forma = DIB()[i].forma, [Xr, Yr, Wr, Hr] = tz.rectPx(r.x0, r.y0, r.x1, r.y1);
+      const vaso = forma === 'agua' ? DIB().map((q, j) => (q.forma === 'vaso' ? rect(j, t) : null)).find(q => q && q.x0 <= r.x0 + 1e-9 && q.x1 >= r.x1 - 1e-9) : null;
+      let fx, fy;
+      if (forma === 'vaso') { fx = Xr + Wr + 40; fy = Yr + Hr * 0.45 - 20; }
+      else if (vaso) { const [Xv, Yv] = tz.rectPx(vaso.x0, vaso.y0, vaso.x1, vaso.y1); fx = Xv + 18; fy = Yv - 52; }
+      else { fx = Xr + Wr / 2 - (wf - 18) / 2; fy = Yr - 48; }
+      fx = Math.max(30, Math.min(tz.w - 8 - wf, fx));
+      const gx = fx - 12, gy = fy + 36;
+      tz.lineaPx([[X, Y], [gx + (X > gx ? 4 : -4), gy - 6]], { color: 'linea-fuerte', grosor: 1 }); tz.sondaTermica(X, Y);
+      tz.termometro(gx, gy, (C(s.T[i]) + 20) / 140, { grueso: hover === o.id });
+      const f = tz.ficha(fx, fy, lin);
+      if (sel === o.id) { tz.seleccionCirculo(X, Y, 7); tz.seleccionCaja(gx - 8, fy, f.w + 20, 40); }
+      ULT.zonas.push({ id: o.id, r: [X - 6, Y - 6, 12, 12] }, { id: o.id, r: [gx - 10, fy, f.w + 22, 40] });
+    }
+  }
+  /** Capa de edición: cuerpo que se arrastra y pista de la herramienta. */
+  function edicion() {
+    const v = tz.vista;
+    if (arrastre && arrastre.movido && arrastre.ghost) { const [x0, y0, x1, y1] = arrastre.ghost, [X, Y, W, H] = tz.rectPx(x0, y0, x1, y1); tz.lineaPx([[X, Y], [X + W, Y], [X + W, Y + H], [X, Y + H], [X, Y]], { color: 'texto-2', grosor: 1.5, patron: 'previsto' }); }
+    if (herramienta && cursorPx) tz.ficha(cursorPx[0] + 14, cursorPx[1] + 14, [[{ t: `${NOMBRE_HERR[herramienta]}: ${PISTA_HERR[herramienta]}`, f: 'ui', tam: 11.5 }]]);
+    void v;
   }
   function eventoReciente() {
     const ev = SIM.eventos.filter(e => e.t <= t + 1e-9 && t - e.t < 2.5).pop();
@@ -244,7 +327,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   }
 
   function objetoEn(X, Y) {
-    if (!SIM) return null;
+    for (let q = ULT.zonas.length - 1; q >= 0; q--) { const z = ULT.zonas[q]; if (X >= z.r[0] && X <= z.r[0] + z.r[2] && Y >= z.r[1] && Y <= z.r[1] + z.r[3]) return z.id; }
+    if (!SIM) return ULT.bano && X >= ULT.bano[0] && X <= ULT.bano[0] + ULT.bano[2] && Y >= ULT.bano[1] && Y <= ULT.bano[1] + ULT.bano[3] ? 'bano' : null;
     const v = tz.vista, w = [v.mx(X), v.my(Y)];
     if (esAuto()) {
       const x = pos(t);
@@ -256,6 +340,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     // Primero lo pequeño (piezas), después el agua y el vaso
     const d = DIB(), orden = d.map((q, i) => i).sort((a, c) => (d[a].w * d[a].h) - (d[c].w * d[c].h));
     for (const i of orden) { const r = rect(i, t); if (w[0] >= r.x0 - 0.01 && w[0] <= r.x1 + 0.01 && w[1] >= r.y0 - 0.01 && w[1] <= r.y1 + 0.01) return 'c' + i; }
+    if (ULT.bano && X >= ULT.bano[0] && X <= ULT.bano[0] + ULT.bano[2] && Y >= ULT.bano[1] && Y <= ULT.bano[1] + ULT.bano[3]) return 'bano';
     return null;
   }
 
@@ -265,9 +350,42 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   const fila = (etq, control) => `<div class="fila"><span class="etq">${etq}</span>${control}</div>`;
   const campoFijo = (val, u, ayuda) => `<div class="campo"${ayuda ? ` data-ayuda="${ayuda}"` : ''}><input value="${val}" readonly tabindex="-1"><span class="u">${u}</span></div>`;
   const icoDe = i => { const f = DIB()[i]?.forma; return f === 'vaso' ? 'o-calorimetro' : f === 'agua' ? 'o-columna-liquido' : esAuto() && i === 0 ? 'o-motor' : 'o-cuerpo-termico'; };
+  /** Pieza del montaje para una selección de la pantalla (c0 → cuerpo, h0 → calentador). */
+  function selMontaje(sx) {
+    if (!MONTAJE) return null;
+    if (sx === 'escena' || sx === 'bano') return sx;
+    if (/^c\d+$/.test(sx)) return (MONTAJE.cuerpos[+sx.slice(1)] || {}).id || null;
+    if (/^h\d+$/.test(sx)) return (MONTAJE.calentadores[+sx.slice(1)] || {}).id || null;
+    return null;
+  }
+  function selPantalla(ms) {
+    const i = MONTAJE.cuerpos.findIndex(c => c.id === ms); if (i >= 0) return 'c' + i;
+    const k = MONTAJE.calentadores.findIndex(h => h.id === ms); if (k >= 0) return 'h' + k;
+    return ms;
+  }
+  const AYUDA = {
+    escena: 'Escena propia: coloca cuerpos, un calorímetro, calentadores y un baño con la paleta. Dos cuerpos que se tocan (o uno dentro de otro) intercambian calor; arrástralos para juntarlos o separarlos.',
+    cuerpo: 'Arrástralo: si toca otro cuerpo (o queda dentro del agua) intercambian calor. Suelto cerca de otro, se apoya en él.',
+    vaso: 'El vaso del calorímetro está aislado por fuera: solo intercambia calor con lo que tiene dentro. Al arrastrarlo se lleva lo de dentro.',
+    bano: 'Cada cuerpo que toca el baño (o está dentro) intercambia calor con él; el baño no cambia de temperatura.',
+    calentador: 'Encendido, da su potencia al cuerpo. Se enciende y se apaga en Acciones.',
+  };
   function inspector() {
-    let ico = E.vehiculo ? 'o-motor' : 'o-calorimetro', nombre = ESC.titulo, estado = '', html = '';
-    if (/^c\d+$/.test(sel) && E.cuerpos[+sel.slice(1)]) {
+    let ico = E && E.vehiculo ? 'o-motor' : 'o-calorimetro', nombre = ESC.titulo, estado = '', html = '', enlazar = null;
+    const ins = esInstr(sel) ? INSTR.find(o => o.id === sel) : null;
+    const ms = ESC.propio ? selMontaje(sel) : null, p = ms ? piezaCalor(MONTAJE, ms) : null;
+    if (ins) {
+      const i = +String(ins.en).slice(1);
+      ico = 'n-termometro'; nombre = 'Termómetro'; estado = E && E.cuerpos[i] ? `Mide ${E.cuerpos[i].nombre.toLowerCase()}` : '';
+      html = '<p class="ayuda-fila" style="margin:2px 0 8px">Arrástralo a otro cuerpo para medir su temperatura.</p>' + botonQuitar();
+    } else if (p) {
+      ico = p.ico; nombre = p.nombre; estado = p.clase === 'escena' ? `${MONTAJE.cuerpos.length} cuerpos` : p.clase === 'calentador' ? 'Resistencia' : p.clase === 'bano' ? 'Temperatura fija' : p.clase === 'vaso' ? 'Calorímetro aislado' : 'Cuerpo con capacidad calorífica';
+      html = (AYUDA[p.clase] ? `<p class="ayuda-fila" style="margin:2px 0 8px">${AYUDA[p.clase]}</p>` : '') + filasParametros(PARAMS_CALOR[p.clase], p.holder) + (p.clase !== 'escena' ? botonQuitar() : '');
+      enlazar = (k, v2) => cambiarMontaje(m => ({ montaje: ajustarCalor(m, ms, k, v2), sel: ms }), null, { encuadrar: ['w', 'h'].includes(k) });
+      if (p.clase !== 'escena') { $('#insp-ico').setAttribute('href', '#' + ico); }
+    } else if (ESC.propio) {
+      sel = 'escena'; inspector(); return;
+    } else if (/^c\d+$/.test(sel) && E.cuerpos[+sel.slice(1)]) {
       const i = +sel.slice(1), cpo = E.cuerpos[i];
       ico = icoDe(i); nombre = cpo.nombre; estado = cpo.fusion ? 'Cuerpo con cambio de fase' : 'Cuerpo con capacidad calorífica';
       html = fila('Masa', campoFijo(fmt(cpo.m * 1e3, 4), 'g')) + fila('Calor específico', campoFijo(fmt(cpo.c, 4), 'J/(kg·K)'))
@@ -285,20 +403,26 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     $('#insp-ico').setAttribute('href', '#' + ico);
     $('#insp-nombre').textContent = nombre; $('#insp-estado').textContent = estado;
     $('#propiedades').innerHTML = html;
+    if (enlazar) enlazarParametros($('#propiedades'), enlazar);
+    const bq = $('#b-quitar-pieza'); if (bq) bq.addEventListener('click', quitarSeleccion);
     arbol(); acciones();
   }
   function arbol() {
     const nodo = (s, ico, nom, dato) => `<div class="nodo" data-sel="${s}" aria-selected="${sel === s}"><svg class="ico"><use href="#${ico}"/></svg><span class="nombre">${nom}</span><span class="dato">${dato}</span></div>`;
+    if (!SIM) { $('#arbol').innerHTML = nodo('escena', 'i-escena', 'Escena propia', 'vacía') + (MONTAJE && MONTAJE.bano ? nodo('bano', 'o-bano-termico', 'Baño térmico', cantidad(MONTAJE.bano.T, '°C', 3)) : ''); return; }
     const s = est(t);
-    let h = nodo('escena', 'i-escena', 'Escena', E.ambiente ? 'con aire' : 'aislada');
+    let h = nodo('escena', 'i-escena', ESC.propio ? 'Escena propia' : 'Escena', E.ambiente ? (ESC.propio ? 'con baño' : 'con aire') : 'aislada');
     E.cuerpos.forEach((c, i) => { h += nodo('c' + i, icoDe(i), c.nombre, gradC(s.T[i], 3)); });
     if (E.vehiculo) h += nodo('vehiculo', 'o-motor', 'Automóvil', cantidad(s.v, 'm/s', 3));
+    if (ESC.propio) { MONTAJE.calentadores.forEach((q, k) => { h += nodo('h' + k, 'o-calentador', `Calentador de ${(MONTAJE.cuerpos.find(c => c.id === q.en) || { nombre: '?' }).nombre.toLowerCase()}`, cantidad(q.P, 'W', 3)); }); if (MONTAJE.bano) h += nodo('bano', 'o-bano-termico', 'Baño térmico', cantidad(MONTAJE.bano.T, '°C', 3)); }
+    for (const o of INSTR) { const i = +String(o.en).slice(1); h += nodo(o.id, 'n-termometro', 'Termómetro', E.cuerpos[i] ? gradC(s.T[i], 3) : ''); }
     $('#arbol').innerHTML = h;
   }
   $('#arbol').addEventListener('click', ev => { const n = ev.target instanceof Element ? ev.target.closest('.nodo') : null; if (n) seleccionar(n.dataset.sel); });
   function seleccionar(s) { sel = s; inspector(); lecturas(); dibujar(); }
 
   function acciones() {
+    if (!SIM) { $('#grupo-acciones').hidden = true; return; }
     const b = banderas(t), filas = [];
     (E.contactos || []).forEach((c, k) => {
       const a = E.cuerpos[c.a].nombre, d = E.cuerpos[c.b].nombre;
@@ -334,13 +458,14 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   }
 
   function lecturas() {
-    if (!SIM) return;
-    const s = est(t);
     pintarReloj(t);
     $('#lect-titulo').textContent = `Lecturas en t = ${fmt(t, 4)} s`;
+    if (!SIM) { $('#lecturas').innerHTML = '<p class="ayuda-fila" style="margin-left:0">Sin cuerpos no hay lecturas.</p>'; $('#grupo-examen').hidden = true; return; }
+    const s = est(t);
     let filas;
-    if (/^c\d+$/.test(sel) && E.cuerpos[+sel.slice(1)]) {
-      const i = +sel.slice(1);
+    const ins = esInstr(sel) ? INSTR.find(o => o.id === sel) : null, iSel = ins ? +String(ins.en).slice(1) : /^c\d+$/.test(sel) ? +sel.slice(1) : -1;
+    if (iSel >= 0 && E.cuerpos[iSel]) {
+      const i = iSel;
       filas = [['<span class="sim">T</span>', C(s.T[i]), '°C'], ['<span class="sim">T</span>', s.T[i], 'K'], ['<span class="sim">Q</span>', s.dH[i], 'J', 'Calor neto recibido desde el principio|Heat received'],
         ['<span class="sim">Q</span><sub class="r">contactos</sub>', s.Qcont[i], 'J', 'Calor recibido de los otros cuerpos|Heat from contacts']];
       if (E.cuerpos[i].fusion) filas.push(['<span class="sim">x</span>', s.x[i], '', 'Fracción fundida|Melted fraction']);
@@ -378,7 +503,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // Las etiquetas de las series van al final de lo recorrido: solo cuando ya hay sitio
   const hayEtq = () => t > SIM.duracion * 0.15;
   function graficas() {
-    if ($('#p-graficas').hidden || !SIM) return;
+    if (!SIM) { for (const q of ['1', '2', '3']) { $('#t' + q).textContent = ''; $('#l' + q).textContent = ''; grafica($('#g' + q), { x: { min: 0, max: ESC.duracion }, y: { min: 0, max: 1 }, series: [], eventos: [] }); } return; }
+    if ($('#p-graficas').hidden) return;
     const s = est(t), N = E.cuerpos.length, X = { min: 0, max: SIM.duracion };
     const leyenda = (items) => `<span class="leyenda">${items.map(([col, pat, nom]) => `<span style="color:${col}"><i${pat ? ' class="discontinua"' : ''}></i>${nom}</span>`).join('')}</span>`;
     // 1 · Temperaturas
@@ -421,7 +547,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     }
   }
   function tablas() {
-    if (!SIM) return;
+    if (!SIM) { for (const id of ['#e-cuerpos', '#e-fuentes', '#t-eventos', '#t-datos']) $(id).innerHTML = ''; return; }
     const s = est(t);
     if (!$('#p-energia').hidden) {
       const esc = Math.max(1e-9, ...SIM.muestras.flatMap(m => m.dH.map(Math.abs)), ...SIM.muestras.map(m => Math.abs(m.Equim)));
@@ -452,32 +578,37 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // ---------------------------------------------------------------------
   function titulo() { ponerTitulo(ESC, NOMBRE_ESPACIO); }
   function construirVars() { construirVariables($('#variables'), VAR, () => { recalcular(); lecturas(); }, () => setTimeout(registrar, 0)); }
-  const instantanea = () => ({ clave: ESC.clave, vars: vals(), guion: guionPropio ? guion : null, capas: { ...capas } });
+  const instantanea = () => ({ clave: ESC.propio ? 'propia' : ESC.clave, titulo: ESC.titulo, montaje: ESC.propio ? copia(MONTAJE) : null, instrumentos: copia(INSTR), vars: vals(), guion: guionPropio ? guion : null, capas: { ...capas } });
   function registrar() { if (historial && historial.registrar(instantanea())) botonesHistorial(); if (autoguardar) autoguardado.guardar('termodinamica-calor', escenaActual()); }
   function botonesHistorial() { $('#b-deshacer').disabled = !historial?.puedeDeshacer; $('#b-rehacer').disabled = !historial?.puedeRehacer; }
   function deshacer() { const d = historial?.deshacer(); if (d) { restaurar(d); botonesHistorial(); } }
   function rehacer() { const d = historial?.rehacer(); if (d) { restaurar(d); botonesHistorial(); } }
   const TIPOS_ACCION = ['contacto', 'calentador', 'acelerar', 'frenar'];
   function datosSeguros(d = {}) {
-    const base = ESCENAS_CALOR.find(e => e.clave === d.clave) || ESCENAS_CALOR[0], vars = {};
+    const propia = d.clave === 'propia', r = propia ? sanearCalor(d.montaje) : null;
+    const base = propia ? escenaCalor(r.montaje) : ESCENAS_CALOR.find(e => e.clave === d.clave) || ESCENAS_CALOR[0], vars = {};
     for (const [k, def] of Object.entries(base.variables || {})) vars[k] = numero(d.vars?.[k], def.val, def.min, def.max);
-    const g = Array.isArray(d.guion) ? d.guion.filter(a => a && TIPOS_ACCION.includes(a.tipo) && typeof a.valor === 'boolean' && Number.isFinite(a.t) && a.t >= 0 && a.t <= base.duracion)
+    let g = Array.isArray(d.guion) ? d.guion.filter(a => a && TIPOS_ACCION.includes(a.tipo) && typeof a.valor === 'boolean' && Number.isFinite(a.t) && a.t >= 0 && a.t <= base.duracion)
       .slice(0, 200).map(a => ({ t: a.t, tipo: a.tipo, i: Math.round(numero(a.i, 0, 0, 20)), valor: a.valor })) : null;
+    // En una escena propia, solo las acciones sobre contactos y calentadores que existen
+    if (propia && g) g = g.filter(a => (a.tipo === 'contacto' ? a.i < base.claves.contactos.length : a.tipo === 'calentador' ? a.i < base.claves.calentadores.length : false));
     const capasOk = {}; for (const k of Object.keys(capas)) capasOk[k] = typeof d.capas?.[k] === 'boolean' ? d.capas[k] : true;
-    return { clave: base.clave, vars, guion: g, capas: capasOk };
+    const instrumentos = sanearInstrumentos(d.instrumentos, ['termometro']).filter(o => /^c\d+$/.test(o.en || ''));
+    return { clave: propia ? 'propia' : base.clave, titulo: texto(d.titulo, 'Escena propia', 90), montaje: propia ? r.montaje : null, error: propia ? r.error : null, instrumentos, vars, guion: g, capas: capasOk };
   }
   function restaurar(d) {
     const s = datosSeguros(d);
-    ESC = escenaPorClave(s.clave); VAR = copia(ESC.variables || {});
+    if (s.montaje) ponerMontaje(s.montaje, s.titulo); else { MONTAJE = null; ESC = escenaPorClave(s.clave); VAR = copia(ESC.variables || {}); }
     for (const k in s.vars) if (VAR[k]) VAR[k].val = s.vars[k];
-    guionPropio = !!s.guion; guion = s.guion || []; Object.assign(capas, s.capas);
+    guionPropio = !!s.guion || !!s.montaje; guion = s.guion || []; Object.assign(capas, s.capas); INSTR = s.instrumentos;
+    if (s.error) avisar(`Escena abierta sin su montaje: ${s.error}`);
     document.querySelectorAll('.capa-btn').forEach(b => b.setAttribute('aria-pressed', String(!!capas[b.dataset.capa])));
     titulo(); construirVars(); recalcular(false); inspector();
   }
   function abrirEscena1(clave) {
     const e = escenaPorClave(clave); if (!e) return;
     if (e.espacio !== ESPACIO) { irAEscenaDeOtroEspacio(e); return; }
-    ESC = e; VAR = copia(e.variables || {}); guionPropio = false; sel = 'escena';
+    ESC = e; VAR = copia(e.variables || {}); guionPropio = false; sel = 'escena'; MONTAJE = null; INSTR = [];
     titulo(); construirVars(); recalcular(false);
     vistaTocada = false; encuadrar(); escala0 = tz.vista.escala; zoomTexto();
     inspector(); repro.irA(0);
@@ -495,15 +626,16 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   }
   function recalcular(guardarAuto = true) {
     try { simular(); } catch (e) { avisar(e.message); return; }
-    lt.duracion = SIM.duracion; lt.simulado = SIM.duracion;
-    lt.eventos = SIM.eventos.map(e => ({ t: e.t, nombre: e.nombre }));
-    if (t > SIM.duracion) t = SIM.duracion;
+    lt.duracion = ESC.duracion; lt.simulado = ESC.duracion;
+    lt.eventos = SIM ? SIM.eventos.map(e => ({ t: e.t, nombre: e.nombre })) : [];
+    if (t > ESC.duracion) t = ESC.duracion;
     arbol(); acciones(); todo();
     if (guardarAuto && autoguardar) autoguardado.guardar('termodinamica-calor', escenaActual());
   }
   function todo() { dibujar(); lecturas(); lt.poner(t); graficas(); tablas(); arbol(); }
 
   function exportarCSV() {
+    if (!SIM) { avisar('No hay datos: la escena está vacía'); return; }
     const filas = SIM.muestras.map(m => [m.t, ...m.T, ...m.dH, m.Qcal.reduce((a, b) => a + b, 0), m.Equim, m.Ek]);
     descargarTexto(nombreArchivo(ESC.titulo) + '-calor.csv', aCSV(['t (s)', ...E.cuerpos.map(c => `T ${c.nombre} (K)`), ...E.cuerpos.map(c => `Q ${c.nombre} (J)`), 'Q cal (J)', 'E química (J)', 'Ek (J)'], filas))
       .then(r => { if (r) avisar(`Datos exportados: ${filas.length} filas`); }, () => {});
@@ -513,14 +645,78 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // ---------------------------------------------------------------------
   // Capas, lienzo, reproducción, comandos
   // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // Escena propia: paleta, colocar, quitar y arrastrar (termodinamica-montaje.js).
+  // Una escena del catálogo no se convierte: sus cuerpos caen o se juntan con
+  // acciones que la geometría no describe, así que la paleta empieza una
+  // escena propia nueva (los termómetros sí se ponen en cualquier escena).
+  // ---------------------------------------------------------------------
+  function ponerMontaje(m, tit) { MONTAJE = copia(m); ESC = escenaCalor(MONTAJE, tit || 'Escena propia'); VAR = {}; titulo(); }
+  /** Cambia el montaje con fn(montaje) → {montaje, sel}. Las acciones y los termómetros siguen a su pieza. */
+  function cambiarMontaje(fn, mensaje, o = {}) {
+    const nueva = !ESC.propio, base = nueva ? montajeCalorVacio() : MONTAJE;
+    let r;
+    try { r = fn(base); } catch (e) { avisar(e.message); return false; }
+    const antes = nueva ? { contactos: [], calentadores: [] } : ESC.claves, idsAntes = base.cuerpos.map(c => c.id);
+    ponerMontaje(r.montaje, nueva ? 'Escena propia' : ESC.titulo);
+    guion = nueva ? [] : guionValidoCalor(guion, antes, ESC.claves); guionPropio = true;
+    INSTR = (nueva ? [] : INSTR).map(q => { const i = MONTAJE.cuerpos.findIndex(c => c.id === idsAntes[+q.en.slice(1)]); return i < 0 ? null : { ...q, en: 'c' + i }; }).filter(Boolean);
+    if (r.sel) sel = selPantalla(r.sel);
+    if (o.encuadrar !== false || nueva) vistaTocada = false;
+    construirVars(); recalcular(false);
+    if (!vistaTocada) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); }
+    inspector(); todo(); registrar();
+    if (mensaje) avisar(mensaje + (nueva ? ' · escena propia nueva' : ''), true);
+    return true;
+  }
+  function escenaVacia() {
+    ponerMontaje(montajeCalorVacio(), 'Escena propia'); guion = []; guionPropio = true; INSTR = []; sel = 'escena'; vistaTocada = false;
+    construirVars(); recalcular(false); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); inspector(); todo(); registrar(); repro.irA(0);
+    avisar('Escena vacía: coloca cuerpos, un calorímetro o un baño con la paleta de objetos');
+  }
+  const marcarHerr = iniciarPaleta('.panel-izq', h => ponerHerramienta(herramienta === h ? null : h));
+  function ponerHerramienta(h) {
+    herramienta = h; marcarHerr(h); lienzo.style.cursor = h ? 'crosshair' : 'default';
+    if (h) avisar(`${NOMBRE_HERR[h]}: ${PISTA_HERR[h]}${h !== 'termometro' && !ESC.propio ? ' · empieza una escena propia' : ''} · Esc termina`);
+    dibujar();
+  }
+  function colocar(X, Y, ev) {
+    const v = tz.vista, w = [v.mx(X), v.my(Y)], ob = objetoEn(X, Y), h = herramienta;
+    if (h === 'termometro') {
+      if (!ob || !/^c\d+$/.test(ob)) { avisar('El termómetro mide la temperatura de un cuerpo: haz clic sobre uno.'); return; }
+      const r = rect(+ob.slice(1), t);
+      let o; try { o = nuevoInstrumento(INSTR, 'termometro', { en: ob, u: (w[0] - r.x0) / ((r.x1 - r.x0) || 1), w: (w[1] - r.y0) / ((r.y1 - r.y0) || 1) }); } catch (e) { avisar(e.message); return; }
+      INSTR.push(o); sel = o.id; inspector(); todo(); registrar();
+      avisar(`Termómetro colocado en ${E.cuerpos[+ob.slice(1)].nombre.toLowerCase()}`, true);
+    } else {
+      const en = ESC.propio && ob ? selMontaje(ob) : null;
+      cambiarMontaje(m => colocarCalor(m, h, { x: w[0], y: w[1], en: en && /^cu/.test(en) ? en : null }), `${NOMBRE_HERR[h]} colocad${h === 'cuerpo' || h === 'calorimetro' || h === 'calentador' ? 'o' : 'o'}`, { encuadrar: h !== 'calentador' });
+    }
+    if (!ev.shiftKey) ponerHerramienta(null);
+  }
+  function quitarSeleccion() {
+    if (esInstr(sel)) { const i = INSTR.findIndex(o => o.id === sel); if (i < 0) return; INSTR.splice(i, 1); sel = 'escena'; inspector(); todo(); registrar(); avisar('Termómetro quitado', true); return; }
+    if (!ESC.propio) { avisar('Las escenas del catálogo no se modifican: empieza una escena propia con la paleta o con «+».'); return; }
+    const ms = selMontaje(sel);
+    if (!ms || ms === 'escena') { avisar('Selecciona en el lienzo o en el árbol lo que quieres quitar'); return; }
+    const p2 = piezaCalor(MONTAJE, ms);
+    cambiarMontaje(m => quitarCalor(m, ms), `Se quita: ${p2 ? p2.nombre.toLowerCase() : 'el objeto'}`, { encuadrar: false });
+  }
+  $('#b-vacia').addEventListener('click', escenaVacia);
   const alternarCapa = k => { capas[k] = !capas[k]; document.querySelectorAll(`.capa-btn[data-capa="${k}"]`).forEach(b => b.setAttribute('aria-pressed', String(capas[k]))); registrar(); dibujar(); };
   document.querySelectorAll('.capa-btn').forEach(b => b.addEventListener('click', () => alternarCapa(b.dataset.capa)));
   $('#pest').addEventListener('click', () => setTimeout(() => { graficas(); tablas(); }, 0));
   lienzo.addEventListener('pointerdown', ev => {
     const r = lienzo.getBoundingClientRect(), X = ev.clientX - r.left, Y = ev.clientY - r.top, v = tz.vista;
     if (ev.button === 1 || ev.button === 2 || espacioPulsado) { paneo = [X, Y, v.ox, v.oy]; lienzo.setPointerCapture(ev.pointerId); return; }
+    if (herramienta) { colocar(X, Y, ev); return; }
     const ob = objetoEn(X, Y);
-    if (ob) { seleccionar(ob); return; }
+    if (ob) {
+      seleccionar(ob);
+      // Se arrastran los termómetros, y en una escena propia los cuerpos y el baño
+      if (esInstr(ob) || (ESC.propio && (/^c\d+$/.test(ob) || ob === 'bano'))) { arrastre = { ob, desde: [v.mx(X), v.my(Y)], movido: false }; try { lienzo.setPointerCapture(ev.pointerId); } catch { /* sin captura */ } }
+      return;
+    }
     seleccionar('escena');
     paneo = [X, Y, v.ox, v.oy]; lienzo.setPointerCapture(ev.pointerId);
   });
@@ -528,12 +724,38 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const r = lienzo.getBoundingClientRect(), X = ev.clientX - r.left, Y = ev.clientY - r.top, v = tz.vista;
     $('#cx').textContent = cantidad(v.mx(X), 'm', 3); $('#cy').textContent = cantidad(v.my(Y), 'm', 3);
     if (paneo) { vistaTocada = true; v.ox = paneo[2] + X - paneo[0]; v.oy = paneo[3] + Y - paneo[1]; dibujar(); return; }
+    cursorPx = [X, Y];
+    if (arrastre) {
+      const a = arrastre, w = [v.mx(X), v.my(Y)], d = [w[0] - a.desde[0], w[1] - a.desde[1]];
+      if (!a.movido && Math.hypot(d[0], d[1]) * v.escala < 3) return;
+      a.movido = true; a.d = d;
+      if (esInstr(a.ob)) a.punto = w;
+      else { const o = a.ob === 'bano' ? MONTAJE.bano : MONTAJE.cuerpos[+a.ob.slice(1)], r = rectCalor(o); a.ghost = [r.x0 + d[0], Math.max(0, r.y0 + d[1]), r.x1 + d[0], Math.max(0, r.y0 + d[1]) + (r.y1 - r.y0)]; }
+      dibujar();
+      if (a.punto) { const [Xp, Yp] = v.P(a.punto); tz.sondaTermica(Xp, Yp); }
+      return;
+    }
+    if (herramienta) { dibujar(); return; }
     const ob = objetoEn(X, Y);
-    lienzo.style.cursor = ob ? 'pointer' : 'default';
+    lienzo.style.cursor = ob && (esInstr(ob) || (ESC.propio && (/^c\d+$/.test(ob) || ob === 'bano'))) ? 'grab' : ob ? 'pointer' : 'default';
     if (ob !== hover) { hover = ob; dibujar(); }
   });
-  lienzo.addEventListener('pointerup', () => { paneo = null; });
-  lienzo.addEventListener('pointerleave', () => { if (hover) { hover = null; dibujar(); } });
+  lienzo.addEventListener('pointerup', ev => {
+    paneo = null;
+    const a = arrastre; arrastre = null;
+    if (!a || !a.movido) return;
+    if (esInstr(a.ob)) {
+      // El termómetro se queda en el cuerpo donde se suelta
+      const [X, Y] = tz.vista.P(a.punto), ob = objetoEn(X, Y), o = INSTR.find(q => q.id === a.ob);
+      if (o && ob && /^c\d+$/.test(ob)) { const r = rect(+ob.slice(1), t); Object.assign(o, { en: ob, u: (a.punto[0] - r.x0) / ((r.x1 - r.x0) || 1), w: (a.punto[1] - r.y0) / ((r.y1 - r.y0) || 1) }); registrar(); }
+      else avisar('El termómetro mide un cuerpo: suéltalo sobre uno.');
+      inspector(); todo(); return;
+    }
+    const ms = a.ob === 'bano' ? 'bano' : selMontaje(a.ob), o = a.ob === 'bano' ? MONTAJE.bano : MONTAJE.cuerpos[+a.ob.slice(1)];
+    cambiarMontaje(m => ({ montaje: moverCalor(m, ms, o.x + a.d[0], o.y + a.d[1]), sel: ms }), null, { encuadrar: false });
+    void ev;
+  });
+  lienzo.addEventListener('pointerleave', () => { cursorPx = null; if (hover || herramienta) { hover = null; dibujar(); } });
   lienzo.addEventListener('contextmenu', ev => ev.preventDefault());
   lienzo.addEventListener('wheel', ev => { ev.preventDefault(); const r = lienzo.getBoundingClientRect(); vistaTocada = true; tz.vista.zoom(Math.exp(-ev.deltaY * 0.0015), ev.clientX - r.left, ev.clientY - r.top); zoomTexto(); dibujar(); }, { passive: false });
   function zoomTexto() { $('#zoom').textContent = Math.round(tz.vista.escala / escala0 * 100) + ' %'; }
@@ -553,7 +775,9 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     ['i-reiniciar', 'Volver al principio', 'Inicio', () => repro.irA(0)],
     ['i-capas', 'Mostrar u ocultar los flujos de calor', 'Q', () => alternarCapa('flujos')],
     ['i-capas', 'Mostrar u ocultar las temperaturas', 'T', () => alternarCapa('temperaturas')],
-    ['i-historial', 'Restablecer las acciones de la escena', '', () => { guionPropio = false; recalcular(); registrar(); inspector(); }],
+    ...(ESC.propio ? [] : [['i-historial', 'Restablecer las acciones de la escena', '', () => { guionPropio = false; recalcular(); registrar(); inspector(); }]]),
+    ['i-mas', 'Escena vacía', '', escenaVacia], ['i-borrar', 'Quitar lo seleccionado', 'Supr', quitarSeleccion],
+    ...Object.keys(NOMBRE_HERR).map(h => [h === 'termometro' ? 'n-termometro' : `o-${{ cuerpo: 'cuerpo-termico', calorimetro: 'calorimetro', bano: 'bano-termico' }[h] || h}`, `Colocar: ${NOMBRE_HERR[h].toLowerCase()}`, '', () => ponerHerramienta(h), 'Paleta']),
     ['i-encuadrar', 'Encuadrar todo', 'F', encuadrarTodo],
     ['i-tema-oscuro', 'Cambiar tema claro u oscuro', '', () => Volta.ponerTema(document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')],
     ['i-deshacer', 'Deshacer', 'Ctrl Z', deshacer], ['i-rehacer', 'Rehacer', 'Ctrl Y', rehacer],
@@ -572,6 +796,9 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (mod && (tecla === 'y' || (ev.shiftKey && tecla === 'z'))) { ev.preventDefault(); rehacer(); return; }
     if (mod && tecla === 'z') { ev.preventDefault(); deshacer(); return; }
     if (mod) return;
+    if (ev.target instanceof Element && ev.target.matches('select')) return;
+    if (ev.key === 'Delete' || ev.key === 'Backspace') { ev.preventDefault(); quitarSeleccion(); return; }
+    if (ev.key === 'Escape' && herramienta) { ponerHerramienta(null); return; }
     if (ev.code === 'Space') { ev.preventDefault(); if (!ev.repeat) repro.alternar(); espacioPulsado = true; }
     else if (ev.key === 'ArrowRight') repro.irA(t + repro.paso());
     else if (ev.key === 'ArrowLeft') repro.irA(t - repro.paso());
@@ -586,14 +813,21 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // Arranque. Parámetros: ?escena=hielo&t=60&sel=c1&pest=energia
   // ---------------------------------------------------------------------
   Volta.alCambiarTema(() => { tz.temas(); todo(); });
-  window.addEventListener('resize', () => { tz.ajustar(); if (!vistaTocada && SIM) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); } if (SIM) todo(); });
+  // Antes del arranque no hay escena que dibujar; después, también la vacía se vuelve a encuadrar
+  let arrancado = false;
+  window.addEventListener('resize', () => { tz.ajustar(); if (!arrancado) return; if (!vistaTocada) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); } todo(); });
   document.fonts.ready.then(() => {
     const q = new URLSearchParams(location.search), limpio = ![...q.keys()].filter(k => k !== 'tema').length;
     const pend = escenaPendiente('termodinamica');
     if (pend && aOtroEspacio(pend, ESPACIO)) return;
     const previa = pend || (limpio ? autoguardado.leer('termodinamica-calor', { modulo: 'termodinamica' }) : null);
     tz.ajustar();
-    if (q.has('escena') || !previa) {
+    if (q.has('montaje')) {
+      // Escena propia para capturas: ?montaje=<JSON>&guion=<JSON>&instr=<JSON> (se sanea como un archivo)
+      const json = k => { try { return JSON.parse(q.get(k) || 'null'); } catch { return null; } };
+      restaurar({ clave: 'propia', titulo: 'Escena propia', montaje: json('montaje'), guion: json('guion'), instrumentos: json('instr') || [] });
+    } else if (q.has('vacia')) { ponerMontaje(montajeCalorVacio(), 'Escena propia'); guion = []; guionPropio = true; construirVars(); recalcular(false); }
+    else if (q.has('escena') || !previa) {
       const e = escenaPorClave(q.get('escena') || '') || ESCENAS_CALOR[0];
       if (e.espacio !== ESPACIO) { irAEscenaDeOtroEspacio(e); return; }
       ESC = e; VAR = copia(e.variables || {});
@@ -607,5 +841,6 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     repro.irA(q.has('t') ? parseFloat(q.get('t')) || 0 : 0);
     historial = new Historial(instantanea()); botonesHistorial();
     repro.arrancar();
+    arrancado = true;
   });
 })();

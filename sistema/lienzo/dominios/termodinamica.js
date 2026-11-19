@@ -430,6 +430,22 @@
     return [X, Y, W, H];
   };
 
+  // Cronómetro: esfera de 9 px con el pulsador arriba y una aguja que da una
+  // vuelta por minuto (frac: fracción de vuelta). (x, y) = centro en px.
+  P.termoCronometro = function (x, y, frac, o = {}) {
+    const c = this.ctx, r = 9, a = -Math.PI / 2 + 2 * Math.PI * (frac - Math.floor(frac));
+    c.save(); c.setLineDash([]);
+    c.fillStyle = this.t.tinta; c.fillRect(x - 2, y - r - 4, 4, 3);
+    c.beginPath(); c.arc(x, y, r, 0, 2 * Math.PI); c.fillStyle = this.t.lienzo; c.fill();
+    c.strokeStyle = this.t.tinta; c.lineWidth = G.real + (o.grueso ? 0.5 : 0); c.stroke();
+    c.strokeStyle = this.t['texto-3']; c.lineWidth = 1; c.beginPath();
+    for (let i = 0; i < 4; i++) { const b = i * Math.PI / 2, ca = Math.cos(b), sa = Math.sin(b); c.moveTo(x + ca * (r - 2), y + sa * (r - 2)); c.lineTo(x + ca * (r - 4), y + sa * (r - 4)); }
+    c.stroke();
+    c.strokeStyle = this.t.tinta; c.lineWidth = 1.5; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * (r - 3), y + Math.sin(a) * (r - 3)); c.stroke();
+    c.restore();
+  };
+
   // Vaso de calorímetro: pared adiabática abierta arriba (el aislante del
   // calorímetro) con el vaso conductor por dentro.
   P.termoVaso = function (x0, y0, x1, y1, o = {}) {

@@ -17,6 +17,7 @@ import {
   ponerTitulo, iniciarMenuEscenas, aOtroEspacio, irAEscenaDeOtroEspacio, construirVariables, filaLectura, examenHTML,
   crearAvisador, iniciarComandos, crearReproductor, pintarReloj, simHTML, fmtVar, ICONO_TIPO, chipDe,
 } from './termodinamica-comun.js';
+import { libertadEstado, moverEstadoCiclo } from './termodinamica-montaje.js';
 import { aCSV } from '../nucleo/csv.js';
 import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
@@ -47,7 +48,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   let fGas = null;                  // grados de libertad elegidos en el inspector
   /** @type {any} */ let SIM = null;
   let FILAS = [], ERROR = null, FASES = [];
-  let sel = 'gas', hover = null, herramienta = null, cursor = null;
+  let sel = 'gas', hover = null, herramienta = null, cursor = null, arrastre = null;
   const capas = { referencias: true, calor: true, cilindro: true };
   let historial = null, autoguardar = false, vistaTocada = false, escala0 = 1, espacioPulsado = false, paneo = null;
   const lienzo = $('#lienzo'), tz = new Trazo(lienzo);
@@ -149,13 +150,22 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     for (let P = pasoP; P <= GEO.Pax * 1.0001; P += pasoP) { const Y = v.Y(yP(P)); if (huecosY.some(h => Math.abs(h - Y) < 14)) continue; tz.texto(fmtMarca(P / 1e3, pasoP / 1e3), X0 - 6, Y, { fuente: 'num', tam: 11, color: 'texto-3', alinear: 'right', base: 'middle' }); }
 
     const s = estadoCiclo(SIM, t), k = tramoActual(t);
+    // Las curvas de los tramos son obstáculos para las letras y las etiquetas
+    const curvas = [];
+    SIM.tramos.forEach((_, i) => { let ult = null; for (const [V, P] of curvaTramo(SIM, i, 96)) { const q = Pp(V, P); if (!ult || Math.hypot(q[0] - ult[0], q[1] - ult[1]) > 5) { curvas.push([q[0] - 3, q[1] - 3, 6, 6]); ult = q; } } });
+    const tocaCurva = ([a, b, w, h]) => curvas.some(([p, q, r, u]) => a < p + r && a + w > p && b < q + u && b + h > q);
     // Curvas de referencia por el estado actual (construcción auxiliar)
     if (capas.referencias) {
       c.save(); c.beginPath(); c.rect(X0, Y1, X1 - X0, Y0 - Y1); c.clip();
       const curva = (fP, col) => { const pts = []; for (let i = 1; i <= 120; i++) { const V = GEO.Vax * i / 120; pts.push(Pp(V, fP(V))); } tz.lineaPx(pts, { color: col, grosor: 1, patron: 'auxiliar' }); return pts; };
       const iso = curva(V => s.P * s.V / V, 'termico'), adi = curva(V => s.P * (s.V / V) ** SIM.gas.gam, 'texto-3');
       c.restore();
-      const etiqueta = (pts, txt, col) => { const p = pts.filter(([x, y]) => x > X0 + 4 && x < X1 - 4 && y > Y1 + 10 && y < Y0 - 6).pop(); if (p) tz.texto(txt, Math.min(p[0], X1 - 4), p[1] - 6, { tam: 10.5, color: col, alinear: 'right', halo: true }); };
+      // Etiqueta donde la curva sale del área, o más atrás si ahí pisa el ciclo
+      const etiqueta = (pts, txt, col) => {
+        c.save(); c.font = Volta.FUENTE.ui(10.5); const w = c.measureText(txt).width; c.restore();
+        const dentro = pts.filter(([x, y]) => x > X0 + 4 && x < X1 - 4 && y > Y1 + 10 && y < Y0 - 6);
+        for (let j = dentro.length - 1; j >= 0; j -= 3) { const [x, y] = dentro[j], xd = Math.min(x, X1 - 4); if (xd - w < X0 + 4) break; if (!tocaCurva([xd - w, y - 16, w, 12])) { tz.texto(txt, xd, y - 6, { tam: 10.5, color: col, alinear: 'right', halo: true }); return; } }
+      };
       etiqueta(iso, 'isoterma', 'termico'); etiqueta(adi, 'adiabática', 'texto-3');
     }
 
@@ -187,27 +197,33 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       tz.lineaPx([[X, Y], [X0, Y]], { color: 'texto-3', grosor: 1, patron: 'auxiliar' });
     }
     const cajasLetras = [];
+    const solapa = ([a, b, w, h], lista) => lista.some(([p, q, r, u]) => a < p + r && a + w > p && b < q + u && b + h > q);
+    for (const e of Object.values(SIM.estados)) cajasLetras.push([Pp(e.V, e.P)[0] - 6, Pp(e.V, e.P)[1] - 6, 12, 12]);
     for (const e of Object.values(SIM.estados)) {
       const [X, Y] = Pp(e.V, e.P), [ex, ey] = Pw(e.V, e.P);
       c.save(); c.fillStyle = tz.t.tinta; c.beginPath(); c.arc(X, Y, 3.5, 0, 2 * Math.PI); c.fill(); c.restore();
       let dx = ex - cx, dy = ey - cy; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
       if (Object.keys(SIM.estados).length < 3) { dx = -0.7; dy = 0.7; }
-      const lx = X + dx * 15, ly = Y - dy * 15 + 5;
-      cajasLetras.push([lx - 8, ly - 13, 16, 17], [X - 6, Y - 6, 12, 12]);
+      // Primero la dirección que se aleja del centro del ciclo; si pisa otra letra o una curva, la siguiente libre
+      const base = Math.atan2(-dy, dx), dirs = [0, 1, -1, 2, -2, 3, -3, 4].map(k => base + k * Math.PI / 4);
+      let lx = X + dx * 15, ly = Y - dy * 15 + 5;
+      for (const a of dirs) { const x2 = X + Math.cos(a) * 15, y2 = Y + Math.sin(a) * 15 + 5; if (!solapa([x2 - 7, y2 - 12, 14, 15], [...cajasLetras, ...curvas])) { lx = x2; ly = y2; break; } }
+      cajasLetras.push([lx - 8, ly - 13, 16, 17]);
       tz.texto(e.nombre, lx, ly, { tam: 13, peso: 600, alinear: 'center', halo: true });
       if (sel === 'e:' + e.nombre) tz.seleccionCirculo(X, Y, 9);
       else if (hover === 'e:' + e.nombre) tz.seleccionCirculo(X, Y, 7);
     }
     // Calor de cada tramo junto a su curva: fuera del ciclo si cabe, sin pisar
     // los ejes, las letras de los estados ni otras etiquetas
-    const ocupado = cajasLetras.slice();
+    const ocupado = [...cajasLetras, ...curvas];
     const choca = ([a, b, w, h]) => a < X0 + 4 || b + h > Y0 - 4 || b < Y1 - 14 || a + w > X1 + 70 || ocupado.some(([p, q, r, u]) => a < p + r && a + w > p && b < q + u && b + h > q);
+    const sinSitio = [];
     for (const i of etiquetasQ) {
       const x = SIM.tramos[i], txt = x.tipo === 'adiabatico' ? ' = 0' : ` = ${x.Q >= 0 ? '+' : '−'}${kJ(Math.abs(x.Q))}`;
       c.save(); c.font = Volta.FUENTE.num(11); const ancho = c.measureText(txt).width + 16; c.restore();
       const Xc = v.X(cx), Yc = v.Y(cy);
       let puesto = null;
-      for (const sx of [0.5, 0.32, 0.68]) for (const d of [16, -16, 30, -30]) {
+      for (const sx of [0.5, 0.32, 0.68, 0.2, 0.8]) for (const d of [16, -16, 30, -30, 46, -46]) {
         if (puesto) break;
         const m = puntoTramo(SIM.gas, x.tipo, x.a, x.b, sx), m2 = puntoTramo(SIM.gas, x.tipo, x.a, x.b, Math.min(1, sx + 0.03));
         const [ax, ay] = Pp(m.V, m.P), [bx, by] = Pp(m2.V, m2.P), L = Math.hypot(bx - ax, by - ay) || 1;
@@ -218,10 +234,13 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         const caja = [izq ? px - ancho : cen ? px - ancho / 2 : px, py - 12, ancho, 16];
         if (!choca(caja)) puesto = { px, py, caja, alinear: izq ? 'right' : cen ? 'center' : 'left' };
       }
-      if (!puesto) continue;
+      if (!puesto) { sinSitio.push([{ t: 'Q', f: 'sim', tam: 13, color: 'termico' }, { t: subN(i + 1), f: 'simRecta', tam: 10, dy: 3, color: 'termico' }, { t: txt, f: 'num', tam: 11 }]); continue; }
       ocupado.push(puesto.caja);
+      // Línea guía hasta el tramo si la etiqueta quedó lejos de él
       tz.compuesto([{ t: 'Q', f: 'sim', tam: 13, color: 'termico' }, { t: subN(i + 1), f: 'simRecta', tam: 10, dy: 3, color: 'termico' }, { t: txt, f: 'num', tam: 11, color: 'texto-2' }], puesto.px, puesto.py, { alinear: puesto.alinear });
     }
+    // Los calores que no caben junto a su tramo van juntos en una ficha, arriba a la derecha del diagrama
+    if (sinSitio.length) tz.ficha(X1 - 4 - Math.max(...sinSitio.map(l => { c.save(); let w = 0; for (const sg of l) { c.font = tz._fuente(sg.f, sg.tam); w += c.measureText(sg.t).width; } c.restore(); return w + 16; })), Y1 + 6, sinSitio);
 
     // Estado actual
     const [Xs, Ys] = Pp(s.V, s.P);
@@ -640,7 +659,15 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (ev.button === 1 || ev.button === 2 || espacioPulsado) { paneo = [X, Y, v.ox, v.oy]; lienzo.setPointerCapture(ev.pointerId); return; }
     if (herramienta) { const w = [v.mx(X), v.my(Y)]; if (w[0] > 0 && w[1] > 0) { anadirTramo(w); if (!ev.shiftKey) { herramienta = null; marcarHerramienta(); } } return; }
     const ob = objetoEn(X, Y);
-    if (ob) { seleccionar(ob); if (ob.startsWith('e:')) { const nom = ob.slice(2), x = SIM.tramos.find(q => q.hasta === nom); repro.irA(nom === SIM.inicio ? 0 : x ? x.t1 : t); } return; }
+    if (ob) {
+      seleccionar(ob);
+      if (ob.startsWith('e:')) {
+        const nom = ob.slice(2), x = SIM.tramos.find(q => q.hasta === nom), lib = libertadDe(nom);
+        repro.irA(nom === SIM.inicio ? 0 : x ? x.t1 : t);
+        if (lib.P || lib.V) { arrastre = { nombre: nom, i: nom === SIM.inicio ? -1 : tramoDe(nom), lib, movido: false, ciclo: null }; lienzo.setPointerCapture(ev.pointerId); }
+      }
+      return;
+    }
     paneo = [X, Y, v.ox, v.oy]; lienzo.setPointerCapture(ev.pointerId);
   });
   lienzo.addEventListener('pointermove', ev => {
@@ -648,12 +675,47 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const dentro = w[0] >= 0 && w[1] >= 0 && w[0] <= DW * 1.1 && w[1] <= DH * 1.1;
     $('#cx').textContent = dentro ? Vtxt(Vx(w[0])) : '—'; $('#cy').textContent = dentro ? Ptxt(Py(w[1])) : '—';
     if (paneo) { vistaTocada = true; v.ox = paneo[2] + X - paneo[0]; v.oy = paneo[3] + Y - paneo[1]; dibujar(); return; }
+    if (arrastre) { moverEstado(w); return; }
     if (herramienta) { cursor = dentro ? w : null; dibujar(); return; }
     const ob = objetoEn(X, Y);
-    lienzo.style.cursor = ob ? 'pointer' : 'default';
+    const lib = ob && ob.startsWith('e:') ? libertadDe(ob.slice(2)) : null;
+    lienzo.style.cursor = lib && (lib.P || lib.V) ? (lib.P && lib.V ? 'move' : lib.P ? 'ns-resize' : 'ew-resize') : ob ? 'pointer' : 'default';
     if (ob !== hover) { hover = ob; dibujar(); }
   });
-  lienzo.addEventListener('pointerup', () => { paneo = null; });
+  lienzo.addEventListener('pointerup', () => {
+    paneo = null;
+    const a = arrastre; arrastre = null;
+    if (!a) return;
+    if (a.movido && a.ciclo) { if (aplicar(a.ciclo, `Estado ${a.nombre} movido: ${Ptxt(a.P)} · ${Vtxt(a.V)}`)) { sel = 'e:' + a.nombre; inspector(); } }
+    else dibujar();
+  });
+  /** Qué se puede arrastrar de un estado (P, V o los dos), según el tramo que llega a él. */
+  function libertadDe(nom) {
+    if (!SIM || !SIM.estados[nom]) return { P: false, V: false };
+    const c = cicloActual();
+    if (nom === SIM.inicio) return libertadEstado(c, -1);
+    const i = tramoDe(nom);
+    return i < 0 ? { P: false, V: false } : libertadEstado(c, i);
+  }
+  /**
+   * Arrastre de un estado: el punto sigue al ratón por lo que su tramo deja
+   * mover (una isócora solo sube y baja; una isobara, una isoterma o una
+   * adiabática solo cambian de volumen) y el ciclo se recalcula en vivo. Los
+   * ejes no cambian mientras se arrastra; los valores se redondean al paso.
+   */
+  function moverEstado(w) {
+    const a = arrastre, e = SIM.estados[a.nombre] || a.e0;
+    if (!a.movido) { a.e0 = { ...e }; a.sim0 = SIM; a.movido = true; }
+    const pasoP = pasoAgradable(GEO.Pax / 1e3 / 60) * 1e3, pasoV = pasoAgradable(GEO.Vax * fV() / 60) / fV();
+    const P = a.lib.P ? Math.max(pasoP, Math.round(Py(w[1]) / pasoP) * pasoP) : a.e0.P, V = a.lib.V ? Math.max(pasoV, Math.round(Vx(w[0]) / pasoV) * pasoV) : a.e0.V;
+    let ciclo, prueba;
+    try { ciclo = moverEstadoCiclo(propio ? CIC : cicloActual(), a.i, P, V); prueba = simularCiclo({ ...ciclo, f: fGas ?? ciclo.f }); }
+    catch { return; }   // ahí no hay ciclo posible: el punto se queda en el último válido
+    a.ciclo = ciclo; a.P = P; a.V = V;
+    const geo = GEO; SIM = prueba; dibujar(); GEO = geo;
+    tz.ficha(Pp(V, P)[0] + 12, Pp(V, P)[1] - 30, [[{ t: `Estado ${a.nombre}`, f: 'ui', tam: 11.5 }], [{ t: 'P', f: 'sim', tam: 13 }, { t: ` = ${Ptxt(P)}   `, f: 'num', tam: 11.5 }, { t: 'V', f: 'sim', tam: 13 }, { t: ` = ${Vtxt(V)}`, f: 'num', tam: 11.5 }]]);
+    SIM = a.sim0;
+  }
   lienzo.addEventListener('pointerleave', () => { cursor = null; if (hover) { hover = null; } dibujar(); });
   lienzo.addEventListener('contextmenu', ev => ev.preventDefault());
   lienzo.addEventListener('wheel', ev => {
