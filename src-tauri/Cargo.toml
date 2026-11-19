@@ -1,6 +1,6 @@
 [package]
 name = "volta"
-version = "0.1.0"
+version = "0.2.0"
 description = "Volta: simulador de física para Windows"
 authors = ["Eliam Mojardin Ibarra"]
 license = "MIT"
