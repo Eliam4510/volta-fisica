@@ -115,7 +115,7 @@ import { avisar } from '../componentes/exportar.js';
     ['termodinamica', 'Termodinámica', 'Gases con émbolos y válvulas, ciclos, y el gas visto desde sus moléculas.', 1, 1, 'termodinamica.html'],
     ['electrostatica', 'Electrostática', 'Cargas, campo, potencial, conductores, dieléctricos y capacitores.', 1, 1, 'electrostatica.html'],
     ['circuitos', 'Circuitos', 'Corriente continua, redes de capacitores y transitorios RC, RL y LC.', 1, 3, 'circuitos.html'],
-    ['magnetismo', 'Magnetismo e inducción', 'Campos de corrientes, fuerza de Lorentz e inducción electromagnética.', null, null, null],
+    ['magnetismo', 'Magnetismo e inducción', 'Campos de corrientes, partículas en E y B, efecto Hall e inducción electromagnética.', 3, 13, 'magnetismo.html'],
     ['ondas', 'Ondas y sonido', 'Cuerdas, tubos, efecto Doppler, pulsaciones y acústica.', 2, 16, 'ondas.html'],
     ['optica', 'Óptica', 'Rayos, refracción, interferencia, películas delgadas y Michelson.', 3, 14, 'optica.html'],
     ['moderna', 'Física moderna', 'Efecto fotoeléctrico y decaimientos nucleares.', null, null, null],
@@ -238,7 +238,7 @@ import { avisar } from '../componentes/exportar.js';
   // «Continuar»: lo que de verdad se abrió en este equipo (el autoguardado de
   // cada pantalla lo registra). Al abrirla, la pantalla recupera su autoguardado.
   const NOMBRES = Object.fromEntries(MODULOS.map(([id, nombre]) => [id, nombre]));
-  const MINI = { mecanica: 'proyectil', gravitacion: 'tiro', termodinamica: 'embolo', electrostatica: 'cargas', circuitos: 'rc', ondas: 'doppler', optica: 'young' };
+  const MINI = { mecanica: 'proyectil', gravitacion: 'tiro', termodinamica: 'embolo', electrostatica: 'cargas', circuitos: 'rc', ondas: 'doppler', optica: 'young', magnetismo: 'cargas' };
   const PAGINA_DE_CLAVE = clave => /^[a-z-]+$/.test(clave) && clave !== 'inicio' ? `${clave === 'mecanica-laboratorio' || clave === 'laboratorio' ? 'mecanica-laboratorio' : clave}.html` : null;
   const hace = ms => {
     const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
@@ -268,9 +268,9 @@ import { avisar } from '../componentes/exportar.js';
 
   // ---------- Abrir y nueva escena ----------
   // La escena viaja a su pantalla por sessionStorage ("volta.abrir").
-  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html', optica: 'optica.html' };
+  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html', optica: 'optica.html', magnetismo: 'magnetismo.html' };
   // Espacios con pantalla propia dentro de un módulo
-  const ESPACIOS = { 'mecanica:laboratorio': 'mecanica-laboratorio.html', 'ondas:doppler': 'ondas-doppler.html', 'optica:interferencia': 'optica-ondas.html', 'optica:peliculas': 'optica-peliculas.html' };
+  const ESPACIOS = { 'mecanica:laboratorio': 'mecanica-laboratorio.html', 'ondas:doppler': 'ondas-doppler.html', 'optica:interferencia': 'optica-ondas.html', 'optica:peliculas': 'optica-peliculas.html', 'magnetismo:particulas': 'magnetismo-particulas.html', 'magnetismo:induccion': 'magnetismo-induccion.html' };
   function abrir() {
     abrirEscena({}).then(e => {
       // Algunos módulos tienen varios espacios, cada uno con su pantalla

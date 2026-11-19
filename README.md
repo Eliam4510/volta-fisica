@@ -51,7 +51,7 @@ Principios del proyecto:
 | Termodinámica | Utilizable | Gas en cilindro con émbolo, calor, trabajo, diagrama P-V |
 | Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria; 8 escenas MEXT |
 | Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC |
-| Magnetismo e inducción | Planeado | Fuerza de Lorentz, inducción electromagnética |
+| Magnetismo e inducción | Utilizable | Campos de hilos, espiras, solenoides e imanes; partículas en E y B con Boris (selector, espectrómetro, ciclotrón, Hall); inducción acoplada (rieles, espiras, generador) con balance de energía; 13 escenas MEXT |
 | Ondas y sonido | Utilizable | Cuerdas y tubos (reflexión, uniones, modos, resonancia) y Doppler con audio; la cubeta 2D, en preparación |
 | Óptica | Utilizable | Trazado de rayos (Snell, Fresnel, reflexión total, prismas con dispersión, lentes y espejos), interferencia y difracción por suma de Huygens, películas delgadas, anillos de Newton y Michelson |
 | Física moderna | Planeado | Efecto fotoeléctrico, núcleo |
@@ -83,9 +83,9 @@ El plan completo, con dependencias y orden de implementación, está en
 |---|---|
 | ![Óptica geométrica](docs/diseno/capturas/f11_optica.png) | ![Interferencia](docs/diseno/capturas/f12_interferencia.png) |
 
-| Películas e interferómetros | |
+| Películas e interferómetros | Magnetismo: inducción |
 |---|---|
-| ![Michelson](docs/diseno/capturas/f13_peliculas.png) | |
+| ![Michelson](docs/diseno/capturas/f13_peliculas.png) | ![Inducción](docs/diseno/capturas/f14_magnetismo.png) |
 
 ## Instalación
 

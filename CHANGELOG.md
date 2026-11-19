@@ -9,6 +9,19 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Módulo Magnetismo e inducción con tres espacios de trabajo:
+  - «Campos magnéticos»: hilos, segmentos, espiras, solenoides e imanes por
+    Biot–Savart, con líneas, ⊙/⊗, brújulas, sonda de B, fuerza entre
+    corrientes y perfiles del campo.
+  - «Partículas en E y B»: integrador de Boris (|v| se conserva en mil
+    vueltas), fuente de iones con varias especies, regiones de campo,
+    placas, pantalla detectora, ciclotrón y efecto Hall; radio y periodo
+    medidos contra mv/(|q|B) y 2πm/(|q|B).
+  - «Inducción»: rieles con una o dos barras, espiras, hilos con corriente
+    variable, campos B(t) y generador, con flujo por intersección exacta
+    de polígonos, sentido de Lenz y registro de energía.
+  - 47 pruebas y las 13 escenas MEXT del tema.
+
 - Laboratorio: panel de variables, como en los demás módulos. Una variable
   es un deslizador que fija a la vez varias propiedades (la rapidez de dos
   pelotas, el μs de un plano); los campos ligados se ven como la variable.
