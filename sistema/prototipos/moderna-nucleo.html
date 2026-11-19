@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volta · Núcleo</title>
+<link rel="stylesheet" href="../fuentes/fuentes.css">
+<link rel="icon" href="../marca/icono-app.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="../componentes/componentes.css">
+<script src="../iconos/sprite.js"></script>
+<style>
+  /* Solo ajustes propios de esta pantalla; todo lo demás viene del sistema */
+  .migas { flex: none; }
+  .escena-btn { gap: var(--e-2); min-width: 0; max-width: 460px; padding: 0 var(--e-2); color: var(--texto-3); font-weight: 400; }
+  .escena-btn b { color: var(--texto-2); font-weight: var(--peso-medio); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .escena-btn .ico { color: var(--texto-3); }
+  #menu-escenas { position: fixed; z-index: 40; min-width: 340px; max-height: calc(100vh - 64px); overflow: auto; }
+  #menu-escenas .menu-item .chip { margin-left: auto; }
+  #menu-escenas .menu-item[aria-current="true"] { background: var(--campo); }
+  .grafica-cab .leyenda .sim { font-size: 13px; }
+  .grafica-cab .sim sub { font-family: var(--fuente-simbolos); font-style: normal; font-size: .7em; }
+  .grafica-cab > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .grafica-cab .lect { white-space: nowrap; }
+  .fila .segmentado { justify-self: start; }
+  .fila .segmentado button { padding: 0 7px; }
+  .lecturas .sim .r { font-style: normal; }
+  .aviso-lienzo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acciones-fila { display: flex; gap: var(--e-1); flex-wrap: wrap; }
+  .reloj { min-width: 104px; }
+  .energia .barra-e { grid-template-columns: 150px minmax(0, 1fr) 110px; }
+  .barra-e .sim { font-family: var(--fuente-simbolos); font-style: italic; font-size: 14px; color: var(--texto); }
+  .barra-e .sim sub { font-style: normal; font-size: .72em; }
+</style>
+</head>
+<body>
+<div class="espacio">
+  <!-- ============================ Barra superior ============================ -->
+  <header class="barra">
+    <a class="marca" href="inicio.html" data-ayuda="Inicio|Home">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6.5 L16 23 L26 6.5" stroke-width="2.4"/><path d="M4 23 H28" stroke-width="2.4"/><path d="M8.5 23 L5.5 26 M13.5 23 L10.5 26 M18.5 23 L15.5 26 M23.5 23 L20.5 26" stroke-width="1.4"/><circle cx="26" cy="6.5" r="2.6" fill="currentColor" stroke="none"/></svg>
+      <b>Volta</b>
+    </a>
+    <span class="separador-v"></span>
+    <nav class="migas">
+      <button class="btn btn-compacto">Física moderna<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+      <span class="sep">/</span>
+      <button class="btn btn-compacto">Núcleo<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    </nav>
+    <button class="btn btn-compacto escena-btn" id="b-escenas" aria-haspopup="menu" data-ayuda="Cambiar de escena|Scenes"><span id="escena-chip" class="chip">Tutorial</span><b id="escena-nombre"></b><svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    <span class="sp"></span>
+    <div class="transporte">
+      <button class="btn btn-icono" id="b-reiniciar" data-ayuda="Reiniciar: todos los núcleos sin decaer|Reset|Inicio"><svg class="ico"><use href="#i-reiniciar"/></svg></button>
+      <button class="btn btn-icono" id="b-atras" data-ayuda="Retroceder un cuadro|Step back|←"><svg class="ico"><use href="#i-paso-atras"/></svg></button>
+      <button class="btn btn-primario btn-reproducir" id="b-play" data-ayuda="Reproducir|Play|Espacio"><svg class="ico"><use href="#i-reproducir"/></svg></button>
+      <button class="btn btn-icono" id="b-adelante" data-ayuda="Avanzar un cuadro|Step forward|→"><svg class="ico"><use href="#i-paso-adelante"/></svg></button>
+    </div>
+    <div class="reloj" id="reloj"></div>
+    <div class="segmentado" data-exclusivo id="velocidades" data-ayuda="Velocidad de reproducción: a 1× la línea de tiempo dura 10 s|Playback speed">
+      <button data-v="0.25">¼×</button><button data-v="0.5">½×</button><button data-v="1" aria-pressed="true">1×</button><button data-v="2">2×</button>
+    </div>
+    <span class="sp"></span>
+    <button class="btn btn-icono" id="b-deshacer" disabled data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
+    <button class="btn btn-icono" id="b-rehacer" disabled data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
+    <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
+  </header>
+
+  <!-- ============================ Panel izquierdo ============================ -->
+  <aside class="panel panel-izq">
+    <div class="desplaza">
+      <div class="seccion">
+        <div class="panel-cab">Objetos</div>
+        <div class="paleta" id="paleta-objetos">
+          <button class="herr" data-herr="nuclido" data-ayuda="Núclido: clic en una casilla de la carta para seguir su cadena de decaimiento|Nuclide"><svg class="ico"><use href="#o-nucleo"/></svg><span>Núclido</span></button>
+          <button class="herr" data-herr="muestra" data-ayuda="Muestra radiactiva: N núcleos que decaen al azar|Radioactive sample"><svg class="ico"><use href="#o-muestra"/></svg><span>Muestra radiactiva</span></button>
+          <button class="herr" data-herr="decaimiento" data-ayuda="Decaimiento puntual: un núcleo en reposo que decae; reparte el momento entre los productos|Single decay"><svg class="ico"><use href="#o-impulso"/></svg><span>Decaimiento puntual</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Instrumentos</div>
+        <div class="paleta" id="paleta-instrumentos">
+          <button class="herr" data-herr="contador" data-ayuda="Contador: núcleos que quedan en la muestra y en cada casilla de la carta|Counter|C"><svg class="ico"><use href="#n-detector"/></svg><span>Contador</span></button>
+          <button class="herr" data-herr="cronometro" data-ayuda="Cronómetro: marca los múltiplos de T½ y el periodo medido|Stopwatch|T"><svg class="ico"><use href="#n-cronometro"/></svg><span>Cronómetro</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Escena</div>
+        <div class="arbol" id="arbol"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================ Lienzo ============================ -->
+  <main class="lienzo-area" id="area">
+    <canvas id="lienzo"></canvas>
+    <div class="flotante ar-der" role="group" aria-label="Capas">
+      <svg class="ico"><use href="#i-capas"/></svg>
+      <button class="capa-btn" data-capa="cadenas" aria-pressed="true" data-ayuda="Flechas de las cadenas de decaimiento|Decay chains">Cadenas</button>
+      <button class="capa-btn" data-capa="valle" aria-pressed="true" data-ayuda="Valle de estabilidad y recta N = Z|Valley of stability">Valle</button>
+      <button class="capa-btn" data-capa="momentos" aria-pressed="true" data-ayuda="Momentos de los productos del decaimiento|Momenta|P">Momentos</button>
+      <button class="capa-btn" data-capa="valores" aria-pressed="true">Valores</button>
+    </div>
+    <div class="flotante ab-izq" id="coords"><span class="sim">N</span><span class="num" id="cx">—</span><span class="sim">Z</span><span class="num" id="cy">—</span></div>
+    <div class="flotante ab-der">
+      <button class="btn btn-icono btn-compacto" id="b-zoom-menos" data-ayuda="Alejar la carta|Zoom out|−"><svg class="ico"><use href="#i-zoom-menos"/></svg></button>
+      <span class="num" id="zoom">100 %</span>
+      <button class="btn btn-icono btn-compacto" id="b-zoom-mas" data-ayuda="Acercar la carta|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button>
+      <span class="sep"></span>
+      <button class="btn btn-compacto" id="b-encuadrar" data-ayuda="Encuadrar las cadenas|Fit to view|F"><svg class="ico"><use href="#i-encuadrar"/></svg>Encuadrar</button>
+    </div>
+    <div class="aviso-flotante aviso-lienzo" id="aviso" hidden><svg class="ico"><use href="#i-evento"/></svg><span id="aviso-texto"></span><button class="btn btn-compacto" id="aviso-deshacer">Deshacer</button></div>
+  </main>
+
+  <!-- ============================ Panel derecho ============================ -->
+  <aside class="panel panel-der">
+    <div class="desplaza">
+      <div class="panel-cab">Inspector</div>
+      <div class="insp-cab">
+        <div class="miniatura"><svg class="ico"><use id="insp-ico" href="#o-nucleo"/></svg></div>
+        <div><div class="t1" id="insp-nombre"></div><div class="t2" id="insp-estado"></div></div>
+      </div>
+      <details class="grupo" open id="grupo-props">
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="props-titulo">Propiedades</span></summary>
+        <div id="propiedades"></div>
+      </details>
+      <details class="grupo" open>
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
+        <div class="lecturas" id="lecturas"></div>
+      </details>
+      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables</div>
+      <div class="variables" id="variables"></div>
+    </div>
+  </aside>
+
+  <!-- ============================ Panel inferior ============================ -->
+  <section class="panel panel-inf">
+    <div class="inf-cab">
+      <div class="pestanas" role="tablist" id="pest">
+        <button class="pestana" role="tab" aria-selected="true" aria-controls="p-graficas">Gráficas</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-cadena">Cadena</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-balance">Balance</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-tabla">Tabla</button>
+      </div>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn btn-compacto" id="b-exportar" data-ayuda="Exportar los datos de la pestaña a CSV|Export data"><svg class="ico"><use href="#i-exportar"/></svg>Exportar datos</button>
+    </div>
+    <div class="linea-tiempo"><canvas id="tl"></canvas></div>
+    <div class="graficas" id="p-graficas" data-grupo="pest">
+      <div class="grafica"><div class="grafica-cab"><span id="t1"></span><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t2"></span><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t3"></span><span class="lect" id="l3"></span></div><canvas id="g3"></canvas></div>
+    </div>
+    <div class="lista-eventos" id="p-cadena" data-grupo="pest" hidden><table class="tabla" id="t-cadena"></table></div>
+    <div class="energia" id="p-balance" data-grupo="pest" hidden>
+      <div class="barras" id="barras-k"></div>
+      <div class="barras" id="barras-p"></div>
+    </div>
+    <div class="lista-eventos" id="p-tabla" data-grupo="pest" hidden><table class="tabla" id="t-datos"></table></div>
+  </section>
+</div>
+
+<!-- Menú de escenas -->
+<div class="menu" id="menu-escenas" role="menu" hidden></div>
+
+<!-- Paleta de comandos -->
+<div class="velo comandos-velo" id="velo-comandos" hidden>
+  <div class="comandos" role="dialog" aria-label="Comandos">
+    <div class="comandos-buscar"><svg class="ico ico-20" style="color:var(--texto-3)"><use href="#i-buscar"/></svg><input id="cmd-q" placeholder="Escribe un comando o una escena"><kbd>Esc</kbd></div>
+    <div class="comandos-lista" id="cmd-lista"></div>
+  </div>
+</div>
+
+<script type="module" src="../lienzo/trazo.js"></script>
+<script type="module" src="../lienzo/dominios/moderna.js"></script>
+<script type="module" src="../lienzo/grafica.js"></script>
+<script type="module" src="../componentes/linea-tiempo.js"></script>
+<script type="module" src="../componentes/espacio.js"></script>
+<script type="module" src="moderna-nucleo.js"></script>
+</body>
+</html>
