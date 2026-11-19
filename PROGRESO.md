@@ -5,18 +5,13 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.4.0 (publicada el 2026-11-19)
+- Versión: 0.5.0 (publicada el 2026-11-19)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
 - Circuitos (pantalla «Transitorios», 56 pruebas) integrado y enlazado.
 - Laboratorio de Mecánica integrado.
-- Agentes en curso (sus archivos quedan sin seguimiento hasta revisarlos):
-  - Ondas y sonido: `motores/ondas.js`, `pruebas/ondas.test.js`,
-    `lienzo/dominios/ondas.js`, `prototipos/ondas.html|js` (y quizá
-    `ondas-doppler.*`). Al integrar: añadirlo a MODULOS en
-    `componentes/espacio.js`, a PANTALLAS y a la tarjeta de Inicio, al README
-    y al CHANGELOG.
+- Ondas y sonido integrado (Medio 1D y Doppler y acústica). Falta la cubeta 2D, el pistón móvil y la escena MEXT 2012 del ventilador.
 - Escenas MEXT del Laboratorio integradas: 24 escenas MEXT con prueba cada
   una. Sin representar: 2016 P3 (fricción entre dos cuerpos móviles),
   2006 1-(1) (fuerza que depende de la posición), 2025 T2 (sin enunciado),
@@ -58,7 +53,9 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Motor de Electrostática + `nucleo/integradores.js` (59 pruebas).
 - [x] Gravitación: motor (40 pruebas) y pantalla «Órbitas» con cinco escenas.
 - [x] Circuitos: motor nodal con transitorios (56 pruebas) y pantalla «Transitorios» con cinco escenarios.
-- [ ] Ondas, Óptica, Magnetismo, Moderna.
+- [x] Ondas y sonido: motor (66 pruebas), «Medio 1D» y «Doppler y acústica».
+- [ ] Ondas: cubeta 2D (WebGL2), pistón que se mueve durante la simulación.
+- [ ] Óptica, Magnetismo e inducción, Física moderna.
 
 ## Autocrítica 1 (2026-11-19 01:05)
 
@@ -151,3 +148,4 @@ análisis de datos:
 - 2026-11-19 06:10 — Laboratorio: fuerza aplicada con U_F, duplicar, gráficas configurables (con aceleración y trayectoria). Paletas que no hacían nada ahora llevan al Laboratorio o explican qué falta. Inicio con estados «Disponible»/«En preparación». Autocrítica 3. 336 pruebas. Agente de Ondas en curso.
 - 2026-11-19 06:40 — Presupuesto de cálculo en Mecánica (pasos y reloj), experimento de conjunto activo descartado, campos muertos corregidos (cilindro, x de salida), GIF del Laboratorio en el README. Lanzado el agente de escenas MEXT del Laboratorio.
 - 2026-11-19 07:20 — 19 escenas MEXT nuevas en el Laboratorio (agente + 2010 1-F), cuerda elástica en el motor, extremos de segmento cerrados y silencio acumulado (errores encontrados por el agente). 439 pruebas.
+- 2026-11-19 07:50 — Ondas y sonido integrado. v0.5.0 publicada (439 pruebas).

@@ -7,6 +7,11 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.5.0] - 2026-11-19
+
+Ondas y sonido (cuerdas, tubos y Doppler con audio), 19 escenas MEXT más en
+el Laboratorio de Mecánica y un motor de Mecánica más robusto.
+
 ### Añadido
 
 - Módulo Ondas y sonido con dos espacios de trabajo:
@@ -220,7 +225,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.4.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.1.0...v0.2.0
