@@ -44,3 +44,17 @@ export const autoguardado = {
   /** @param {string} clave */
   borrar(clave) { try { localStorage.removeItem('volta.escena.' + clave); } catch { /* sin almacenamiento */ } },
 };
+
+/**
+ * Escena que otra pantalla (Inicio) dejó para abrir en esta. Se consume una
+ * sola vez. Devuelve null si no hay o si no es de este módulo.
+ * @param {string} modulo
+ */
+export function escenaPendiente(modulo) {
+  try {
+    const t = sessionStorage.getItem('volta.abrir');
+    if (!t) return null;
+    sessionStorage.removeItem('volta.abrir');
+    return leerEscena(t, { modulo });
+  } catch { return null; }
+}

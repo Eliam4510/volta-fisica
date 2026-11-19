@@ -31,6 +31,10 @@
   .tarjeta-modulo.inactiva:hover { background: var(--panel); border-color: var(--linea-suave); }
   .filtros { display: flex; align-items: center; gap: var(--e-3); }
   .tarjeta-escena { text-decoration: none; color: inherit; }
+  .pie { display: flex; align-items: center; gap: var(--e-2); padding-top: var(--e-6); border-top: 1px solid var(--linea-suave); color: var(--texto-3); font-size: var(--t-pequeno); }
+  .pie a { color: var(--texto-2); }
+  .pie .sp { flex: 1; }
+  body > .aviso-flotante { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; }
   a.tarjeta-modulo { color: var(--texto); }
 </style>
 </head>
@@ -58,8 +62,8 @@
         <p>Nueve módulos, un mismo laboratorio. Abre un escenario o empieza uno en blanco.</p>
       </div>
       <div class="acciones">
-        <button class="btn btn-secundario"><svg class="ico"><use href="#i-carpeta"/></svg>Abrir archivo</button>
-        <button class="btn btn-primario"><svg class="ico"><use href="#i-mas"/></svg>Nueva escena</button>
+        <button class="btn btn-secundario" id="b-abrir" data-ayuda="Abrir una escena .volta|Open scene|Ctrl O"><svg class="ico"><use href="#i-carpeta"/></svg>Abrir archivo</button>
+        <a class="btn btn-primario" id="b-nueva" href="mecanica.html" data-ayuda="Nueva escena en Mecánica|New scene"><svg class="ico"><use href="#i-mas"/></svg>Nueva escena</a>
       </div>
     </div>
 
@@ -84,12 +88,20 @@
       </header>
       <div class="rejilla-4" id="biblioteca"></div>
     </section>
+    <footer class="pie">
+      <span>Volta <span class="num" id="version">0.1.0</span></span>
+      <span>·</span><span>Licencia MIT</span>
+      <span>·</span><a href="https://github.com/Eliam4510/volta-fisica" target="_blank" rel="noopener">github.com/Eliam4510/volta-fisica</a>
+      <span class="sp"></span><span>Las cantidades se escriben según ISO 80000</span>
+    </footer>
   </main>
 </div>
 
 <script type="module" src="../lienzo/trazo.js"></script>
 <script type="module" src="../componentes/espacio.js"></script>
 <script type="module">
+import { abrirEscena } from '../componentes/archivos.js';
+import { avisar } from '../componentes/exportar.js';
 (function () {
   'use strict';
   const MODULOS = [
@@ -230,6 +242,29 @@
   document.getElementById('filtro').addEventListener('click', ev => { const b = ev.target.closest('button'); if (b) pintarBiblioteca(b.dataset.f); });
 
   document.fonts.ready.then(() => { pintarBiblioteca(''); dibujarMinis(); });
+
+  // ---------- Abrir y nueva escena ----------
+  // La escena viaja a su pantalla por sessionStorage ("volta.abrir").
+  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html' };
+  function abrir() {
+    abrirEscena({}).then(e => {
+      const destino = PANTALLAS[e.modulo];
+      if (!destino) { avisar(document.body, `El módulo «${e.modulo}» todavía no tiene pantalla.`); return; }
+      try { sessionStorage.setItem('volta.abrir', JSON.stringify(e)); } catch { /* sin almacenamiento */ }
+      location.href = destino;
+    }).catch(err => avisar(document.body, err.message));
+  }
+  document.getElementById('b-abrir').addEventListener('click', abrir);
+  document.getElementById('b-nueva').addEventListener('click', () => {
+    try { localStorage.removeItem('volta.escena.mecanica'); } catch { /* sin almacenamiento */ }
+  });
+  document.addEventListener('keydown', ev => {
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'o') { ev.preventDefault(); abrir(); }
+  });
+
+  // ---------- Versión desde la aplicación nativa (si existe) ----------
+  const tauri = window.__TAURI__;
+  if (tauri?.core?.invoke) tauri.core.invoke('version').then(v => { document.getElementById('version').textContent = v; }).catch(() => {});
   Volta.alCambiarTema(dibujarMinis);
   window.addEventListener('resize', dibujarMinis);
 })();

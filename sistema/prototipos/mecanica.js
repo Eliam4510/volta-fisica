@@ -7,7 +7,7 @@ import { simularProyectil, estadoEn, energiaEn } from '../motores/proyectiles.js
 import { aCSV, muestrear } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
 import { crearEscena, numero } from '../nucleo/escena.js';
-import { guardarEscena, abrirEscena, autoguardado } from '../componentes/archivos.js';
+import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
 
 (function () {
   'use strict';
@@ -414,7 +414,7 @@ import { guardarEscena, abrirEscena, autoguardado } from '../componentes/archivo
     const q = new URLSearchParams(location.search);
     // El autoguardado se restaura al abrir normalmente, no en capturas ni enlaces con ?t
     const limpio = !q.has('t') && !q.has('captura');
-    const guardada = limpio ? autoguardado.leer('mecanica', { modulo: 'mecanica' }) : null;
+    const guardada = escenaPendiente('mecanica') || (limpio ? autoguardado.leer('mecanica', { modulo: 'mecanica' }) : null);
     if (guardada) {
       const d = guardada.datos || {}, vars = d.variables || {};
       for (const [k, def] of Object.entries(V)) if (!def.constante) def.val = numero(vars[k], def.val, def.min, def.max);
