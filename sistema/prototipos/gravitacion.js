@@ -707,8 +707,17 @@ import { evaluar } from '../nucleo/unidades.js';
   function guardar() {
     guardarEscena(escenaActual()).then(r => { if (r) avisar(area, 'Escena guardada'); }, err => avisar(area, `No se pudo guardar: ${err}`));
   }
+  // Una escena de otro espacio de Gravitación (Sistema solar, Maniobras) se abre en su pantalla
+  const PAGINAS = { orbitas: 'gravitacion.html', 'sistema-solar': 'gravitacion-sistema-solar.html', maniobras: 'gravitacion-maniobras.html' };
+  function aOtroEspacio(e) {
+    if (!e.espacio || e.espacio === 'orbitas' || !PAGINAS[e.espacio]) return false;
+    try { sessionStorage.setItem('volta.abrir', JSON.stringify(e)); } catch { /* sin almacenamiento */ }
+    location.href = PAGINAS[e.espacio];
+    return true;
+  }
   function abrir() {
     abrirEscena({ modulo: 'gravitacion' }).then(e => {
+      if (aOtroEspacio(e)) return;
       guardarHistorial();
       const d = datosSeguros(e.datos);
       cargarEscena(d.escena, d);
@@ -994,7 +1003,9 @@ import { evaluar } from '../nucleo/unidades.js';
     tz.ajustar();
     // Escena abierta desde Inicio, o la última sesión (no en capturas ni con parámetros)
     const limpio = ![...q.keys()].length;
-    const previa = escenaPendiente('gravitacion') || (limpio ? autoguardado.leer('gravitacion', { modulo: 'gravitacion' }) : null);
+    const pend = escenaPendiente('gravitacion');
+    if (pend && aOtroEspacio(pend)) return;
+    const previa = pend || (limpio ? autoguardado.leer('gravitacion', { modulo: 'gravitacion' }) : null);
     autoguardar = limpio || !!previa;
     if (previa) { const d = datosSeguros(previa.datos); cargarEscena(d.escena, d); $('#f-m').value = String(masa); }
     else cargarEscena(q.get('escena') || 'canon');

@@ -9,6 +9,16 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Gravitación: espacios nuevos «Sistema solar» (cuerpos colocados
+  libremente que se atraen entre sí, planetas con datos reales J2000,
+  escala lineal o logarítmica, T² contra a³ de todos, áreas barridas,
+  centro de masa, tres cuerpos de Burrau y la figura en ocho) y
+  «Maniobras» (nave con un programa de impulsos en instantes o en el
+  periapsis o el apoapsis, órbita predicha tras cada impulso, Δv total y
+  Hohmann a un clic). Motor de N cuerpos con Yoshida 4 y Bulirsch–Stoer
+  adaptativo en los encuentros cercanos, fusiones y aterrizajes. 32
+  pruebas nuevas.
+
 - Termodinámica es una caja de arena en sus cuatro espacios: las paletas
   colocan, arrastran y quitan objetos (cilindro con pesa, calentador y
   baño; filas de recipientes con válvulas, tabiques o émbolos; globo;

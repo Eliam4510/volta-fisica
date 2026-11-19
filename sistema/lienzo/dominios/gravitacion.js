@@ -23,6 +23,7 @@
   'use strict';
   const { Trazo, G, PATRON, cantidad, pasoAgradable } = global.Volta;
   const P = Trazo.prototype;
+  const FUENTE_NUM = '11px "IBM Plex Mono", Consolas, monospace';
 
   // Medidas del dominio (px de pantalla salvo que se diga)
   const GG = {
@@ -183,6 +184,94 @@
     this.lineaPx([[x + L, y - 4], [x + L, y + 4]], { color: 'texto-2', grosor: 1.5 });
     this.lineaPx([[x, y], [x + L, y]], { color: 'texto-2', grosor: 1.5 });
     this.texto(cantidad(m, unidad, 2).replace(/\.0+(?= )/, ''), x + L / 2, y - 9, { fuente: 'num', tam: 11, color: 'texto-2', alinear: 'center', halo: true });
+  };
+
+  // ---------------------------------------------------------------------
+  // Sistema solar y Maniobras: N cuerpos sobre el lienzo
+  // ---------------------------------------------------------------------
+  // Cuerpo masivo con un radio de pantalla rPx (simbólico o real): materia con
+  // relleno --campo y contorno de tinta; con radio suficiente, el ecuador del
+  // icono o-planeta y el centro de masa. o: { grueso } (hover y selección)
+  P.gravCuerpo = function (p, rPx, o = {}) {
+    const ctx = this.ctx, [x, y] = this.vista.P(p), r = Math.max(2.5, rPx);
+    ctx.save(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = this.t.campo; ctx.fill();
+    ctx.strokeStyle = this.t.tinta; ctx.lineWidth = (r < 4 ? 1.5 : G.materia) + (o.grueso ? 0.5 : 0); ctx.stroke();
+    if (r >= 11) {
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * GG.ecuador, 0, 0, Math.PI);
+      ctx.strokeStyle = this.t['texto-3']; ctx.lineWidth = 1; ctx.stroke();
+    }
+    ctx.restore();
+    if (r >= 9) this.centroMasa(p);
+    else if (r >= 4) { ctx.save(); ctx.fillStyle = this.t.tinta; ctx.beginPath(); ctx.arc(x, y, 1.5, 0, 2 * Math.PI); ctx.fill(); ctx.restore(); }
+    return [x, y];
+  };
+
+  // Nave: el dibujo del icono o-nave (fuselaje con punta y aletas) orientado
+  // según el ángulo de pantalla ang (rad, hacia donde apunta), en tinta
+  P.gravNave = function (p, ang, o = {}) {
+    const ctx = this.ctx, [x, y] = this.vista.P(p), k = o.escala || 1.25;
+    ctx.save(); ctx.setLineDash([]);
+    ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.scale(k, k);
+    // Coordenadas del icono (20 × 20) centradas en el fuselaje
+    ctx.translate(-10, -10);
+    ctx.beginPath();
+    ctx.moveTo(7.5, 16.5); ctx.lineTo(7.5, 8.5); ctx.lineTo(10, 3); ctx.lineTo(12.5, 8.5); ctx.lineTo(12.5, 16.5); ctx.closePath();
+    ctx.fillStyle = this.t.campo; ctx.fill();
+    ctx.strokeStyle = this.t.tinta; ctx.lineWidth = (1.5 + (o.grueso ? 0.5 : 0)) / k; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(7.5, 11.5); ctx.lineTo(5, 14); ctx.lineTo(5, 16.5); ctx.lineTo(7.5, 16.5);
+    ctx.moveTo(12.5, 11.5); ctx.lineTo(15, 14); ctx.lineTo(15, 16.5); ctx.lineTo(12.5, 16.5);
+    ctx.stroke();
+    ctx.restore();
+    return [x, y];
+  };
+
+  // Escala logarítmica de distancias: anillos de referencia alrededor de c
+  // (mundo) con radios de pantalla ya transformados. anillos: [{rPx, texto}].
+  // Cada etiqueta va sobre su anillo en el primer ángulo libre de o.libre(x, y,
+  // ancho, alto) (por defecto, a 60° arriba a la derecha). Devuelve sus cajas.
+  P.gravAnillos = function (c, anillos, o = {}) {
+    const ctx = this.ctx, [cx, cy] = this.vista.P(c), cajas = [];
+    ctx.save(); ctx.setLineDash([]); ctx.lineWidth = 1;
+    for (const a of anillos) {
+      ctx.strokeStyle = this.t['cuadricula-mayor'];
+      ctx.beginPath(); ctx.arc(cx, cy, a.rPx, 0, 2 * Math.PI); ctx.stroke();
+    }
+    ctx.font = FUENTE_NUM;
+    for (const a of anillos) {
+      if (!a.texto || a.rPx < 24) continue;
+      const w = ctx.measureText(a.texto).width;
+      const angs = [-60, -30, -120, -150, 30, 150, 60, 120, -90, 90].map(g => g * Math.PI / 180);
+      const sitio = angs.map(g => [cx + Math.cos(g) * a.rPx + 4, cy + Math.sin(g) * a.rPx - 3])
+        .find(([x, y]) => !o.libre || o.libre(x, y - 11, w, 14)) || null;
+      if (!sitio) continue;
+      a.sitio = sitio; a.w = w; cajas.push([sitio[0] - 2, sitio[1] - 12, w + 4, 15]);
+    }
+    ctx.restore();
+    for (const a of anillos) if (a.sitio) this.texto(a.texto, a.sitio[0], a.sitio[1], { fuente: 'num', tam: 11, color: 'texto-3', halo: true });
+    return cajas;
+  };
+
+  // Marca de un impulso Δv en el punto p: anillo de evento (hecho) o anillo
+  // discontinuo (previsto)
+  P.gravMarcaImpulso = function (p, hecho = true) {
+    if (hecho) return this.eventoAnillo(p);
+    const ctx = this.ctx, [x, y] = this.vista.P(p);
+    ctx.save(); ctx.setLineDash(PATRON.previsto); ctx.strokeStyle = this.t.tinta; ctx.lineWidth = 1.25; ctx.fillStyle = this.t.lienzo;
+    ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.restore();
+    return [x, y];
+  };
+
+  // Barra de escala con una distancia en la unidad del lienzo y su texto
+  P.gravBarraUnidad = function (x, y, unidad, cifras = 2) {
+    const v = this.vista, m = pasoAgradable(90 / v.escala), L = m * v.escala;
+    this.lineaPx([[x, y - 4], [x, y + 4]], { color: 'texto-2', grosor: 1.5 });
+    this.lineaPx([[x + L, y - 4], [x + L, y + 4]], { color: 'texto-2', grosor: 1.5 });
+    this.lineaPx([[x, y], [x + L, y]], { color: 'texto-2', grosor: 1.5 });
+    this.texto(cantidad(m, unidad, cifras).replace(/\.0+(?= )/, ''), x + L / 2, y - 9, { fuente: 'num', tam: 11, color: 'texto-2', alinear: 'center', halo: true });
+    return L;
   };
 
   global.Volta.grav = { GG, contornoPlaneta };

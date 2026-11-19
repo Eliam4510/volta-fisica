@@ -111,7 +111,7 @@ import { avisar } from '../componentes/exportar.js';
   // Los conteos son los reales: actualizarlos al añadir espacios o escenas MEXT.
   const MODULOS = [
     ['mecanica', 'Mecánica', 'Partículas y cuerpos sobre superficies, cuerdas, resortes, choques y equilibrio.', 2, 38, 'mecanica.html'],
-    ['gravitacion', 'Gravitación', 'Órbitas, satélites, velocidad de escape y leyes de Kepler.', 1, 8, 'gravitacion.html'],
+    ['gravitacion', 'Gravitación', 'Órbitas, el Sistema Solar con datos reales, leyes de Kepler y maniobras con impulsos.', 3, 8, 'gravitacion.html'],
     ['termodinamica', 'Termodinámica', 'Gases con émbolos y válvulas, ciclos en el diagrama P-V, el gas visto desde sus moléculas y calorimetría.', 4, 29, 'termodinamica.html'],
     ['electrostatica', 'Electrostática', 'Cargas, campo, potencial, Gauss, conductores, dieléctricos y capacitores.', 2, 18, 'electrostatica.html'],
     ['circuitos', 'Circuitos', 'Corriente continua, redes de capacitores y transitorios RC, RL y LC.', 1, 10, 'circuitos.html'],
@@ -270,7 +270,7 @@ import { avisar } from '../componentes/exportar.js';
   // La escena viaja a su pantalla por sessionStorage ("volta.abrir").
   const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html', optica: 'optica.html', magnetismo: 'magnetismo.html', moderna: 'moderna.html' };
   // Espacios con pantalla propia dentro de un módulo
-  const ESPACIOS = { 'mecanica:laboratorio': 'mecanica-laboratorio.html', 'ondas:cubeta': 'ondas-cubeta.html', 'termodinamica:ciclos': 'termodinamica-ciclos.html', 'termodinamica:molecular': 'termodinamica-molecular.html', 'termodinamica:calor': 'termodinamica-calor.html', 'electrostatica:conductores': 'electrostatica-conductores.html', 'ondas:doppler': 'ondas-doppler.html', 'optica:interferencia': 'optica-ondas.html', 'optica:peliculas': 'optica-peliculas.html', 'magnetismo:particulas': 'magnetismo-particulas.html', 'magnetismo:induccion': 'magnetismo-induccion.html', 'moderna:nucleo': 'moderna-nucleo.html' };
+  const ESPACIOS = { 'mecanica:laboratorio': 'mecanica-laboratorio.html', 'gravitacion:sistema-solar': 'gravitacion-sistema-solar.html', 'gravitacion:maniobras': 'gravitacion-maniobras.html', 'ondas:cubeta': 'ondas-cubeta.html', 'termodinamica:ciclos': 'termodinamica-ciclos.html', 'termodinamica:molecular': 'termodinamica-molecular.html', 'termodinamica:calor': 'termodinamica-calor.html', 'electrostatica:conductores': 'electrostatica-conductores.html', 'ondas:doppler': 'ondas-doppler.html', 'optica:interferencia': 'optica-ondas.html', 'optica:peliculas': 'optica-peliculas.html', 'magnetismo:particulas': 'magnetismo-particulas.html', 'magnetismo:induccion': 'magnetismo-induccion.html', 'moderna:nucleo': 'moderna-nucleo.html' };
   function abrir() {
     abrirEscena({}).then(e => {
       // Algunos módulos tienen varios espacios, cada uno con su pantalla

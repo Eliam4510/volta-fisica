@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volta · Gravitación · Sistema solar</title>
+<link rel="stylesheet" href="../fuentes/fuentes.css">
+<link rel="icon" href="../marca/icono-app.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="../componentes/componentes.css">
+<script src="../iconos/sprite.js"></script>
+<style>
+  /* Solo ajustes propios de esta pantalla; todo lo demás viene del sistema */
+  .migas { flex: none; }
+  .escena-btn { gap: var(--e-2); min-width: 0; max-width: 460px; padding: 0 var(--e-2); color: var(--texto-3); font-weight: 400; }
+  .escena-btn b { color: var(--texto-2); font-weight: var(--peso-medio); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .escena-btn .ico { color: var(--texto-3); }
+  button.modo { border: 0; background: transparent; cursor: pointer; height: var(--h-compacto); padding: 0 var(--e-2); border-radius: var(--r-control); }
+  button.modo:hover { background: var(--campo-hover); color: var(--texto); }
+  #menu-escenas, #menu-flotante { position: fixed; z-index: 40; min-width: 360px; max-height: calc(100vh - 64px); overflow: auto; }
+  #menu-flotante { min-width: 220px; }
+  #menu-escenas .menu-item .chip, #menu-flotante .menu-item .atajo { margin-left: auto; }
+  #menu-escenas .menu-item[aria-current="true"], #menu-flotante .menu-item[aria-current="true"] { background: var(--campo); }
+  .reloj { min-width: 124px; }
+  .grafica-cab .sim sub { font-family: var(--fuente-simbolos); font-style: normal; font-size: .7em; }
+  .grafica-cab .lect { flex: none; white-space: nowrap; }
+  .grafica-cab > span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fila .segmentado { justify-self: start; }
+  .fila .segmentado button { padding: 0 7px; }
+  .lecturas .sim sub { font-style: normal; }
+  .aviso-lienzo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .graficas { padding-top: var(--e-2); }
+  .acciones-fila { display: flex; gap: var(--e-1); flex-wrap: wrap; }
+  .tabla td.texto { font-family: var(--fuente-interfaz); }
+  .barra-e { grid-template-columns: 136px minmax(0, 1fr) 96px; }
+  .leyenda .sim { display: inline; }
+  .nota-ref { margin: 2px 0 var(--e-2); font-size: var(--t-pequeno); color: var(--texto-3); }
+  .flotante .segmentado button { height: 22px; padding: 0 6px; font-size: var(--t-pequeno); }
+  .flotante .etq { color: var(--texto-3); font-size: var(--t-pequeno); }
+</style>
+</head>
+<body>
+<div class="espacio">
+  <!-- ============================ Barra superior ============================ -->
+  <header class="barra">
+    <a class="marca" href="inicio.html" data-ayuda="Inicio|Home">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6.5 L16 23 L26 6.5" stroke-width="2.4"/><path d="M4 23 H28" stroke-width="2.4"/><path d="M8.5 23 L5.5 26 M13.5 23 L10.5 26 M18.5 23 L15.5 26 M23.5 23 L20.5 26" stroke-width="1.4"/><circle cx="26" cy="6.5" r="2.6" fill="currentColor" stroke="none"/></svg>
+      <b>Volta</b>
+    </a>
+    <span class="separador-v"></span>
+    <nav class="migas">
+      <button class="btn btn-compacto">Gravitación<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+      <span class="sep">/</span>
+      <button class="btn btn-compacto">Sistema solar<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    </nav>
+    <button class="btn btn-compacto escena-btn" id="b-escenas" aria-haspopup="menu" data-ayuda="Cambiar de escena|Scenes"><span id="escena-chip" class="chip">Ejemplo</span><b id="escena-nombre"></b><svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    <span class="sp"></span>
+    <div class="transporte">
+      <button class="btn btn-icono" id="b-reiniciar" data-ayuda="Reiniciar|Reset|Inicio"><svg class="ico"><use href="#i-reiniciar"/></svg></button>
+      <button class="btn btn-icono" id="b-atras" data-ayuda="Retroceder|Step back|←"><svg class="ico"><use href="#i-paso-atras"/></svg></button>
+      <button class="btn btn-primario btn-reproducir" id="b-play" data-ayuda="Reproducir|Play|Espacio"><svg class="ico"><use href="#i-reproducir"/></svg></button>
+      <button class="btn btn-icono" id="b-adelante" data-ayuda="Avanzar|Step forward|→"><svg class="ico"><use href="#i-paso-adelante"/></svg></button>
+    </div>
+    <div class="reloj" id="reloj"></div>
+    <div class="segmentado" data-exclusivo id="velocidades" data-ayuda="Velocidad de reproducción: a 1× la escena entera dura 24 s en pantalla|Playback speed">
+      <button data-v="0.25">¼×</button><button data-v="0.5">½×</button><button data-v="1" aria-pressed="true">1×</button><button data-v="2">2×</button><button data-v="4">4×</button>
+    </div>
+    <span class="sp"></span>
+    <button class="modo" id="b-modo" data-ayuda="Integrador: automático (simpléctico de Yoshida y Bulirsch–Stoer adaptativo en los encuentros cercanos), adaptativo o simpléctico|Integrator">Automático</button>
+    <span class="separador-v"></span>
+    <button class="btn btn-icono" id="b-deshacer" disabled data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
+    <button class="btn btn-icono" id="b-rehacer" disabled data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
+    <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
+  </header>
+
+  <!-- ============================ Panel izquierdo ============================ -->
+  <aside class="panel panel-izq">
+    <div class="desplaza">
+      <div class="seccion">
+        <div class="panel-cab">Objetos</div>
+        <div class="paleta" id="paleta-objetos">
+          <button class="herr" data-herr="planeta" data-ayuda="Planeta con datos reales: elige cuál y haz clic en el lienzo; entra en órbita circular alrededor del cuerpo que domina allí|Planet"><svg class="ico"><use href="#o-planeta"/></svg><span>Planeta</span></button>
+          <button class="herr" data-herr="masivo" data-ayuda="Cuerpo masivo: atrae y es atraído; entra en órbita circular|Massive body"><svg class="ico"><use href="#o-cuerpo-masivo"/></svg><span>Cuerpo masivo</span></button>
+          <button class="herr" data-herr="satelite" data-ayuda="Satélite o partícula de prueba: siente la gravedad pero no atrae|Test particle"><svg class="ico"><use href="#o-satelite"/></svg><span>Satélite</span></button>
+        </div>
+        <div class="paleta" data-pendiente="El arrastre de la atmósfera llega en una próxima versión; las maniobras con impulsos están en el espacio «Maniobras».">
+          <button class="herr" data-ayuda="Atmósfera (arrastre)|Atmosphere"><svg class="ico"><use href="#o-atmosfera"/></svg><span>Atmósfera</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Instrumentos</div>
+        <div class="paleta" id="paleta-instrumentos">
+          <button class="herr" data-herr="regla" data-ayuda="Regla: arrastra sobre el lienzo para medir una distancia|Ruler|R"><svg class="ico"><use href="#n-regla"/></svg><span>Regla</span></button>
+          <button class="herr" data-herr="periodo" data-ayuda="Periodo: el periodo medido de cada cuerpo (primera vuelta completa alrededor de su primario)|Period meter|P"><svg class="ico"><use href="#n-periodo"/></svg><span>Periodo</span></button>
+          <button class="herr" data-herr="velocimetro" data-ayuda="Velocímetro: la rapidez de cada cuerpo respecto de su primario|Speedometer|V"><svg class="ico"><use href="#n-velocimetro"/></svg><span>Velocímetro</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Escena</div>
+        <div class="arbol" id="arbol"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================ Lienzo ============================ -->
+  <main class="lienzo-area" id="area">
+    <canvas id="lienzo"></canvas>
+    <div class="flotante ar-izq" role="group" aria-label="Escala de distancias">
+      <span class="etq">Escala</span>
+      <div class="segmentado texto" id="b-escala" data-ayuda="Escala de distancias: lineal, o logarítmica alrededor del cuerpo central (cabe todo el Sistema Solar)|Distance scale|L"><button data-v="lineal" aria-pressed="true">Lineal</button><button data-v="log" aria-pressed="false">Logarítmica</button></div>
+    </div>
+    <div class="flotante ar-der" role="group" aria-label="Capas">
+      <svg class="ico"><use href="#i-capas"/></svg>
+      <button class="capa-btn" data-capa="trazas" aria-pressed="true" data-ayuda="Trayectorias recorridas|Trails|T">Trazas</button>
+      <button class="capa-btn" data-capa="orbitas" aria-pressed="true" data-ayuda="Órbita predicha de cada cuerpo: la cónica que seguiría sin perturbaciones|Predicted orbits|O">Órbitas</button>
+      <button class="capa-btn" data-capa="areas" aria-pressed="false" data-ayuda="Áreas barridas en intervalos iguales por el cuerpo seleccionado (segunda ley de Kepler)|Swept areas|A">Áreas</button>
+      <button class="capa-btn" data-capa="cm" aria-pressed="true" data-ayuda="Centro de masa del sistema y su recorrido|Center of mass|C">Centro de masa</button>
+      <button class="capa-btn" data-capa="vectores" aria-pressed="true" data-ayuda="Velocidad y aceleración del cuerpo seleccionado|Vectors">Vectores</button>
+      <button class="capa-btn" data-capa="tamano" aria-pressed="false" data-ayuda="Tamaño real de los cuerpos a la escala de las distancias (casi siempre menor que un píxel)|True size">Tamaño real</button>
+    </div>
+    <div class="flotante ab-izq" id="coords"><span class="sim">x</span><span class="num" id="cx">—</span><span class="sim">y</span><span class="num" id="cy">—</span></div>
+    <div class="flotante ab-der">
+      <button class="btn btn-icono btn-compacto" id="b-zoom-menos" data-ayuda="Alejar|Zoom out|−"><svg class="ico"><use href="#i-zoom-menos"/></svg></button>
+      <span class="num" id="zoom">100 %</span>
+      <button class="btn btn-icono btn-compacto" id="b-zoom-mas" data-ayuda="Acercar|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button>
+      <span class="sep"></span>
+      <button class="btn btn-compacto" id="b-encuadrar" data-ayuda="Encuadrar todo|Fit to view|F"><svg class="ico"><use href="#i-encuadrar"/></svg>Encuadrar</button>
+    </div>
+    <div class="aviso-flotante aviso-lienzo" id="aviso" hidden><svg class="ico"><use href="#i-evento"/></svg><span id="aviso-texto"></span><button class="btn btn-compacto" id="aviso-deshacer">Deshacer</button></div>
+  </main>
+
+  <!-- ============================ Panel derecho ============================ -->
+  <aside class="panel panel-der">
+    <div class="desplaza">
+      <div class="panel-cab">Inspector</div>
+      <div class="insp-cab">
+        <div class="miniatura"><svg class="ico"><use id="insp-ico" href="#o-planeta"/></svg></div>
+        <div><div class="t1" id="insp-nombre"></div><div class="t2" id="insp-estado"></div></div>
+      </div>
+      <details class="grupo" open id="grupo-props">
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="props-titulo">Propiedades</span></summary>
+        <div id="propiedades"></div>
+      </details>
+      <details class="grupo" open id="grupo-elementos">
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="elem-titulo">Elementos orbitales</span></summary>
+        <div class="lecturas" id="elementos"></div>
+      </details>
+      <details class="grupo" open>
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
+        <div class="lecturas" id="lecturas"></div>
+      </details>
+      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables</div>
+      <div class="variables" id="variables"></div>
+    </div>
+  </aside>
+
+  <!-- ============================ Panel inferior ============================ -->
+  <section class="panel panel-inf">
+    <div class="inf-cab">
+      <div class="pestanas" role="tablist" id="pest">
+        <button class="pestana" role="tab" aria-selected="true" aria-controls="p-graficas">Gráficas</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-energia">Energía</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-eventos">Eventos</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-tabla">Tabla</button>
+      </div>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn btn-compacto" id="b-exportar" data-ayuda="Exportar el estado de todos los cuerpos a CSV|Export data"><svg class="ico"><use href="#i-exportar"/></svg>Exportar datos</button>
+    </div>
+    <div class="linea-tiempo"><canvas id="tl"></canvas></div>
+    <div class="graficas" id="p-graficas" data-grupo="pest">
+      <div class="grafica"><div class="grafica-cab"><span id="t1"></span><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t2"></span><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t3"></span><span class="lect" id="l3"></span></div><canvas id="g3"></canvas></div>
+    </div>
+    <div class="energia" id="p-energia" data-grupo="pest" hidden>
+      <div class="barras con-signo" id="barras"></div>
+      <div class="grafica"><div class="grafica-cab"><span class="leyenda"><span style="color:var(--f-movimiento)"><i></i><span class="sim">E<sub class="r">k</sub></span></span><span style="color:var(--f-cambio)"><i></i><span class="sim">U</span></span><span style="color:var(--tinta)"><i></i><span class="sim">E</span></span></span><span class="lect" id="l4"></span></div><canvas id="g4"></canvas></div>
+    </div>
+    <div class="lista-eventos" id="p-eventos" data-grupo="pest" hidden><table class="tabla" id="t-eventos"></table></div>
+    <div class="lista-eventos" id="p-tabla" data-grupo="pest" hidden><table class="tabla" id="t-datos"></table></div>
+  </section>
+</div>
+
+<!-- Menús -->
+<div class="menu" id="menu-escenas" role="menu" hidden></div>
+<div class="menu" id="menu-flotante" role="menu" hidden></div>
+
+<!-- Paleta de comandos -->
+<div class="velo comandos-velo" id="velo-comandos" hidden>
+  <div class="comandos" role="dialog" aria-label="Comandos">
+    <div class="comandos-buscar"><svg class="ico ico-20" style="color:var(--texto-3)"><use href="#i-buscar"/></svg><input id="cmd-q" placeholder="Escribe un comando o una escena"><kbd>Esc</kbd></div>
+    <div class="comandos-lista" id="cmd-lista"></div>
+  </div>
+</div>
+
+<script type="module" src="../lienzo/trazo.js"></script>
+<script type="module" src="../lienzo/dominios/gravitacion.js"></script>
+<script type="module" src="../lienzo/grafica.js"></script>
+<script type="module" src="../componentes/linea-tiempo.js"></script>
+<script type="module" src="../componentes/espacio.js"></script>
+<script type="module" src="gravitacion-sistema-solar.js"></script>
+</body>
+</html>

@@ -78,7 +78,7 @@
   // aquí con sus espacios (la primera página es la que abre el módulo).
   const MODULOS = [
     { nombre: 'Mecánica', icono: 'm-mecanica', espacios: [['mecanica.html', 'Cinemática y proyectiles', 'o-lanzador'], ['mecanica-laboratorio.html', 'Laboratorio', 'i-escena']] },
-    { nombre: 'Gravitación', icono: 'm-gravitacion', espacios: [['gravitacion.html', 'Órbitas', 'o-satelite']] },
+    { nombre: 'Gravitación', icono: 'm-gravitacion', espacios: [['gravitacion.html', 'Órbitas', 'o-satelite'], ['gravitacion-sistema-solar.html', 'Sistema solar', 'o-planeta'], ['gravitacion-maniobras.html', 'Maniobras', 'o-nave']] },
     { nombre: 'Termodinámica', icono: 'm-termodinamica', espacios: [['termodinamica.html', 'Laboratorio de gases', 'o-cilindro'], ['termodinamica-ciclos.html', 'Ciclos y diagrama P-V', 'o-embolo'], ['termodinamica-molecular.html', 'Gas molecular', 'o-caja-molecular'], ['termodinamica-calor.html', 'Calor y calorimetría', 'o-calorimetro']] },
     { nombre: 'Electrostática', icono: 'm-electrostatica', espacios: [['electrostatica.html', 'Cargas y campos', 'o-carga-positiva'], ['electrostatica-conductores.html', 'Conductores y dieléctricos', 'o-capacitor-placas']] },
     { nombre: 'Circuitos', icono: 'm-circuitos', espacios: [['circuitos.html', 'Transitorios', 'o-capacitor']] },
