@@ -21,6 +21,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
     variable, campos B(t) y generador, con flujo por intersección exacta
     de polígonos, sentido de Lenz y registro de energía.
   - 47 pruebas y las 13 escenas MEXT del tema.
+- Electrostática: menú de escenas (tutoriales, ejemplos y las 10 MEXT de
+  cargas) en «Cargas y campos», con hilos, segmentos, anillos, láminas,
+  esferas y campo uniforme, y el instrumento de Gauss. Espacio nuevo
+  «Conductores y dieléctricos»: capacitores de placas, esféricos y
+  coaxiales con dieléctricos y conductores, batería conectada o no, y las
+  8 escenas MEXT de conductores y capacitores. 66 pruebas nuevas.
 
 - Laboratorio: panel de variables, como en los demás módulos. Una variable
   es un deslizador que fija a la vez varias propiedades (la rapidez de dos
@@ -67,6 +73,10 @@ fotopuerta). Inicio muestra las escenas recientes reales.
   impuesto ya no distorsionan el cálculo de las demás fuerzas.
 
 ### Corregido
+
+- Electrostática: el potencial sobre un segmento cargado daba infinito; la
+  carga encerrada por un cilindro de Gauss ignoraba la altura de esferas y
+  segmentos respecto de las tapas.
 
 - Inicio mostraba en «Continuar» cuatro escenas fijas de ejemplo («Hace 5
   min», «Ayer») que nadie había abierto. Ahora muestra lo último que se

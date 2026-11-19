@@ -47,7 +47,7 @@ Principios del proyecto:
 | Módulo | Estado | Qué simula |
 |---|---|---|
 | Mecánica | Utilizable | Proyectiles y Laboratorio (caja de arena): superficies fijas o llevadas por un cuerpo, cuerdas, poleas, resortes, varillas, clavos, prensa hidráulica, fricción, choques entre discos y movimiento impuesto (ascensor, gráficas v–t); contactos como problema de complementariedad y energía disipada contabilizada; 38 escenas MEXT |
-| Electrostática | Utilizable | Cargas, campo, potencial, cargas en movimiento |
+| Electrostática | Utilizable | Cargas, hilos, anillos, láminas y esferas; campo, potencial, Gauss y cargas en movimiento; capacitores con dieléctricos, conductores y batería conectada o no; 18 escenas MEXT |
 | Termodinámica | Utilizable | Gas en cilindro con émbolo, calor, trabajo, diagrama P-V |
 | Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria; 8 escenas MEXT |
 | Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC |
