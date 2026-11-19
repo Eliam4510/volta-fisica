@@ -46,11 +46,11 @@ Principios del proyecto:
 
 | Módulo | Estado | Qué simula |
 |---|---|---|
-| Mecánica | Prototipo | Proyectiles, superficies, choques con restitución |
-| Electrostática | Prototipo | Cargas, campo, potencial, cargas en movimiento |
-| Termodinámica | Prototipo | Gas en cilindro con émbolo, calor, trabajo, diagrama P-V |
-| Gravitación | Planeado | Órbitas, escape, leyes de Kepler |
-| Circuitos | Planeado | Corriente continua, capacitores, transitorios |
+| Mecánica | En desarrollo | Proyectiles; motor general con superficies, cuerdas, poleas, resortes, fricción y choques entre discos |
+| Electrostática | Utilizable | Cargas, campo, potencial, cargas en movimiento |
+| Termodinámica | Utilizable | Gas en cilindro con émbolo, calor, trabajo, diagrama P-V |
+| Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria |
+| Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC |
 | Magnetismo e inducción | Planeado | Fuerza de Lorentz, inducción electromagnética |
 | Ondas y sonido | Planeado | Cuerdas, tubos, cubeta de ondas, Doppler |
 | Óptica | Planeado | Rayos, refracción, interferencia |
@@ -68,6 +68,10 @@ El plan completo, con dependencias y orden de implementación, está en
 | Termodinámica | Inicio |
 |---|---|
 | ![Termodinámica](docs/diseno/capturas/f4_termodinamica.png) | ![Inicio](docs/diseno/capturas/f1_inicio.png) |
+
+| Gravitación | Circuitos |
+|---|---|
+| ![Gravitación](docs/diseno/capturas/f6_gravitacion.png) | ![Circuitos](docs/diseno/capturas/f7_circuitos.png) |
 
 ## Instalación
 
@@ -89,6 +93,7 @@ git clone https://github.com/Eliam4510/volta-fisica.git
 cd volta-fisica
 npm install
 npm test          # pruebas de física e integridad
+npm run banco     # rendimiento de los motores
 npm run dev       # abre la aplicación en modo desarrollo
 npm run compilar  # genera el instalador en src-tauri/target/release/bundle/
 ```

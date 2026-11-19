@@ -7,6 +7,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.3.0] - 2026-11-19
+
+Dos módulos nuevos (Gravitación y Circuitos), Electrostática y
+Termodinámica al nivel de Mecánica, y un motor general de Mecánica con
+choques robustos sobre el que se construirá la caja de arena.
+
 ### Añadido
 
 - Campos con unidades y expresiones en Mecánica, Electrostática y Gravitación: se puede
@@ -127,6 +133,7 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.2.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Eliam4510/volta-fisica/releases/tag/v0.1.0

@@ -5,12 +5,13 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.2.0 publicada; 0.3.0 en preparación (CHANGELOG [Sin publicar] al día)
+- Versión: 0.3.0 (publicada el 2026-11-19)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
-- Agentes en curso: Circuitos (pantalla y motor) y Laboratorio de Mecánica
-  (caja de arena). Sus archivos están sin seguimiento hasta revisarlos.
+- Circuitos (pantalla «Transitorios», 56 pruebas) integrado y enlazado.
+- Agente en curso: Laboratorio de Mecánica (caja de arena). Sus archivos
+  están sin seguimiento hasta revisarlos.
 
 ## Pendiente (ordenado)
 
@@ -43,7 +44,7 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
 - [x] Motor de Electrostática + `nucleo/integradores.js` (59 pruebas).
 - [x] Gravitación: motor (40 pruebas) y pantalla «Órbitas» con cinco escenas.
-- [ ] Circuitos (agente en curso).
+- [x] Circuitos: motor nodal con transitorios (56 pruebas) y pantalla «Transitorios» con cinco escenarios.
 - [ ] Ondas, Óptica, Magnetismo, Moderna.
 
 ## Autocrítica 1 (2026-11-19 01:05)
@@ -113,3 +114,4 @@ regularización):
 - 2026-11-19 03:40 — Electrostática con escenas .volta saneadas y exportación con BOM. Motor de Mecánica endurecido: sin efecto túnel, choques simultáneos, contactos entre discos, varios apoyos por partícula, resultado parcial al límite de eventos (301 pruebas). CHANGELOG [Sin publicar] relleno.
   - Pendiente inmediato: revisar y hacer commit de Gravitación (agente terminó: 5 archivos sin seguimiento, 40 pruebas en verde); esperar a los agentes de Circuitos y del Laboratorio de Mecánica; enlazar las tres pantallas desde Inicio; publicar v0.3.0.
   - Conocido: la estabilización de Baumgarte deja ≈ 2·10⁻⁶·E0 de deriva en un montón de discos; mejora posible: proyección de posiciones al iniciar cada tramo. El montón inelástico genera muchos eventos (≈ 5000 en 5 s): falta un modo de reposo agrupado.
+- 2026-11-19 04:40 — Gravitación y Circuitos integrados y enlazados desde Inicio; Electrostática y Gravitación con unidades y escenas; banco de rendimiento; etiquetas de ejes fuera de las barras flotantes; autocrítica 2. v0.3.0 publicada (326 pruebas).
