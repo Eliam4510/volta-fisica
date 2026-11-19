@@ -18,8 +18,11 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 - Mecánica: movimiento impuesto con aceleración por tramos (un ascensor que
   arranca y frena, un móvil que sigue una gráfica v–t). En el Laboratorio,
   ejemplo «Ascensor que arranca y frena» (peso aparente) y escenas MEXT 2017
-  1-(1), 2019 1-(1) y 2023 1-(1) con gráficas v–t reconstruidas. Mecánica
-  tiene ya 36 escenas MEXT.
+  1-(1), 2019 1-(1) y 2023 1-(1) con gráficas v–t reconstruidas.
+- Laboratorio: escena MEXT 2010 1-B (palo con una caja en una cuesta), un
+  cuerpo rígido hecho con un triángulo de varillas sostenido por dos apoyos
+  verticales: F_A/F_B = (1 + tan θ)/(1 − tan θ). Mecánica tiene ya 37
+  escenas MEXT.
 
 ### Corregido
 

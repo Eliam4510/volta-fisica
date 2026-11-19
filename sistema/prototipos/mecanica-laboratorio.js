@@ -767,6 +767,28 @@ export const ESCENARIOS = [
     }),
   },
   {
+    id: 'mext-2010-1b', tipo: 'mext', anio: 2010, ref: '2010 · 1-B', titulo: 'Palo con una caja en una cuesta',
+    nota: ['Figura reconstruida: un palo de 2 m con una caja de 10 kg colgada; el centro de gravedad G queda 1 m por debajo del centro del palo (los extremos A y B pesan 10 g).', 'El palo y la caja son rígidos (un triángulo de varillas) y cada persona lo sostiene con una fuerza vertical: un apoyo sin fricción bajo cada extremo.', 'En la cuesta de θ = 20°, G se corre hacia A: F_A/F_B = (1 + tan θ)/(1 − tan θ) ≈ 2.15. Selecciona cada mano y lee su normal.'],
+    // Momentos respecto de G en horizontal: F_A·(L cos θ − d sen θ) = F_B·(L cos θ + d sen θ), con d = L
+    crear: () => {
+      const L = 1, th = 20, c = cosd(th), sn = sind(th);
+      const A = [-L * c, L * sn], B = [L * c, -L * sn], G = [-L * sn, -L * c];
+      return {
+        duracion: 1,
+        objetos: [
+          SEG('s1', 'segmento', 'Mano A', [A[0] - 0.15, A[1]], [A[0] + 0.15, A[1]], { e: 0 }),
+          SEG('s2', 'segmento', 'Mano B', [B[0] - 0.15, B[1]], [B[0] + 0.15, B[1]], { e: 0 }),
+          P_('p1', 'A', 0.01, A[0], A[1], { sobre: 's1' }),
+          P_('p2', 'B', 0.01, B[0], B[1], { sobre: 's2' }),
+          P_('p3', 'G', 10, G[0], G[1]),
+          { id: 'c1', tipo: 'varilla', nombre: 'Palo', a: 'p1', b: 'p2', L: 2 * L },
+          { id: 'c2', tipo: 'varilla', nombre: 'Soporte A', a: 'p1', b: 'p3', L: Math.SQRT2 * L },
+          { id: 'c3', tipo: 'varilla', nombre: 'Soporte B', a: 'p2', b: 'p3', L: Math.SQRT2 * L },
+        ],
+      };
+    },
+  },
+  {
     id: 'mext-2010-1c', tipo: 'mext', anio: 2010, ref: '2010 · 1-C', titulo: 'Altura en un instante del vuelo',
     nota: ['La pelota sale en diagonal desde el suelo y aterriza en T.', 'En el instante t está a h = ½·g·t·(T − t): pon el cursor en un instante y compara y con esa fórmula.', 'Aquí v = 10 m/s a 60°: T = 2v sen 60°/g ≈ 1.767 s.'],
     crear: () => ({

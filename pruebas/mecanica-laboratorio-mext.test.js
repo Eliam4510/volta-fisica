@@ -446,3 +446,19 @@ describe('escenas MEXT: gráficas v–t con movimiento impuesto por tramos', () 
     cerca(energiaMecanica(sim, 7).W, 5 * g * 20, 1e-9);
   });
 });
+
+describe('escenas MEXT: estática con un cuerpo rígido de varillas', () => {
+  it('2010 · 1-B: en la cuesta, F_A/F_B = (1 + tan θ)/(1 − tan θ) y nada se mueve', () => {
+    const { M, sim } = simular('mext-2010-1b');
+    expect(sim.eventos).toEqual([]);
+    const f = fuerzasEn(sim, M, 0.5), m = 0.01;
+    // La fuerza de cada persona sostiene su extremo (m·g) y su parte del palo con la caja
+    const FA = f.porParticula[0].find(x => x.tipo === 'normal').valor - m * g;
+    const FB = f.porParticula[1].find(x => x.tipo === 'normal').valor - m * g;
+    const th = 20 * Math.PI / 180;
+    cerca(FA / FB, (1 + Math.tan(th)) / (1 - Math.tan(th)), 1e-10);
+    cerca(FA + FB, 10 * g, 1e-10);
+    const G0 = est(sim, 0, 2), G1 = est(sim, 1, 2);
+    cerca(G1.x, G0.x, 1e-9); cerca(G1.y, G0.y, 1e-9);
+  });
+});
