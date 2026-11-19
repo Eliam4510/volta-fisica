@@ -30,15 +30,17 @@
     canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
     const c = canvas.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
     const W = r.width, H = r.height, m = { l: 34, r: 12, t: 8, b: 20 };
-    const X = v => m.l + (W - m.l - m.r) * (v - o.x.min) / (o.x.max - o.x.min);
-    const Y = v => H - m.b - (H - m.t - m.b) * (v - o.y.min) / (o.y.max - o.y.min);
     c.clearRect(0, 0, W, H);
 
-    // Rejilla y números de los ejes
+    // Rejilla y números de los ejes. El margen izquierdo crece con la marca más
+    // ancha del eje y (valores grandes como 50000 se cortaban a la izquierda)
     c.font = '11px "IBM Plex Mono", Consolas, monospace'; c.lineWidth = 1;
     c.fillStyle = t['texto-3'];
     c.textAlign = 'right'; c.textBaseline = 'middle';
     const my = marcas(o.y.min, o.y.max, Math.max(2, Math.floor((H - m.t - m.b) / 28)));
+    for (const v of my) m.l = Math.max(m.l, Math.ceil(c.measureText(fmtMarca(v, my.paso)).width) + 10);
+    const X = v => m.l + (W - m.l - m.r) * (v - o.x.min) / (o.x.max - o.x.min);
+    const Y = v => H - m.b - (H - m.t - m.b) * (v - o.y.min) / (o.y.max - o.y.min);
     for (const v of my) {
       const yy = Math.round(Y(v)) + 0.5;
       c.strokeStyle = v === 0 ? t.eje : t['cuadricula-mayor'];

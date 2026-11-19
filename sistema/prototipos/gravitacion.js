@@ -593,7 +593,11 @@ import { evaluar } from '../nucleo/unidades.js';
       const s = estado(t), r = Math.hypot(s.x, s.y), v = Math.hypot(s.vx, s.vy), R = esc.planeta.radio, mu = esc.planeta.mu;
       let rmin = Infinity, rmax = 0, vmax = 0;
       for (let k = 0; k < SERIES.r.length; k++) { rmin = Math.min(rmin, SERIES.r[k]); rmax = Math.max(rmax, SERIES.r[k]); vmax = Math.max(vmax, SERIES.v[k]); }
-      const MM = 1e6, y0 = Math.min(rmin, R) / MM, y1 = rmax / MM, pad = Math.max(0.08 * (y1 - y0), 0.02 * y1);
+      // Unidad de distancia según la escala: Mm alrededor de un planeta, Gm
+      // alrededor del Sol (si no, las marcas del eje no caben a la izquierda)
+      const MM = rmax >= 1e10 ? 1e9 : 1e6, uD = MM === 1e9 ? 'Gm' : 'Mm';
+      document.querySelectorAll('.u-dist').forEach(el => { el.textContent = uD; });
+      const y0 = Math.min(rmin, R) / MM, y1 = rmax / MM, pad = Math.max(0.08 * (y1 - y0), 0.02 * y1);
       grafica($('#g1'), {
         x: { min: 0, max: DUR }, y: { min: Math.max(0, y0 - pad), max: y1 + pad },
         series: [
@@ -612,15 +616,15 @@ import { evaluar } from '../nucleo/unidades.js';
         ],
         cursor: t, puntoCursor: [t, v / KM], eventos: eventosGrafica(),
       });
-      const A = areaEn(t) / 1e12, Amax = SERIES.A[SERIES.A.length - 1] / 1e12;
+      const A = areaEn(t) / (MM * MM), Amax = SERIES.A[SERIES.A.length - 1] / (MM * MM);
       grafica($('#g3'), {
         x: { min: 0, max: DUR }, y: { min: 0, max: Math.max(Amax, 1e-9) * 1.06 },
-        series: [{ tramos: serie(k => [SIM.t[k], SERIES.A[k] / 1e12]), familia: 'inercia' }],
+        series: [{ tramos: serie(k => [SIM.t[k], SERIES.A[k] / (MM * MM)]), familia: 'inercia' }],
         cursor: t, puntoCursor: [t, A], eventos: eventosGrafica(),
       });
-      $('#l1').textContent = cantidad(r / MM, 'Mm', 4);
+      $('#l1').textContent = cantidad(r / MM, uD, 4);
       $('#l2').textContent = cantidad(v / KM, 'km/s', 4);
-      $('#l3').textContent = cantidad(A, 'Mm²', 4);
+      $('#l3').textContent = cantidad(A, uD + '²', 4);
     }
     if ($('#p-energia').hidden === false) energiaPanel();
   }

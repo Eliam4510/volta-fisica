@@ -7,6 +7,13 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Corregido
+
+- Las marcas del eje vertical de las gráficas se cortaban a la izquierda con
+  valores grandes: el margen se ajusta ahora a la marca más ancha.
+- Gravitación: alrededor del Sol, las distancias y áreas de las gráficas se
+  dan en Gm y Gm² en vez de Mm y Mm².
+
 ## [0.7.0] - 2026-11-19
 
 Contactos de Mecánica como problema de complementariedad, energía disipada
