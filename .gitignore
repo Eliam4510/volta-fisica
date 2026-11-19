@@ -1,0 +1,21 @@
+# Dependencias y compilados
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+dist/
+
+# Banco original de exámenes MEXT: no se publica (ver DECISIONES.md)
+Fisica.csv
+escenarios/figuras/
+
+# Configuración local
+.claude/
+.vscode/
+*.log
+.env
+.env.*
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Volta · símbolo "el rebote": choque elástico contra una superficie fija -->
+  <path d="M6 6.5 L16 23 L26 6.5" stroke-width="2.4"/>
+  <path d="M4 23 H28" stroke-width="2.4"/>
+  <path d="M8.5 23 L5.5 26 M13.5 23 L10.5 26 M18.5 23 L15.5 26 M23.5 23 L20.5 26" stroke-width="1.4"/>
+  <circle cx="26" cy="6.5" r="2.6" fill="currentColor" stroke="none"/>
+</svg>

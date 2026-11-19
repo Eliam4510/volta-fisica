@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="es" data-tema="instrumento">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volta · Maquetas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@1,400;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   Tokens por dirección visual
+   ================================================================ */
+:root, [data-tema="instrumento"] {
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, monospace;
+  --font-math: "Source Serif 4", Georgia, serif;
+  --fs: 12.5px;
+  --bg: #0a0c0f;
+  --panel: #111419;
+  --panel-2: #161a20;
+  --panel-3: #1c2129;
+  --line: #222832;
+  --line-2: #2b323d;
+  --text: #d9dee6;
+  --text-2: #aab3bf;
+  --muted: #6f7a89;
+  --accent: #46c2ff;
+  --accent-soft: rgba(70,194,255,.14);
+  --event: #ffb547;
+  --radius: 5px;
+  --radius-lg: 6px;
+  --canvas: #0d1015;
+  --grid-minor: #141920;
+  --grid-major: #1c232d;
+  --axis: #3b4553;
+  --axis-text: #6f7a89;
+  --surface: #a7b2c0;
+  --surface-fill: #151a21;
+  --hatch: #2e3642;
+  --vel: #46c2ff;
+  --acc: #7ee787;
+  --fuerza: #ff7b72;
+  --tray: #c9d1d9;
+  --ball: #ffb547;
+  --ball-stroke: #ffd591;
+  --shadow: none;
+  --upper: uppercase;
+  --label-ls: .08em;
+}
+[data-tema="papel"] {
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, monospace;
+  --font-math: "Source Serif 4", Georgia, serif;
+  --fs: 13px;
+  --bg: #efebe2;
+  --panel: #f8f6f0;
+  --panel-2: #f2efe7;
+  --panel-3: #e9e4d8;
+  --line: #ddd6c6;
+  --line-2: #cfc6b2;
+  --text: #1c222a;
+  --text-2: #3d4652;
+  --muted: #7a7466;
+  --accent: #2b4c8c;
+  --accent-soft: rgba(43,76,140,.10);
+  --event: #b4541f;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --canvas: #fffdf7;
+  --grid-minor: #eef1f2;
+  --grid-major: #dbe2e6;
+  --axis: #8a95a0;
+  --axis-text: #6b7480;
+  --surface: #1c222a;
+  --surface-fill: #fffdf7;
+  --hatch: #9aa3ad;
+  --vel: #1f5fbf;
+  --acc: #2e7d4f;
+  --fuerza: #b8322a;
+  --tray: #2a2f36;
+  --ball: #b8322a;
+  --ball-stroke: #6e1712;
+  --shadow: none;
+  --upper: none;
+  --label-ls: 0;
+}
+[data-tema="suave"] {
+  --font-ui: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, monospace;
+  --font-math: "Source Serif 4", Georgia, serif;
+  --fs: 13px;
+  --bg: #eef0f6;
+  --panel: rgba(255,255,255,.88);
+  --panel-2: #f4f5fa;
+  --panel-3: #eceef6;
+  --line: #e6e8f0;
+  --line-2: #d9dce8;
+  --text: #171a2b;
+  --text-2: #444a63;
+  --muted: #8a8fa8;
+  --accent: #6d5dfc;
+  --accent-soft: rgba(109,93,252,.12);
+  --event: #ff7a59;
+  --radius: 10px;
+  --radius-lg: 18px;
+  --canvas: #f5f6fb;
+  --grid-minor: #eceef6;
+  --grid-major: #e1e4ef;
+  --axis: #b3b8cc;
+  --axis-text: #8a8fa8;
+  --surface: #2b2f45;
+  --surface-fill: #e4e6f2;
+  --hatch: #c8cbdc;
+  --vel: #3b82f6;
+  --acc: #10b981;
+  --fuerza: #f43f5e;
+  --tray: #6d5dfc;
+  --ball: #6d5dfc;
+  --ball-stroke: #4a3bd6;
+  --shadow: 0 10px 30px rgba(23,26,43,.08), 0 2px 6px rgba(23,26,43,.05);
+  --upper: none;
+  --label-ls: 0;
+}
+
+/* ================================================================
+   Base
+   ================================================================ */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.mat { font-family: var(--font-math); font-style: italic; }
+svg { display: block; }
+.ico { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ================================================================
+   Distribución (instrumento y papel): rejilla clásica
+   ================================================================ */
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 232px 1fr 304px;
+  grid-template-rows: 46px 1fr 262px;
+  grid-template-areas:
+    "top top top"
+    "izq lienzo der"
+    "izq abajo der";
+}
+.top { grid-area: top; }
+.izq { grid-area: izq; }
+.lienzo { grid-area: lienzo; position: relative; overflow: hidden; background: var(--canvas); }
+.der { grid-area: der; }
+.abajo { grid-area: abajo; }
+.panel { background: var(--panel); }
+.izq { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.der { border-left: 1px solid var(--line); overflow: hidden; display: flex; flex-direction: column; }
+.abajo { border-top: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+
+/* ---------------- Barra superior ---------------- */
+.top {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: .02em; font-size: 14px; }
+.logo-mark { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; color: var(--canvas); }
+.logo-mark svg { width: 14px; height: 14px; stroke: var(--panel); stroke-width: 2.2; fill: none; }
+.migas { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+.migas .sep { color: var(--muted); }
+.chip-sel {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 9px; border-radius: var(--radius);
+  background: var(--panel-2); border: 1px solid var(--line);
+  color: var(--text); font-weight: 500;
+}
+.chip-sel .ico { width: 12px; height: 12px; color: var(--muted); }
+.escena-nombre { color: var(--muted); }
+.escena-nombre b { color: var(--text-2); font-weight: 500; }
+.sp { flex: 1; }
+.transporte { display: flex; align-items: center; gap: 4px; }
+.btn {
+  height: 30px; min-width: 30px; padding: 0 8px;
+  display: inline-grid; place-items: center;
+  border-radius: var(--radius); border: 1px solid transparent;
+  background: transparent; color: var(--text-2); cursor: pointer;
+  font: inherit;
+}
+.btn:hover { background: var(--panel-2); }
+.btn.prim { background: var(--accent); color: var(--panel); border-color: var(--accent); width: 38px; }
+[data-tema="papel"] .btn.prim { color: #fff; }
+[data-tema="suave"] .btn.prim { color: #fff; border-radius: 999px; width: 40px; }
+.btn.prim .ico { stroke-width: 2; fill: currentColor; }
+.seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
+.seg span { padding: 4px 8px; border-radius: calc(var(--radius) - 2px); color: var(--muted); font-family: var(--font-num); font-size: 11.5px; }
+.seg span.on { background: var(--panel-3); color: var(--text); }
+[data-tema="suave"] .seg, [data-tema="suave"] .seg span { border-radius: 999px; }
+.tiempo { font-family: var(--font-num); font-size: 15px; color: var(--text); padding: 0 6px; min-width: 112px; }
+.tiempo small { color: var(--muted); font-size: 11px; margin-left: 3px; }
+.modo { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; }
+.punto { width: 7px; height: 7px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent); }
+
+/* ---------------- Paneles: encabezados ---------------- */
+.ph {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 12px 7px;
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: var(--upper); letter-spacing: var(--label-ls);
+}
+[data-tema="papel"] .ph, [data-tema="suave"] .ph { font-size: 12px; color: var(--text-2); }
+.ph .ico { width: 14px; height: 14px; color: var(--muted); }
+
+/* ---------------- Paleta ---------------- */
+.paleta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 10px 8px; }
+.herr {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px; border-radius: var(--radius);
+  border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--text-2); font-size: 12px; white-space: nowrap; overflow: hidden;
+}
+.herr svg { width: 18px; height: 18px; flex: none; stroke: var(--text-2); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.herr.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.herr.on svg { stroke: var(--accent); }
+
+/* ---------------- Árbol ---------------- */
+.arbol { padding: 0 6px 10px; overflow: auto; }
+.nodo { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius); color: var(--text-2); }
+.nodo .sw { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.nodo .acc { margin-left: auto; display: flex; gap: 6px; color: var(--muted); opacity: .8; }
+.nodo .acc .ico { width: 13px; height: 13px; }
+.nodo.sel { background: var(--accent-soft); color: var(--text); }
+.nodo.global { color: var(--muted); }
+.div { height: 1px; background: var(--line); margin: 6px 10px; }
+
+/* ---------------- Inspector ---------------- */
+.insp { overflow: auto; padding-bottom: 10px; }
+.obj-cab { display: flex; align-items: center; gap: 10px; padding: 4px 14px 12px; }
+.obj-cab .icono { width: 30px; height: 30px; border-radius: 50%; background: var(--ball); border: 2px solid var(--ball-stroke); }
+.obj-cab .t1 { font-weight: 600; font-size: 14px; }
+.obj-cab .t2 { color: var(--muted); font-size: 11.5px; }
+.grupo { padding: 6px 14px 10px; border-top: 1px solid var(--line); }
+.grupo h4 { margin: 8px 0 8px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: var(--upper); letter-spacing: var(--label-ls); }
+[data-tema="papel"] .grupo h4, [data-tema="suave"] .grupo h4 { font-size: 12px; color: var(--text-2); }
+.fila { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+.fila label { color: var(--text-2); font-size: 12px; }
+.fila .doble { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.campo {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  height: 28px; padding: 0 8px;
+  border-radius: var(--radius); border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-family: var(--font-num); font-size: 12px; color: var(--text);
+}
+.campo .u { color: var(--muted); font-size: 11px; }
+.campo .eje { color: var(--muted); font-family: var(--font-math); font-style: italic; font-size: 13px; margin-right: 2px; }
+.campo.var { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.campo .ref { color: var(--accent); font-family: var(--font-math); font-style: italic; font-size: 13.5px; }
+.campo .ref-v { color: var(--muted); font-size: 11px; }
+.chk { display: flex; align-items: center; gap: 8px; margin: 7px 0; color: var(--text-2); font-size: 12px; }
+.chk .bx { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--line-2); display: grid; place-items: center; }
+.chk .bx.on { background: var(--accent); border-color: var(--accent); }
+.chk .bx.on svg { width: 10px; height: 10px; stroke: var(--panel); stroke-width: 2.6; fill: none; }
+[data-tema="papel"] .chk .bx.on svg, [data-tema="suave"] .chk .bx.on svg { stroke: #fff; }
+.chk .tag { margin-left: auto; font-family: var(--font-num); font-size: 11px; color: var(--muted); }
+.chk .lin { width: 18px; height: 3px; border-radius: 2px; }
+.lecturas { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 12px; }
+.lecturas .k { color: var(--muted); font-family: var(--font-math); font-style: italic; font-size: 13.5px; }
+.lecturas .v { text-align: right; font-family: var(--font-num); color: var(--text); }
+.lecturas .v small { color: var(--muted); font-size: 10.5px; margin-left: 4px; }
+
+/* ---------------- Variables ---------------- */
+.vars { padding: 4px 14px 12px; border-top: 1px solid var(--line); }
+.var-f { display: grid; grid-template-columns: 26px 1fr 78px; align-items: center; gap: 10px; margin: 9px 0; }
+.var-f .n { font-family: var(--font-math); font-style: italic; font-size: 15px; color: var(--accent); }
+.var-f .val { font-family: var(--font-num); font-size: 12px; text-align: right; color: var(--text); }
+.var-f .val small { color: var(--muted); font-size: 10.5px; margin-left: 3px; }
+.slider { position: relative; height: 4px; border-radius: 3px; background: var(--panel-3); }
+.slider i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); }
+.slider b { position: absolute; top: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); }
+.var-f.const .n { color: var(--muted); }
+.var-f.const .slider { opacity: .45; }
+
+/* ---------------- Línea de tiempo ---------------- */
+.tl { padding: 8px 14px 4px; }
+.tl-cab { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.tabs { display: flex; gap: 2px; }
+.tab { padding: 6px 11px; border-radius: var(--radius); color: var(--muted); font-weight: 500; font-size: 12px; }
+.tab.on { color: var(--text); background: var(--panel-2); }
+[data-tema="instrumento"] .tab { text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+.tl-svg { width: 100%; height: 48px; }
+.graficas { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 4px 14px 12px; min-height: 0; }
+.graf { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--panel-2); padding: 8px 10px 4px; min-height: 0; display: flex; flex-direction: column; }
+.graf-t { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; color: var(--text-2); }
+.graf-t .mat { font-size: 14px; }
+.graf-t .num { font-size: 11.5px; color: var(--text); }
+.graf svg { flex: 1; width: 100%; min-height: 0; }
+
+/* ---------------- Lienzo ---------------- */
+#lienzo { position: absolute; inset: 0; width: 100%; height: 100%; }
+.c-minor { stroke: var(--grid-minor); stroke-width: 1; }
+.c-major { stroke: var(--grid-major); stroke-width: 1; }
+.c-axis { stroke: var(--axis); stroke-width: 1.2; }
+.c-axis-t { fill: var(--axis-text); font-family: var(--font-num); font-size: 10.5px; }
+.c-surf { stroke: var(--surface); stroke-width: 2; fill: none; }
+.c-surf-fill { fill: var(--surface-fill); }
+.c-hatch { stroke: var(--hatch); stroke-width: 1; }
+.c-pred { stroke: var(--tray); stroke-width: 1.4; fill: none; stroke-dasharray: 5 5; opacity: .45; }
+.c-tray { stroke: var(--tray); stroke-width: 2; fill: none; opacity: .9; }
+.c-ghost { fill: var(--ball); opacity: .22; }
+.c-ball { fill: var(--ball); stroke: var(--ball-stroke); stroke-width: 1.5; }
+.c-sel { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-dasharray: 3 3; }
+.c-vel { stroke: var(--vel); stroke-width: 2.4; fill: none; }
+.c-vel-c { stroke: var(--vel); stroke-width: 1.4; fill: none; stroke-dasharray: 4 3; opacity: .8; }
+.c-acc { stroke: var(--acc); stroke-width: 2.2; fill: none; }
+.c-lbl { font-family: var(--font-num); font-size: 11px; }
+.c-lbl-m { font-family: var(--font-math); font-style: italic; font-size: 14px; }
+.c-dim { stroke: var(--muted); stroke-width: 1; fill: none; }
+.c-dim-t { fill: var(--text-2); }
+.c-ev { fill: var(--event); }
+.c-ev-ring { fill: none; stroke: var(--event); stroke-width: 1.5; }
+.c-ev-t { fill: var(--event); font-family: var(--font-num); font-size: 11px; }
+.c-pill { fill: var(--panel); stroke: var(--line-2); }
+.overlay {
+  position: absolute; display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--line);
+  color: var(--text-2); font-size: 11.5px;
+}
+.overlay .num { color: var(--text); }
+.ov-coords { left: 12px; bottom: 12px; }
+.ov-zoom { right: 12px; bottom: 12px; }
+.ov-capas { right: 12px; top: 12px; }
+.ov-capas .on { color: var(--accent); }
+
+/* ================================================================
+   Dirección "suave": paneles flotantes sobre un lienzo a sangre
+   ================================================================ */
+[data-tema="suave"] .app { display: block; position: relative; }
+[data-tema="suave"] .lienzo { position: absolute; inset: 0; z-index: 0; }
+[data-tema="suave"] .panel { z-index: 2; }
+[data-tema="suave"] .panel {
+  position: absolute; background: var(--panel);
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+[data-tema="suave"] .top {
+  left: 50%; transform: translateX(-50%); top: 14px; height: 52px; width: auto;
+  border-radius: 999px; padding: 0 10px 0 14px; gap: 12px; border-bottom: 0;
+}
+[data-tema="suave"] .izq { left: 14px; top: 82px; bottom: 14px; width: 216px; border-right: 0; }
+[data-tema="suave"] .der { right: 14px; top: 82px; bottom: 14px; width: 300px; border-left: 0; }
+[data-tema="suave"] .abajo { left: 244px; right: 328px; bottom: 14px; height: 250px; border-top: 0; }
+[data-tema="suave"] .top * { white-space: nowrap; }
+[data-tema="suave"] .escena-nombre { display: none; }
+[data-tema="suave"] .paleta { grid-template-columns: 1fr 1fr 1fr; }
+[data-tema="suave"] .herr {
+  border-radius: 12px; background: var(--panel-2); border-color: transparent;
+  flex-direction: column; gap: 5px; padding: 9px 2px 7px; font-size: 10.5px; text-align: center;
+}
+[data-tema="suave"] .herr svg { width: 20px; height: 20px; }
+[data-tema="suave"] .herr.on { background: var(--accent-soft); border-color: transparent; }
+[data-tema="suave"] .campo { border-radius: 10px; border-color: transparent; background: var(--panel-2); }
+[data-tema="suave"] .campo.var { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: var(--accent-soft); }
+[data-tema="suave"] .graf { background: var(--panel-2); border-color: transparent; border-radius: 14px; }
+[data-tema="suave"] .overlay { border-radius: 999px; background: var(--panel); border-color: transparent; box-shadow: var(--shadow); }
+[data-tema="suave"] .ov-coords { left: 244px; bottom: 278px; }
+[data-tema="suave"] .ov-zoom { right: 328px; bottom: 278px; }
+[data-tema="suave"] .ov-capas { right: 328px; top: 82px; }
+[data-tema="suave"] .chip-sel { border-radius: 999px; background: var(--panel-2); border-color: transparent; }
+[data-tema="suave"] .logo-mark { border-radius: 8px; background: linear-gradient(135deg, #8b7bff, #6d5dfc 60%, #ff7a59 140%); }
+[data-tema="suave"] .nodo { border-radius: 10px; }
+[data-tema="suave"] .tab { border-radius: 999px; }
+[data-tema="suave"] .tab.on { background: var(--accent-soft); color: var(--accent); }
+
+/* ---------------- Papel: detalles de libro ---------------- */
+[data-tema="papel"] .top { background: var(--panel-2); }
+[data-tema="papel"] .logo { font-family: var(--font-math); font-style: italic; font-weight: 500; font-size: 18px; letter-spacing: 0; }
+[data-tema="papel"] .logo-mark { border-radius: 50%; background: var(--accent); }
+[data-tema="papel"] .herr { background: var(--canvas); }
+[data-tema="papel"] .campo { background: var(--canvas); }
+[data-tema="papel"] .graf { background: var(--canvas); }
+
+/* ---------------- Selector de maqueta ---------------- */
+.selector {
+  position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 50;
+  display: flex; gap: 4px; padding: 4px; border-radius: 999px;
+  background: rgba(20,20,30,.82); backdrop-filter: blur(8px);
+  font: 500 12px "Inter", sans-serif;
+}
+.selector a { color: #cfd3e0; text-decoration: none; padding: 6px 12px; border-radius: 999px; }
+.selector a.on { background: #fff; color: #111; }
+body.captura .selector { display: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-step-f" viewBox="0 0 24 24"><path d="M6 6l8 6-8 6zM18 6v12"/></symbol>
+    <symbol id="i-step-b" viewBox="0 0 24 24"><path d="M18 6l-8 6 8 6zM6 6v12"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4"/></symbol>
+    <symbol id="i-volt" viewBox="0 0 24 24"><path d="M5 5l7 14 7-14"/></symbol>
+    <symbol id="i-cmd" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.3-4.3"/></symbol>
+    <!-- herramientas -->
+    <symbol id="t-part" viewBox="0 0 24 24"><circle cx="9" cy="14" r="4"/><path d="M13 10l6-6M15 4h4v4"/></symbol>
+    <symbol id="t-lanz" viewBox="0 0 24 24"><path d="M4 18h9M6 18l1.5-4h4L13 18"/><path d="M9.5 14l7-7"/><rect x="14" y="4" width="6" height="4" rx="1" transform="rotate(45 17 6)"/></symbol>
+    <symbol id="t-suelo" viewBox="0 0 24 24"><path d="M3 14h18M5 14l-2 4M9 14l-2 4M13 14l-2 4M17 14l-2 4M21 14l-2 4"/></symbol>
+    <symbol id="t-seg" viewBox="0 0 24 24"><path d="M4 17L20 7"/><circle cx="4" cy="17" r="1.6"/><circle cx="20" cy="7" r="1.6"/></symbol>
+    <symbol id="t-plano" viewBox="0 0 24 24"><path d="M3 19h18L3 7z"/><path d="M9 19a6 6 0 0 0-1-3.3"/></symbol>
+    <symbol id="t-plat" viewBox="0 0 24 24"><rect x="3" y="9" width="12" height="10"/><path d="M15 19h6"/></symbol>
+    <symbol id="t-curva" viewBox="0 0 24 24"><path d="M3 6c4 14 14 14 18 0"/></symbol>
+    <symbol id="t-aire" viewBox="0 0 24 24"><path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3"/></symbol>
+    <symbol id="t-regla" viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8" rx="1"/><path d="M6 8v3M9.5 8v4M13 8v3M16.5 8v4"/></symbol>
+    <symbol id="t-transp" viewBox="0 0 24 24"><path d="M3 17a9 9 0 0 1 18 0z"/><path d="M12 17l4.5-6"/></symbol>
+    <symbol id="t-crono" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M10 3h4"/></symbol>
+    <symbol id="t-foto" viewBox="0 0 24 24"><path d="M6 4v16M18 4v16"/><path d="M6 12h12" stroke-dasharray="2 2"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <!-- ======================= Barra superior ======================= -->
+  <header class="top panel">
+    <div class="logo"><div class="logo-mark"><svg viewBox="0 0 24 24"><use href="#i-volt"/></svg></div>Volta</div>
+    <div class="migas">
+      <span class="chip-sel">Mecánica <svg class="ico"><use href="#i-down"/></svg></span>
+      <span class="sep">›</span>
+      <span class="chip-sel">Cinemática y proyectiles <svg class="ico"><use href="#i-down"/></svg></span>
+    </div>
+    <div class="escena-nombre">MEXT 2019 · P3 — <b>Salto hacia una pendiente</b></div>
+    <div class="sp"></div>
+    <div class="transporte">
+      <button class="btn" title="Reiniciar"><svg class="ico"><use href="#i-reset"/></svg></button>
+      <button class="btn" title="Paso atrás"><svg class="ico"><use href="#i-step-b"/></svg></button>
+      <button class="btn prim" title="Reproducir"><svg class="ico"><use href="#i-play"/></svg></button>
+      <button class="btn" title="Paso adelante"><svg class="ico"><use href="#i-step-f"/></svg></button>
+    </div>
+    <div class="tiempo" id="tiempo"></div>
+    <div class="seg"><span>0.25×</span><span class="on">1×</span><span>4×</span></div>
+    <div class="sp"></div>
+    <div class="modo"><span class="punto"></span>Preciso</div>
+    <button class="btn" title="Deshacer"><svg class="ico"><use href="#i-undo"/></svg></button>
+    <button class="btn" title="Rehacer"><svg class="ico"><use href="#i-redo"/></svg></button>
+    <button class="btn" title="Comandos"><svg class="ico"><use href="#i-cmd"/></svg></button>
+  </header>
+
+  <!-- ======================= Panel izquierdo ======================= -->
+  <aside class="izq panel">
+    <div class="ph">Objetos</div>
+    <div class="paleta">
+      <div class="herr on"><svg><use href="#t-part"/></svg>Partícula</div>
+      <div class="herr"><svg><use href="#t-lanz"/></svg>Lanzador</div>
+      <div class="herr"><svg><use href="#t-suelo"/></svg>Suelo</div>
+      <div class="herr"><svg><use href="#t-seg"/></svg>Segmento</div>
+      <div class="herr"><svg><use href="#t-plano"/></svg>Plano incl.</div>
+      <div class="herr"><svg><use href="#t-plat"/></svg>Plataforma</div>
+      <div class="herr"><svg><use href="#t-curva"/></svg>Curva</div>
+      <div class="herr"><svg><use href="#t-aire"/></svg>Aire</div>
+    </div>
+    <div class="ph">Instrumentos</div>
+    <div class="paleta">
+      <div class="herr"><svg><use href="#t-regla"/></svg>Regla</div>
+      <div class="herr"><svg><use href="#t-transp"/></svg>Transport.</div>
+      <div class="herr"><svg><use href="#t-crono"/></svg>Cronómetro</div>
+      <div class="herr"><svg><use href="#t-foto"/></svg>Fotopuerta</div>
+    </div>
+    <div class="div"></div>
+    <div class="ph">Escena <svg class="ico"><use href="#i-plus"/></svg></div>
+    <div class="arbol">
+      <div class="nodo sel"><span class="sw" style="background:var(--ball)"></span>Bola<span class="acc"><svg class="ico"><use href="#i-eye"/></svg></span></div>
+      <div class="nodo"><span class="sw" style="background:var(--surface)"></span>Plataforma<span class="acc"><svg class="ico"><use href="#i-lock"/></svg></span></div>
+      <div class="nodo"><span class="sw" style="background:var(--surface)"></span>Pendiente<span class="acc"><svg class="ico"><use href="#i-lock"/></svg></span></div>
+      <div class="nodo"><span class="sw" style="background:var(--surface)"></span>Suelo<span class="acc"><svg class="ico"><use href="#i-lock"/></svg></span></div>
+      <div class="nodo"><span class="sw" style="background:var(--event)"></span>Fotopuerta 1</div>
+      <div class="nodo global"><span class="sw" style="background:var(--acc)"></span>Gravedad <span class="num" style="margin-left:auto;font-size:11px">9.80 m/s²</span></div>
+    </div>
+  </aside>
+
+  <!-- ======================= Lienzo ======================= -->
+  <main class="lienzo">
+    <svg id="lienzo"></svg>
+    <div class="overlay ov-coords"><span class="mat">x</span><span class="num">3.120 m</span><span class="mat">y</span><span class="num">0.870 m</span></div>
+    <div class="overlay ov-zoom"><span class="num">100 %</span><span style="opacity:.5">|</span>Encuadrar</div>
+    <div class="overlay ov-capas"><svg class="ico"><use href="#i-layers"/></svg><span class="on">Vectores</span><span class="on">Traza</span><span class="on">Estrobo</span><span>Energía</span></div>
+  </main>
+
+  <!-- ======================= Panel derecho ======================= -->
+  <aside class="der panel">
+    <div class="insp">
+      <div class="ph">Inspector</div>
+      <div class="obj-cab">
+        <div class="icono"></div>
+        <div><div class="t1">Bola</div><div class="t2">Partícula · en vuelo</div></div>
+      </div>
+      <div class="grupo">
+        <h4>Condiciones iniciales</h4>
+        <div class="fila"><label>Masa</label><div class="campo">0.50<span class="u">kg</span></div></div>
+        <div class="fila"><label>Posición</label>
+          <div class="doble">
+            <div class="campo"><span class="eje">x</span>0<span class="u">m</span></div>
+            <div class="campo var"><span class="eje">y</span><span class="ref">h</span><span class="ref-v">3.00</span></div>
+          </div>
+        </div>
+        <div class="fila"><label>Velocidad</label>
+          <div class="doble">
+            <div class="campo var"><span class="ref">v<sub>0</sub></span><span class="ref-v">4.00</span></div>
+            <div class="campo">0<span class="u">°</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="grupo">
+        <h4>Mostrar</h4>
+        <div class="chk"><span class="bx on"><svg><use href="#i-check"/></svg></span>Vector velocidad<span class="lin" style="background:var(--vel);margin-left:auto"></span></div>
+        <div class="chk"><span class="bx on"><svg><use href="#i-check"/></svg></span>Componentes</div>
+        <div class="chk"><span class="bx"></span>Vector aceleración<span class="lin" style="background:var(--acc);margin-left:auto"></span></div>
+        <div class="chk"><span class="bx on"><svg><use href="#i-check"/></svg></span>Estroboscopio<span class="tag">Δt 0.10 s</span></div>
+        <div class="chk"><span class="bx on"><svg><use href="#i-check"/></svg></span>Trayectoria prevista</div>
+      </div>
+      <div class="grupo">
+        <h4 id="lect-t">Valores</h4>
+        <div class="lecturas" id="lecturas"></div>
+      </div>
+    </div>
+    <div class="ph" style="border-top:1px solid var(--line)">Variables <svg class="ico"><use href="#i-plus"/></svg></div>
+    <div class="vars" style="border-top:0;padding-top:0">
+      <div class="var-f"><span class="n">h</span><div class="slider"><i style="width:50%"></i><b style="left:50%"></b></div><span class="val">3.00<small>m</small></span></div>
+      <div class="var-f"><span class="n">θ</span><div class="slider"><i style="width:39%"></i><b style="left:39%"></b></div><span class="val">35<small>°</small></span></div>
+      <div class="var-f"><span class="n">v<sub>0</sub></span><div class="slider"><i style="width:40%"></i><b style="left:40%"></b></div><span class="val">4.00<small>m/s</small></span></div>
+      <div class="var-f"><span class="n">e</span><div class="slider"><i style="width:50%"></i><b style="left:50%"></b></div><span class="val">0.50</span></div>
+      <div class="var-f const"><span class="n">g</span><div class="slider"><i style="width:65%"></i><b style="left:65%"></b></div><span class="val">9.80<small>m/s²</small></span></div>
+    </div>
+  </aside>
+
+  <!-- ======================= Panel inferior ======================= -->
+  <section class="abajo panel">
+    <div class="tl">
+      <div class="tl-cab">
+        <div class="tabs"><span class="tab on">Gráficas</span><span class="tab">Tabla</span><span class="tab">Energía</span><span class="tab">Eventos</span></div>
+      </div>
+      <svg class="tl-svg" id="tl"></svg>
+    </div>
+    <div class="graficas">
+      <div class="graf"><div class="graf-t"><span><span class="mat">y</span> contra <span class="mat">t</span></span><span class="num" id="g1v"></span></div><svg id="g1"></svg></div>
+      <div class="graf"><div class="graf-t"><span><span class="mat">v<sub>y</sub></span> contra <span class="mat">t</span></span><span class="num" id="g2v"></span></div><svg id="g2"></svg></div>
+      <div class="graf"><div class="graf-t"><span><span class="mat">y</span> contra <span class="mat">x</span></span><span class="num" id="g3v"></span></div><svg id="g3"></svg></div>
+    </div>
+  </section>
+</div>
+
+<nav class="selector" id="selector">
+  <a href="?tema=instrumento" data-t="instrumento">A · Instrumento</a>
+  <a href="?tema=papel" data-t="papel">B · Papel</a>
+  <a href="?tema=suave" data-t="suave">C · Suave</a>
+</nav>
+
+<script>
+/* ================================================================
+   Tema y modo captura desde la URL
+   ================================================================ */
+const qs = new URLSearchParams(location.search);
+let tema = qs.get('tema') || 'instrumento';
+if (qs.has('captura')) document.body.classList.add('captura');
+function ponerTema(t) {
+  tema = t;
+  document.documentElement.dataset.tema = t;
+  document.querySelectorAll('#selector a').forEach(a => a.classList.toggle('on', a.dataset.t === t));
+  if (window.listo) todo();
+}
+var listo = false;
+document.querySelectorAll('#selector a').forEach(a => a.addEventListener('click', ev => { ev.preventDefault(); ponerTema(a.dataset.t); }));
+ponerTema(tema);
+
+/* ================================================================
+   Física real de la escena (2019 P3 con rebotes, e = 0.5)
+   ================================================================ */
+const P = { h: 3, th: 35 * Math.PI / 180, v0: 4, g: 9.8, e: 0.5, T: 1.6, tVista: 0.30 };
+const tanT = Math.tan(P.th), sn = Math.sin(P.th), cs = Math.cos(P.th);
+const L = P.h / tanT;
+
+function raices(a, b, c) {
+  const d = b * b - 4 * a * c;
+  if (d < 0) return [];
+  const s = Math.sqrt(d);
+  return [(-b - s) / (2 * a), (-b + s) / (2 * a)];
+}
+function simular() {
+  let s = { x: 0, y: P.h, vx: P.v0, vy: 0, t: 0 };
+  const tramos = [], eventos = [{ t: 0, tipo: 'despega', x: 0, y: P.h }];
+  for (let k = 0; k < 12 && s.t < P.T; k++) {
+    let mejor = Infinity, sup = null;
+    for (const r of raices(-0.5 * P.g, s.vy + s.vx * tanT, s.y - P.h + s.x * tanT)) {
+      if (r > 1e-9 && r < mejor) { const x = s.x + s.vx * r; if (x >= 0 && x <= L) { mejor = r; sup = 'pendiente'; } }
+    }
+    for (const r of raices(-0.5 * P.g, s.vy, s.y)) {
+      if (r > 1e-9 && r < mejor) { const x = s.x + s.vx * r; if (x >= L) { mejor = r; sup = 'suelo'; } }
+    }
+    tramos.push({ ...s, dur: Math.min(mejor, P.T - s.t) });
+    if (s.t + mejor > P.T) break;
+    const t = mejor;
+    const x = s.x + s.vx * t, y = s.y + s.vy * t - 0.5 * P.g * t * t;
+    let vx = s.vx, vy = s.vy - P.g * t;
+    if (sup === 'pendiente') {
+      const vn = vx * sn + vy * cs, vt = vx * cs - vy * sn, vn2 = -P.e * vn;
+      vx = vt * cs + vn2 * sn; vy = -vt * sn + vn2 * cs;
+    } else { vy = -P.e * vy; }
+    s = { x, y, vx, vy, t: s.t + t };
+    eventos.push({ t: s.t, tipo: sup === 'pendiente' ? 'choque con la pendiente' : 'choque con el suelo', x, y });
+  }
+  return { tramos, eventos };
+}
+const SIM = simular();
+function estado(t) {
+  let tr = SIM.tramos[0];
+  for (const q of SIM.tramos) if (q.t <= t) tr = q;
+  const d = t - tr.t;
+  return { x: tr.x + tr.vx * d, y: tr.y + tr.vy * d - 0.5 * P.g * d * d, vx: tr.vx, vy: tr.vy - P.g * d };
+}
+const ST = estado(P.tVista);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f = (v, n = 3) => (Math.abs(v) < 5e-10 ? 0 : v).toFixed(n).replace('-', '−');
+
+/* ---------------- Lecturas ---------------- */
+document.getElementById('tiempo').innerHTML = `t = ${f(P.tVista)}<small>s</small>`;
+document.getElementById('lect-t').textContent = `Valores en t = ${f(P.tVista)} s`;
+const vmod = Math.hypot(ST.vx, ST.vy);
+document.getElementById('lecturas').innerHTML = [
+  ['x', f(ST.x), 'm'], ['y', f(ST.y), 'm'], ['vₓ', f(ST.vx), 'm/s'], ['v_y', f(ST.vy), 'm/s'], ['|v|', f(vmod), 'm/s'],
+].map(([k, v, u]) => `<span class="k">${k.replace('v_y', 'v<sub>y</sub>')}</span><span class="v">${v}<small>${u}</small></span>`).join('');
+
+/* ================================================================
+   Lienzo
+   ================================================================ */
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function dibujarLienzo() {
+  const svg = document.getElementById('lienzo');
+  svg.innerHTML = '';
+  const R = svg.getBoundingClientRect();
+  let W = R.width, H = R.height;
+  // Zona útil (en "suave" los paneles flotan encima)
+  let ux0 = 0, ux1 = W, uy0 = 0, uy1 = H;
+  if (tema === 'suave') { ux0 = 244; ux1 = W - 328; uy0 = 82; uy1 = H - 278; }
+  const mundo = { x0: -1.6, x1: 6.6, y0: -0.55, y1: 3.95 };
+  const esc = Math.min((ux1 - ux0 - 40) / (mundo.x1 - mundo.x0), (uy1 - uy0 - 40) / (mundo.y1 - mundo.y0));
+  const cx = (ux0 + ux1) / 2 - esc * (mundo.x0 + mundo.x1) / 2;
+  const cy = (uy0 + uy1) / 2 + esc * (mundo.y0 + mundo.y1) / 2;
+  const X = x => cx + esc * x, Y = y => cy - esc * y;
+
+  // Cuadrícula (abarca todo el lienzo)
+  const g = el('g', {}, svg);
+  const xa = (0 - cx) / esc, xb = (W - cx) / esc, ya = (cy - H) / esc, yb = cy / esc;
+  for (let x = Math.floor(xa * 4) / 4; x <= xb; x += 0.25) {
+    const maj = Math.abs(x - Math.round(x)) < 1e-6;
+    el('line', { x1: X(x), x2: X(x), y1: 0, y2: H, class: maj ? 'c-major' : 'c-minor' }, g);
+  }
+  for (let y = Math.floor(ya * 4) / 4; y <= yb; y += 0.25) {
+    const maj = Math.abs(y - Math.round(y)) < 1e-6;
+    el('line', { y1: Y(y), y2: Y(y), x1: 0, x2: W, class: maj ? 'c-major' : 'c-minor' }, g);
+  }
+  // Ejes
+  el('line', { x1: X(mundo.x0 - 1), x2: X(mundo.x1 + 2), y1: Y(0), y2: Y(0), class: 'c-axis' }, svg);
+  el('line', { x1: X(0), x2: X(0), y1: Y(-0.5), y2: Y(4.6), class: 'c-axis' }, svg);
+  for (let x = 1; x <= 6; x++) { const t = el('text', { x: X(x), y: Y(0) + 15, 'text-anchor': 'middle', class: 'c-axis-t' }, svg); t.textContent = x; }
+  for (let y = 1; y <= 3; y++) {
+    el('rect', { x: X(0) - 19, y: Y(y) - 8, width: 14, height: 15, rx: 3, fill: css('--canvas'), opacity: .92 }, svg);
+    const t = el('text', { x: X(0) - 8, y: Y(y) + 3.5, 'text-anchor': 'end', class: 'c-axis-t' }, svg); t.textContent = y;
+  }
+  const tx = el('text', { x: X(6.45), y: Y(0) - 7, 'text-anchor': 'end', class: 'c-lbl-m', fill: css('--axis-text') }, svg); tx.textContent = 'x (m)';
+  const ty = el('text', { x: X(0) + 8, y: Y(3.85), class: 'c-lbl-m', fill: css('--axis-text') }, svg); ty.textContent = 'y (m)';
+
+  // Patrón de rayado para superficies
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', { id: 'rayado', width: 7, height: 7, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+  el('line', { x1: 0, y1: 0, x2: 0, y2: 7, class: 'c-hatch' }, pat);
+  const fl = el('marker', { id: 'flecha-v', viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+  el('path', { d: 'M0,1 L9,5 L0,9 z', fill: css('--vel') }, fl);
+  const fd = el('marker', { id: 'flecha-d', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs);
+  el('path', { d: 'M0,1.5 L9,5 L0,8.5 z', fill: css('--muted') }, fd);
+
+  // Plataforma
+  el('rect', { x: X(-1.6), y: Y(P.h), width: X(0) - X(-1.6), height: Y(0) - Y(P.h), fill: 'url(#rayado)' }, svg);
+  el('rect', { x: X(-1.6), y: Y(P.h), width: X(0) - X(-1.6), height: Y(0) - Y(P.h), class: 'c-surf-fill', opacity: .35 }, svg);
+  // Pendiente (relleno bajo la línea)
+  el('path', { d: `M${X(0)},${Y(P.h)} L${X(L)},${Y(0)} L${X(0)},${Y(0)} Z`, fill: 'url(#rayado)' }, svg);
+  el('path', { d: `M${X(0)},${Y(P.h)} L${X(L)},${Y(0)} L${X(0)},${Y(0)} Z`, class: 'c-surf-fill', opacity: .35 }, svg);
+  // Suelo
+  el('rect', { x: X(-1.6), y: Y(0), width: X(6.8) - X(-1.6), height: 12, fill: 'url(#rayado)' }, svg);
+  // Contornos
+  el('path', { d: `M${X(-1.6)},${Y(P.h)} L${X(0)},${Y(P.h)} L${X(L)},${Y(0)} L${X(6.8)},${Y(0)}`, class: 'c-surf' }, svg);
+
+  // Cotas: altura h y ángulo θ
+  const dx = X(-0.9);
+  el('line', { x1: dx, x2: dx, y1: Y(0) - 4, y2: Y(P.h) + 4, class: 'c-dim', 'marker-start': 'url(#flecha-d)', 'marker-end': 'url(#flecha-d)' }, svg);
+  const th = el('text', { x: dx - 8, y: (Y(0) + Y(P.h)) / 2 + 5, 'text-anchor': 'end', class: 'c-lbl-m c-dim-t' }, svg); th.textContent = 'h';
+  const r = 34, a0 = Math.PI, a1 = Math.PI - P.th;
+  el('path', { d: `M${X(L) - r},${Y(0)} A${r},${r} 0 0 1 ${X(L) + r * Math.cos(a1)},${Y(0) - r * Math.sin(a1)}`, class: 'c-dim' }, svg);
+  const tt = el('text', { x: X(L) - r - 14, y: Y(0) - 9, 'text-anchor': 'middle', class: 'c-lbl-m c-dim-t' }, svg); tt.textContent = 'θ';
+
+  // Trayectoria prevista completa (punteada) y recorrida (continua)
+  const camino = (t0, t1, n) => { let d = ''; for (let i = 0; i <= n; i++) { const t = t0 + (t1 - t0) * i / n; const s = estado(t); d += (i ? 'L' : 'M') + X(s.x).toFixed(1) + ',' + Y(s.y).toFixed(1); } return d; };
+  el('path', { d: camino(0, P.T, 420), class: 'c-pred' }, svg);
+  el('path', { d: camino(0, P.tVista, 120), class: 'c-tray' }, svg);
+
+  // Estroboscopio
+  const rb = 7.5;
+  for (let t = 0; t < P.tVista - 0.01; t += 0.1) { const s = estado(t); el('circle', { cx: X(s.x), cy: Y(s.y), r: rb, class: 'c-ghost' }, svg); }
+
+  // Eventos (choques)
+  SIM.eventos.slice(1, 3).forEach((ev, i) => {
+    el('circle', { cx: X(ev.x), cy: Y(ev.y), r: 4, class: 'c-ev' }, svg);
+    el('circle', { cx: X(ev.x), cy: Y(ev.y), r: 8, class: 'c-ev-ring', opacity: .5 }, svg);
+    if (i === 0) {
+      const px = X(ev.x) - 150, py = Y(ev.y) + 16;
+      el('rect', { x: px, y: py, width: 138, height: 38, rx: 6, fill: css('--panel'), stroke: css('--line-2') }, svg);
+      el('line', { x1: X(ev.x) - 6, y1: Y(ev.y) + 6, x2: px + 132, y2: py + 2, stroke: css('--event'), opacity: .6 }, svg);
+      const t = el('text', { x: px + 9, y: py + 15, class: 'c-ev-t' }, svg);
+      t.textContent = `choque · t = ${f(ev.t)} s`;
+      const t2 = el('text', { x: px + 9, y: py + 30, class: 'c-lbl', fill: css('--text-2') }, svg);
+      t2.textContent = `(${f(ev.x, 2)} m, ${f(ev.y, 2)} m)`;
+    }
+  });
+
+  // Bola en t de vista, con velocidad y componentes
+  const bx = X(ST.x), by = Y(ST.y), kv = 0.2 * esc; // escala de vectores: 0.2 m por m/s
+  el('line', { x1: bx, y1: by, x2: bx + ST.vx * kv, y2: by, class: 'c-vel-c' }, svg);
+  el('line', { x1: bx + ST.vx * kv, y1: by, x2: bx + ST.vx * kv, y2: by - ST.vy * kv, class: 'c-vel-c' }, svg);
+  el('line', { x1: bx, y1: by, x2: bx + ST.vx * kv, y2: by - ST.vy * kv, class: 'c-vel', 'marker-end': 'url(#flecha-v)' }, svg);
+  el('circle', { cx: bx, cy: by, r: rb + 6, class: 'c-sel' }, svg);
+  el('circle', { cx: bx, cy: by, r: rb, class: 'c-ball' }, svg);
+  // Etiquetas de vectores
+  const lx = bx + ST.vx * kv + 10, ly = by - ST.vy * kv + 4;
+  const tv = el('text', { x: lx, y: ly, class: 'c-lbl', fill: css('--vel') }, svg);
+  tv.innerHTML = `<tspan class="c-lbl-m">v</tspan> = ${f(vmod, 2)} m/s`;
+  const tvx = el('text', { x: bx + ST.vx * kv / 2, y: by - 7, 'text-anchor': 'middle', class: 'c-lbl', fill: css('--vel'), opacity: .85 }, svg);
+  tvx.innerHTML = `<tspan class="c-lbl-m">v</tspan><tspan dy="3" font-size="9">x</tspan>`;
+  const tvy = el('text', { x: bx + ST.vx * kv + 8, y: by - ST.vy * kv / 2 + 4, class: 'c-lbl', fill: css('--vel'), opacity: .85 }, svg);
+  tvy.innerHTML = `<tspan class="c-lbl-m">v</tspan><tspan dy="3" font-size="9">y</tspan>`;
+
+  // Barra de escala (1 m)
+  const sx = (tema === 'suave' ? ux0 + 18 : 16), sy = (tema === 'suave' ? uy1 - 54 : H - 54);
+  el('line', { x1: sx, x2: sx + esc, y1: sy, y2: sy, stroke: css('--text-2'), 'stroke-width': 2 }, svg);
+  el('line', { x1: sx, x2: sx, y1: sy - 4, y2: sy + 4, stroke: css('--text-2'), 'stroke-width': 2 }, svg);
+  el('line', { x1: sx + esc, x2: sx + esc, y1: sy - 4, y2: sy + 4, stroke: css('--text-2'), 'stroke-width': 2 }, svg);
+  const ts = el('text', { x: sx + esc / 2, y: sy - 8, 'text-anchor': 'middle', class: 'c-lbl', fill: css('--text-2') }, svg); ts.textContent = '1 m';
+}
+
+/* ================================================================
+   Línea de tiempo
+   ================================================================ */
+function dibujarTL() {
+  const svg = document.getElementById('tl'); svg.innerHTML = '';
+  const W = svg.getBoundingClientRect().width, H = 48;
+  const x = t => 16 + (W - 32) * t / P.T;
+  el('rect', { x: 16, y: 22, width: W - 32, height: 6, rx: 3, fill: css('--panel-3') }, svg);
+  el('rect', { x: 16, y: 22, width: x(P.tVista) - 16, height: 6, rx: 3, fill: css('--accent') }, svg);
+  for (let t = 0; t <= P.T + 1e-9; t += 0.2) {
+    el('line', { x1: x(t), x2: x(t), y1: 33, y2: 37, stroke: css('--muted') }, svg);
+    const tx = el('text', { x: x(t), y: 47, 'text-anchor': 'middle', class: 'c-axis-t' }, svg); tx.textContent = t.toFixed(1);
+  }
+  SIM.eventos.forEach((ev, i) => {
+    el('path', { d: `M${x(ev.t)},18 l-4,-6 h8 z`, fill: css('--event') }, svg);
+    if (i === 1) { const t = el('text', { x: x(ev.t) + 7, y: 11, class: 'c-ev-t' }, svg); t.textContent = ev.tipo; }
+  });
+  el('line', { x1: x(P.tVista), x2: x(P.tVista), y1: 14, y2: 36, stroke: css('--text'), 'stroke-width': 1.5 }, svg);
+  el('circle', { cx: x(P.tVista), cy: 25, r: 6, fill: css('--panel'), stroke: css('--accent'), 'stroke-width': 2 }, svg);
+}
+
+/* ================================================================
+   Gráficas
+   ================================================================ */
+function grafica(id, fx, fy, dom, rango, opt = {}) {
+  const svg = document.getElementById(id); svg.innerHTML = '';
+  const R = svg.getBoundingClientRect(); const W = R.width, H = R.height;
+  const m = { l: 30, r: 12, t: 6, b: 18 };
+  const X = v => m.l + (W - m.l - m.r) * (v - dom[0]) / (dom[1] - dom[0]);
+  const Y = v => H - m.b - (H - m.t - m.b) * (v - rango[0]) / (rango[1] - rango[0]);
+  for (const v of opt.yt || []) {
+    el('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: v === 0 ? 'c-axis' : 'c-minor', 'stroke-width': v === 0 ? 1 : 1 }, svg);
+    const t = el('text', { x: m.l - 5, y: Y(v) + 3.5, 'text-anchor': 'end', class: 'c-axis-t' }, svg); t.textContent = String(v).replace('-', '−');
+  }
+  for (const v of opt.xt || []) { const t = el('text', { x: X(v), y: H - 4, 'text-anchor': 'middle', class: 'c-axis-t' }, svg); t.textContent = v; }
+  // Series por tramos (las discontinuidades de v_y se ven como saltos)
+  SIM.tramos.forEach(tr => {
+    let d = ''; const n = 60;
+    for (let i = 0; i <= n; i++) {
+      const t = tr.t + tr.dur * i / n; const s = estado(Math.min(t, tr.t + tr.dur - 1e-9));
+      d += (i ? 'L' : 'M') + X(fx(t, s)).toFixed(1) + ',' + Y(fy(t, s)).toFixed(1);
+    }
+    el('path', { d, fill: 'none', stroke: opt.color, 'stroke-width': 1.8 }, svg);
+  });
+  if (opt.cursor) {
+    const s = estado(P.tVista);
+    el('line', { x1: X(fx(P.tVista, s)), x2: X(fx(P.tVista, s)), y1: m.t, y2: H - m.b, stroke: css('--text-2'), 'stroke-dasharray': '3 3', opacity: .7 }, svg);
+    el('circle', { cx: X(fx(P.tVista, s)), cy: Y(fy(P.tVista, s)), r: 3.5, fill: css('--panel'), stroke: opt.color, 'stroke-width': 2 }, svg);
+  }
+  SIM.eventos.slice(1).forEach(ev => {
+    const s = { x: ev.x, y: ev.y };
+    if (opt.evt) el('circle', { cx: X(opt.evt(ev)[0]), cy: Y(opt.evt(ev)[1]), r: 2.6, fill: css('--event') }, svg);
+  });
+}
+function dibujarGraficas() {
+  grafica('g1', t => t, (t, s) => s.y, [0, P.T], [0, 3.2], { color: css('--tray'), yt: [0, 1, 2, 3], xt: [0, 0.4, 0.8, 1.2, 1.6], cursor: true, evt: ev => [ev.t, ev.y] });
+  grafica('g2', t => t, (t, s) => s.vy, [0, P.T], [-6.5, 2.5], { color: css('--vel'), yt: [-6, -4, -2, 0, 2], xt: [0, 0.4, 0.8, 1.2, 1.6], cursor: true });
+  grafica('g3', (t, s) => s.x, (t, s) => s.y, [0, 6.6], [0, 3.2], { color: css('--tray'), yt: [0, 1, 2, 3], xt: [0, 2, 4, 6], cursor: true, evt: ev => [ev.x, ev.y] });
+  document.getElementById('g1v').textContent = `${f(ST.y)} m`;
+  document.getElementById('g2v').textContent = `${f(ST.vy)} m/s`;
+  document.getElementById('g3v').textContent = `${SIM.eventos.length - 1} choques`;
+}
+
+function todo() { dibujarLienzo(); dibujarTL(); dibujarGraficas(); }
+document.fonts.ready.then(() => { listo = true; todo(); });
+window.addEventListener('resize', todo);
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "volta-fisica",
+  "version": "0.1.0",
+  "description": "Volta: simulador de física para Windows, organizado en módulos y orientado al temario de Física MEXT.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest run",
+    "test:vigilar": "vitest",
+    "tipos": "tsc -p jsconfig.json",
+    "tokens": "node sistema/tokens/construir.mjs",
+    "iconos": "node sistema/iconos/construir.mjs",
+    "servir": "python -m http.server 8811 --bind 127.0.0.1",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "compilar": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

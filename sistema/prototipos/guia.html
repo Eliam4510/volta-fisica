@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volta · Lenguaje de diseño</title>
+<link rel="stylesheet" href="../fuentes/fuentes.css">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="../componentes/componentes.css">
+<script src="../iconos/sprite.js"></script>
+<style>
+  /* ==========================================================================
+     Guía viva — maquetación propia de esta página.
+     Solo tokens: ningún color literal. Los componentes vienen de componentes.css.
+     ========================================================================== */
+  html { scroll-padding-top: calc(var(--est-barra) + var(--e-4)); }
+  body { height: auto; background: var(--fondo); }
+  ul { margin: 0; padding: 0; list-style: none; }
+  p { margin: 0; }
+  a { color: inherit; }
+  code {
+    font-family: var(--fuente-numeros); font-size: var(--t-micro); color: var(--texto-2);
+    background: var(--campo); border: 1px solid var(--linea-suave); border-radius: var(--r-casilla);
+    padding: 0 5px; white-space: nowrap;
+  }
+
+  /* ---------- Estructura: barra, navegación y contenido ---------- */
+  .g-barra { position: sticky; top: 0; z-index: 30; height: var(--est-barra); }
+  .g-barra .g-pagina { color: var(--texto-2); font-weight: var(--peso-medio); white-space: nowrap; }
+  .g-barra .g-ruta { color: var(--texto-3); font-family: var(--fuente-numeros); font-size: var(--t-pequeno); white-space: nowrap; }
+  .g-cuerpo { display: grid; grid-template-columns: var(--est-panel-izq) minmax(0, 1fr); }
+  .g-nav {
+    position: sticky; top: var(--est-barra); height: calc(100vh - var(--est-barra)); overflow: auto;
+    background: var(--panel); border-right: 1px solid var(--linea-suave);
+    padding: var(--e-3) var(--e-2) var(--e-8);
+  }
+  .g-nav .panel-cab { padding-left: var(--e-2); height: 28px; color: var(--texto-3); }
+  .g-nav a {
+    display: flex; align-items: center; gap: var(--e-2); height: 28px; padding: 0 var(--e-2);
+    border-radius: var(--r-control); color: var(--texto-2); text-decoration: none; white-space: nowrap;
+    transition: background var(--mov-rapido) var(--mov-curva), color var(--mov-rapido) var(--mov-curva);
+  }
+  .g-nav a .n { font-family: var(--fuente-numeros); font-size: var(--t-micro); color: var(--texto-4); width: 14px; text-align: right; flex: none; }
+  .g-nav a:hover { background: var(--campo-hover); color: var(--texto); }
+  .g-nav a[aria-current="true"] { background: var(--campo-activo); color: var(--texto); }
+  .g-nav .sub { display: none; flex-direction: column; margin: 2px 0 var(--e-2) 21px; padding-left: var(--e-2); border-left: 1px solid var(--linea-suave); }
+  .g-nav li.abierta > .sub { display: flex; }
+  .g-nav .sub a { height: 24px; font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-nav .sub a[aria-current="true"] { background: transparent; color: var(--texto); font-weight: var(--peso-medio); }
+  .g-nav .g-nav-pie { margin: var(--e-6) var(--e-2) 0; font-size: var(--t-micro); line-height: var(--t-micro-alto); color: var(--texto-4); }
+
+  .g-contenido { min-width: 0; padding: 0 var(--e-12) var(--e-12); }
+  .g-ancho { max-width: 1040px; margin: 0 auto; }
+  .g-contenido canvas { display: block; width: 100%; }
+
+  /* ---------- Portada ---------- */
+  .g-portada { padding: var(--e-12) 0 var(--e-8); }
+  .g-firma { display: flex; align-items: center; gap: var(--e-4); color: var(--texto); }
+  .g-firma .g-simbolo svg { width: 52px; height: 52px; display: block; }
+  .g-firma b { font-size: var(--t-display); line-height: var(--t-display-alto); font-weight: var(--peso-fuerte); letter-spacing: -0.01em; }
+  .g-portada h1 { margin: var(--e-6) 0 var(--e-2); font-size: var(--t-pantalla); line-height: var(--t-pantalla-alto); font-weight: var(--peso-fuerte); letter-spacing: -0.01em; }
+  .g-entrada { font-size: var(--t-subtitulo); line-height: var(--t-subtitulo-alto); color: var(--texto-2); max-width: 70ch; }
+  .g-datos { display: flex; flex-wrap: wrap; gap: var(--e-2); margin-top: var(--e-5); }
+  .g-portada-lienzo { margin-top: var(--e-8); }
+  .g-portada-lienzo canvas { height: 280px; }
+
+  /* ---------- Secciones ---------- */
+  .g-seccion { padding: var(--e-12) 0 var(--e-4); border-top: 1px solid var(--linea-suave); }
+  .g-seccion > .g-cab { margin-bottom: var(--e-8); }
+  .g-cab .g-num { font-family: var(--fuente-numeros); font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-cab h2 { margin: var(--e-1) 0 var(--e-3); font-size: var(--t-pantalla); line-height: var(--t-pantalla-alto); font-weight: var(--peso-fuerte); letter-spacing: -0.01em; }
+  .g-sub { margin: 0 0 var(--e-12); }
+  .g-sub > h3 { margin: 0 0 var(--e-1); font-size: var(--t-titulo); line-height: var(--t-titulo-alto); font-weight: var(--peso-fuerte); letter-spacing: -0.005em; }
+  .g-sub > .g-desc { font-size: var(--t-enfasis); line-height: var(--t-enfasis-alto); color: var(--texto-2); max-width: 72ch; margin-bottom: var(--e-5); }
+  .g-comp { margin: 0 0 var(--e-8); }
+  .g-comp > h4 { margin: 0 0 2px; font-size: var(--t-subtitulo); line-height: var(--t-subtitulo-alto); font-weight: var(--peso-fuerte); }
+  .g-comp > .g-desc { font-size: var(--t-base); color: var(--texto-3); margin-bottom: var(--e-3); max-width: 80ch; }
+  .g-prosa { font-size: var(--t-enfasis); line-height: var(--t-enfasis-alto); color: var(--texto-2); max-width: 72ch; }
+  .g-prosa + .g-prosa { margin-top: var(--e-2); }
+  .g-nota { font-size: var(--t-pequeno); line-height: var(--t-pequeno-alto); color: var(--texto-3); margin-top: var(--e-2); }
+
+  /* ---------- Rejillas ---------- */
+  .g-r2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e-4); }
+  .g-r3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-4); }
+  .g-r4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--e-4); }
+  .g-pila { display: flex; flex-direction: column; gap: var(--e-4); }
+
+  /* ---------- Muestra: escenario + pie con uso y clase ---------- */
+  .g-muestra { margin: 0; border: 1px solid var(--linea-suave); border-radius: var(--r-tarjeta); background: var(--panel); overflow: hidden; min-width: 0; }
+  :where(.g-sub, .g-comp) > .g-muestra + .g-muestra { margin-top: var(--e-3); }
+  .g-escenario { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3); padding: var(--e-6); min-height: 88px; position: relative; }
+  .g-escenario.lienzo { background: var(--lienzo); padding: 0; }
+  .g-escenario.columna { flex-direction: column; align-items: stretch; }
+  .g-escenario.sin-relleno { padding: 0; }
+  .g-escenario.fondo { background: var(--fondo); }
+  .g-escenario.velado { background: linear-gradient(var(--velo), var(--velo)), var(--fondo); justify-content: center; padding: var(--e-8); }
+  .g-escenario canvas { display: block; width: 100%; }
+  .g-pie {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--e-1) var(--e-4);
+    padding: var(--e-2) var(--e-4); border-top: 1px solid var(--linea-suave);
+    font-size: var(--t-pequeno); line-height: var(--t-pequeno-alto); color: var(--texto-3);
+  }
+  .g-pie .uso { color: var(--texto-2); flex: 1 1 240px; }
+  .g-pie .clases { display: flex; flex-wrap: wrap; gap: var(--e-1); justify-content: flex-end; margin-left: auto; }
+  .g-var { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e-2); min-width: 0; }
+  .g-var .etq { font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-sep-v { width: 1px; align-self: stretch; background: var(--linea-suave); }
+
+  /* ---------- Correcto e incorrecto (el color de estado, solo en texto e icono) ---------- */
+  .g-caso { border: 1px solid var(--linea-suave); border-radius: var(--r-tarjeta); background: var(--panel); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .g-caso .cuerpo { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--e-3); padding: var(--e-5); min-height: 92px; background: var(--lienzo); text-align: center; }
+  .g-caso .cuerpo.izq { justify-content: flex-start; text-align: left; }
+  .g-caso .cuerpo canvas { width: 100%; height: 120px; display: block; }
+  .g-caso .cuerpo.lienzo { padding: 0; }
+  .g-caso .pie { display: flex; gap: var(--e-2); align-items: flex-start; padding: var(--e-2) var(--e-3); border-top: 1px solid var(--linea-suave); font-size: var(--t-pequeno); line-height: var(--t-pequeno-alto); color: var(--texto-2); }
+  .g-caso .veredicto { display: inline-flex; align-items: center; gap: var(--e-1); font-weight: var(--peso-medio); color: var(--texto); flex: none; }
+  .g-caso .veredicto .ico { width: 14px; height: 14px; }
+  .g-caso.no .veredicto { color: var(--error); }
+
+  /* ---------- Principios ---------- */
+  .g-principio { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--e-8); padding: var(--e-6) 0; border-top: 1px solid var(--linea-suave); align-items: center; }
+  .g-principio:first-of-type { border-top: 0; padding-top: 0; }
+  .g-principio .g-num { font-family: var(--fuente-numeros); font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-principio h3 { margin: var(--e-1) 0 var(--e-2); font-size: var(--t-titulo); line-height: var(--t-titulo-alto); font-weight: var(--peso-fuerte); }
+  .g-principio p { font-size: var(--t-enfasis); line-height: var(--t-enfasis-alto); color: var(--texto-2); }
+  .g-p1 { display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+  .g-p1 .controles { display: flex; flex-direction: column; gap: var(--e-3); padding: var(--e-5); border-right: 1px solid var(--linea-suave); background: var(--panel); }
+  .g-p3 { display: flex; flex-direction: column; align-items: center; gap: var(--e-4); padding: var(--e-8) var(--e-6); background: var(--lienzo); }
+  .g-p3 .lectura { font-size: 30px; line-height: 36px; color: var(--texto); }
+  .g-p3 .lectura .num { color: var(--texto); }
+  .g-p3 .partes { display: grid; grid-template-columns: repeat(4, auto); gap: var(--e-2) var(--e-5); font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-p3 .partes span::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--texto-3); margin-right: 6px; vertical-align: 1px; }
+  .g-p5 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .g-p5 > div + div { border-left: 1px solid var(--linea-suave); }
+  .g-p5 .etq { padding: var(--e-2) var(--e-3); font-size: var(--t-pequeno); color: var(--texto-3); border-top: 1px solid var(--linea-suave); background: var(--panel); }
+
+  /* ---------- Marca ---------- */
+  .g-marca-grande { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .g-marca-grande > div { display: grid; place-items: center; min-height: 260px; position: relative; }
+  .g-marca-grande .papel { background: var(--lienzo); color: var(--tinta); }
+  .g-marca-grande .tinta { background: var(--tinta); color: var(--sobre-tinta); }
+  .g-marca-grande .g-simbolo svg { width: 144px; height: 144px; display: block; }
+  .g-marca-grande .etq { position: absolute; left: var(--e-4); bottom: var(--e-3); font-size: var(--t-pequeno); opacity: .7; }
+  .g-construccion { position: relative; width: 256px; height: 256px; }
+  .g-construccion svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .g-construccion .g-simbolo { position: absolute; inset: 0; color: var(--tinta); }
+  .g-construccion .g-simbolo svg { width: 256px; height: 256px; }
+  .g-logo { display: inline-flex; align-items: center; gap: var(--e-3); color: var(--texto); }
+  .g-logo b { font-weight: var(--peso-fuerte); letter-spacing: -0.01em; }
+  .g-logo.l44 .g-simbolo svg { width: 50px; height: 50px; display: block; }
+  .g-logo.l44 b { font-size: var(--t-display); line-height: var(--t-display-alto); }
+  .g-logo.l20 { gap: var(--e-2); }
+  .g-logo.l20 .g-simbolo svg { width: 24px; height: 24px; display: block; }
+  .g-logo.l20 b { font-size: var(--t-titulo); line-height: var(--t-titulo-alto); }
+  .g-iconos-app { display: flex; align-items: flex-end; gap: var(--e-8); }
+  .g-iconos-app figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: var(--e-2); font-size: var(--t-micro); color: var(--texto-3); font-family: var(--fuente-numeros); }
+  .g-mal-color { color: var(--f-movimiento); }
+  .g-mal-efecto svg { filter: drop-shadow(0 4px 6px var(--linea-fuerte)); }
+  .g-mal-deformado { transform: scaleX(1.5); }
+  .g-mal-contraste { background: var(--campo-activo); color: var(--texto-4); }
+
+  /* ---------- Color ---------- */
+  .g-rampa { display: flex; height: 44px; border-radius: var(--r-control); overflow: hidden; box-shadow: inset 0 0 0 1px var(--linea-suave); }
+  .g-rampa i { flex: 1; }
+  .g-rampas { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--e-2) var(--e-3); align-items: center; margin-bottom: var(--e-5); font-size: var(--t-pequeno); color: var(--texto-3); }
+  table.g-tabla { width: 100%; border-collapse: collapse; font-size: var(--t-pequeno); line-height: var(--t-pequeno-alto); }
+  .g-tabla th { text-align: left; font-weight: var(--peso-medio); color: var(--texto-3); padding: var(--e-2) var(--e-3); border-bottom: 1px solid var(--linea-suave); white-space: nowrap; }
+  .g-tabla td { padding: 7px var(--e-3); border-bottom: 1px solid var(--linea-suave); vertical-align: middle; color: var(--texto-2); }
+  .g-tabla tr:last-child td { border-bottom: 0; }
+  .g-tabla .der { text-align: right; }
+  .g-tabla .mono { font-family: var(--fuente-numeros); font-variant-numeric: tabular-nums; color: var(--texto); }
+  .g-tabla .tenue { color: var(--texto-3); }
+  .g-tabla td.lz { padding: 0 var(--e-3); width: 236px; }
+  .g-tabla td.lz canvas { display: block; width: 220px; height: 34px; }
+  .g-pastillas { display: inline-flex; gap: 4px; vertical-align: middle; }
+  .g-pastilla { width: 36px; height: 22px; border-radius: var(--r-casilla); box-shadow: inset 0 0 0 1px var(--linea-suave); display: inline-block; }
+  .g-cumple { color: var(--texto-2); }
+  .g-no-cumple { color: var(--aviso); }
+
+  .g-familia { border: 1px solid var(--linea-suave); border-radius: var(--r-tarjeta); background: var(--panel); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .g-familia .cab { display: flex; align-items: baseline; gap: var(--e-2); padding: var(--e-3) var(--e-4) var(--e-1); }
+  .g-familia .cab b { font-size: var(--t-enfasis); font-weight: var(--peso-fuerte); color: var(--texto); }
+  .g-familia .cab .sp { flex: 1; }
+  .g-familia .significa { padding: 0 var(--e-4) var(--e-3); color: var(--texto-2); font-size: var(--t-pequeno); line-height: var(--t-pequeno-alto); min-height: 44px; }
+  .g-dual { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--linea-suave); border-bottom: 1px solid var(--linea-suave); }
+  .g-dual canvas { display: block; width: 100%; height: 116px; }
+  .g-dual canvas + canvas { border-left: 1px solid var(--linea-suave); }
+  .g-familia .valores { display: grid; grid-template-columns: auto 1fr auto; gap: 4px var(--e-3); padding: var(--e-3) var(--e-4); font-size: var(--t-pequeno); color: var(--texto-3); align-items: center; }
+  .g-familia .valores .mono { font-family: var(--fuente-numeros); color: var(--texto-2); }
+  .g-tinte { display: inline-block; width: 22px; height: 14px; border-radius: var(--r-casilla); vertical-align: -2px; margin-right: 4px; }
+
+  .g-mapa { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr); gap: var(--e-2) var(--e-3); align-items: center; font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-mapa canvas { display: block; width: 100%; height: 32px; border-radius: var(--r-casilla); }
+  .g-mapa b { color: var(--texto); font-weight: var(--peso-medio); display: block; }
+
+  /* ---------- Tipografía ---------- */
+  .g-familias-tipo .g-muestra .g-escenario { flex-direction: column; align-items: flex-start; gap: var(--e-2); min-height: 170px; }
+  .g-aa { font-size: 56px; line-height: 60px; color: var(--texto); }
+  .g-escala-fila { display: grid; grid-template-columns: 150px 72px minmax(0, 1fr); gap: var(--e-4); align-items: baseline; padding: var(--e-3) var(--e-4); border-top: 1px solid var(--linea-suave); }
+  .g-escala-fila:first-child { border-top: 0; }
+  .g-escala-fila .tok { font-family: var(--fuente-numeros); font-size: var(--t-pequeno); color: var(--texto); }
+  .g-escala-fila .med { font-family: var(--fuente-numeros); font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-escala-fila .muestra { color: var(--texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .g-escala-fila .uso { display: block; font-size: var(--t-pequeno); line-height: var(--t-pequeno-alto); color: var(--texto-3); margin-top: 2px; }
+  .g-pesos { display: flex; gap: var(--e-8); align-items: baseline; font-size: var(--t-titulo); line-height: var(--t-titulo-alto); }
+  .g-pesos span small { display: block; font-size: var(--t-pequeno); color: var(--texto-3); font-family: var(--fuente-numeros); font-weight: var(--peso-normal); }
+  .g-cantidad { font-size: 20px; line-height: 28px; color: var(--texto); }
+  .g-cantidad .num { color: var(--texto); }
+  .g-formateador { display: grid; grid-template-columns: 160px 112px auto minmax(0, 1fr); gap: var(--e-3); align-items: center; }
+  .g-formateador .salida { font-size: 20px; line-height: 28px; text-align: right; }
+  math { font-family: var(--fuente-formulas); font-size: 22px; color: var(--texto); }
+
+  /* ---------- Geometría ---------- */
+  .g-espacios { display: grid; grid-template-columns: 96px 40px minmax(0, 1fr); gap: 6px var(--e-3); align-items: center; font-size: var(--t-pequeno); }
+  .g-espacios .tok { font-family: var(--fuente-numeros); color: var(--texto); }
+  .g-espacios .med { font-family: var(--fuente-numeros); color: var(--texto-3); text-align: right; }
+  .g-espacios i { display: block; height: 12px; background: var(--tinta); border-radius: 1px; }
+  .g-rejilla-base { width: 100%; height: 120px; border-radius: var(--r-control); background-color: var(--lienzo);
+    background-image: linear-gradient(var(--cuadricula-mayor) 1px, transparent 1px), linear-gradient(90deg, var(--cuadricula-mayor) 1px, transparent 1px),
+      linear-gradient(var(--cuadricula-menor) 1px, transparent 1px), linear-gradient(90deg, var(--cuadricula-menor) 1px, transparent 1px);
+    background-size: 16px 16px, 16px 16px, 4px 4px, 4px 4px; box-shadow: inset 0 0 0 1px var(--linea-suave);
+    display: flex; align-items: flex-start; gap: var(--e-2); padding: 44px var(--e-4) 0; }
+  .g-radios { display: flex; gap: var(--e-4); flex-wrap: wrap; align-items: flex-end; }
+  .g-radios figure { margin: 0; display: flex; flex-direction: column; gap: var(--e-2); font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-radios .caja { width: 72px; height: 56px; border: 1.5px solid var(--tinta); background: var(--lienzo); }
+  .g-radios figure b { display: block; color: var(--texto); font-weight: var(--peso-medio); }
+  .g-alturas { display: flex; gap: var(--e-8); align-items: flex-end; }
+  .g-altura { display: flex; align-items: center; gap: var(--e-2); }
+  .g-cota-v { width: 9px; border: 1px solid var(--texto-3); border-left: 0; flex: none; }
+  .g-altura .med { font-family: var(--fuente-numeros); font-size: var(--t-pequeno); color: var(--texto-2); }
+  .g-elevaciones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-6); padding: var(--e-8); background: var(--fondo); }
+  .g-elev { height: 120px; display: flex; flex-direction: column; justify-content: flex-end; padding: var(--e-3); font-size: var(--t-pequeno); color: var(--texto-3); background: var(--panel); }
+  .g-elev b { color: var(--texto); font-weight: var(--peso-medio); }
+  .g-elev.plano { border: 1px solid var(--linea-suave); }
+  .g-elev.menu-e { border: 1px solid var(--linea); border-radius: var(--r-tarjeta); box-shadow: var(--sombra-menu); }
+  .g-elev.dialogo-e { border: 1px solid var(--linea); border-radius: var(--r-dialogo); box-shadow: var(--sombra-dialogo); }
+  .g-mov { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--e-3) var(--e-4); align-items: center; font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-mov b { display: block; color: var(--texto); font-weight: var(--peso-medio); }
+  .g-pista { position: relative; height: 24px; border-radius: var(--r-control); background: var(--campo); }
+  .g-pista i { position: absolute; top: 6px; left: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--tinta); transition-property: left; transition-timing-function: var(--mov-curva); }
+  .g-mov.movido .g-pista i { left: calc(100% - 18px); }
+
+  /* ---------- Iconografía ---------- */
+  .g-icono-anatomia { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--e-8); align-items: center; }
+  .g-icono-anatomia svg.rejilla { width: 280px; height: 280px; display: block; }
+  .g-reglas { display: flex; flex-direction: column; gap: var(--e-3); font-size: var(--t-base); color: var(--texto-2); }
+  .g-reglas li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--e-2); }
+  .g-reglas li .ico { color: var(--texto-3); margin-top: 1px; }
+  .g-reglas b { color: var(--texto); font-weight: var(--peso-medio); }
+  .g-tamanos { display: flex; gap: var(--e-6); align-items: flex-end; flex-wrap: wrap; }
+  .g-tamanos figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: var(--e-2); font-size: var(--t-micro); color: var(--texto-3); font-family: var(--fuente-numeros); }
+  .g-tamanos .ico40 { width: 40px; height: 40px; color: var(--texto); }
+  .g-set-cab { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; padding: var(--e-3) var(--e-4); border-bottom: 1px solid var(--linea-suave); }
+  .g-set-cab .campo { width: 240px; }
+  .g-set-grupo { padding: var(--e-4); border-bottom: 1px solid var(--linea-suave); }
+  .g-set-grupo:last-child { border-bottom: 0; }
+  .g-set-grupo h5 { margin: 0 0 var(--e-3); font-size: var(--t-pequeno); font-weight: var(--peso-medio); color: var(--texto-2); }
+  .g-set-grupo h5 span { color: var(--texto-4); font-family: var(--fuente-numeros); margin-left: var(--e-1); }
+  .g-set { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 2px; }
+  .g-set .celda { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: var(--e-3) var(--e-1) var(--e-2); border-radius: var(--r-control); color: var(--texto); }
+  .g-set .celda:hover { background: var(--campo-hover); }
+  .g-set .celda span { font-family: var(--fuente-numeros); font-size: var(--t-micro); color: var(--texto-3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .g-set.t20 .ico { width: 20px; height: 20px; }
+  .g-set .celda.falta .ico { visibility: hidden; }
+  .g-set .celda.falta span { color: var(--texto-4); }
+  .g-inventario { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  /* ---------- Componentes ---------- */
+  .g-estados { width: 100%; border-collapse: collapse; }
+  .g-estados th { font-size: var(--t-pequeno); font-weight: var(--peso-medio); color: var(--texto-3); text-align: left; padding: 0 var(--e-3) var(--e-3); }
+  .g-estados td { padding: var(--e-2) var(--e-3); }
+  .g-estados td:first-child { font-size: var(--t-pequeno); color: var(--texto-2); white-space: nowrap; }
+  /* Estados forzados solo para documentarlos (espejo de :hover, :active y :focus-visible de componentes.css) */
+  .g-hover.btn { background: var(--campo-hover); color: var(--texto); }
+  .g-hover.btn-primario { background: var(--tinta); color: var(--sobre-tinta); opacity: .88; }
+  .g-activo.btn { background: var(--campo-activo); color: var(--texto); }
+  .g-activo.btn-primario { background: var(--tinta); color: var(--sobre-tinta); opacity: .78; }
+  .g-foco { outline: 2px solid var(--tinta); outline-offset: 2px; }
+  .g-foco-campo { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta); }
+  .g-campo-ancho { width: 220px; }
+  .g-campo-largo { width: 280px; }
+  .g-valor-expr { font-size: var(--t-pequeno); color: var(--texto-3); margin-top: 4px; min-height: 16px; font-family: var(--fuente-numeros); }
+  .g-panel { background: var(--panel); border: 1px solid var(--linea-suave); border-radius: var(--r-control); min-width: 0; }
+  .g-panel-der { width: var(--est-panel-der); }
+  .g-panel-izq { width: var(--est-panel-izq); }
+  .g-menus { display: flex; gap: var(--e-8); align-items: flex-start; flex-wrap: wrap; }
+  .g-menus .menu { width: 240px; }
+  .g-ancla-menu { position: relative; }
+  .g-menu-vivo { position: fixed; z-index: 70; }
+  .g-zona-contextual { position: relative; width: 300px; height: 160px; border-radius: var(--r-control); border: 1px dashed var(--linea-fuerte); background: var(--lienzo); display: grid; place-items: start center; padding-top: var(--e-2); font-size: var(--t-pequeno); color: var(--texto-3); overflow: hidden; user-select: none; }
+  .g-zona-contextual canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .g-zona-contextual span { position: relative; }
+  .g-ayudas { display: flex; gap: var(--e-5); align-items: flex-start; flex-wrap: wrap; }
+  .g-velo-vivo { z-index: 80; }
+  .g-aviso-vivo { position: fixed; left: 50%; bottom: var(--e-6); z-index: 90; transform: translate(-50%, 0); transition: opacity var(--mov-medio) var(--mov-curva), transform var(--mov-medio) var(--mov-curva); }
+  .g-aviso-vivo.oculto { opacity: 0; transform: translate(-50%, 8px); pointer-events: none; }
+  .g-graficas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-2); padding: var(--e-3); width: 100%; }
+  .g-graficas .grafica { height: 184px; }
+  .g-graficas .grafica-cab .leyenda { font-size: var(--t-micro); }
+  .g-tabla-datos { max-height: 196px; overflow: auto; width: 100%; }
+  .g-registro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--e-6); width: 100%; }
+  .g-r2 > .g-lienzo-tarjeta:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .g-tiempo { width: 100%; }
+  .g-tiempo .inf-cab { border-bottom: 1px solid var(--linea-suave); }
+  .g-tarjetas-escena { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--e-4); width: 100%; }
+  .g-tarjetas-modulo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-4); width: 100%; }
+  .g-lienzo-flotantes { position: relative; width: 100%; height: 300px; }
+  .g-paleta-panel .paleta { padding-top: 0; }
+
+  /* ---------- Gramática del lienzo ---------- */
+  .g-capas { display: grid; grid-template-columns: minmax(0, 1fr) 232px; }
+  .g-capas canvas { height: 380px; }
+  .g-capas .lista { border-left: 1px solid var(--linea-suave); padding: var(--e-3) var(--e-4); background: var(--panel); }
+  .g-capas .lista .casilla { font-size: var(--t-pequeno); min-height: 28px; }
+  .g-capas .lista .casilla .n { margin-left: auto; font-family: var(--fuente-numeros); font-size: var(--t-micro); color: var(--texto-4); }
+  .g-regla { display: flex; flex-direction: column; gap: 6px; padding: var(--e-3) var(--e-4); border-top: 1px solid var(--linea-suave); }
+  .g-regla b { font-size: var(--t-base); font-weight: var(--peso-fuerte); color: var(--texto); }
+  .g-regla p { font-size: var(--t-pequeno); line-height: var(--t-pequeno-alto); color: var(--texto-2); }
+  .g-regla .api { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+  .g-lienzo-tarjeta { border: 1px solid var(--linea-suave); border-radius: var(--r-tarjeta); background: var(--panel); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .g-lienzo-tarjeta canvas { display: block; width: 100%; height: 196px; background: var(--lienzo); }
+  .g-lienzo-tarjeta .control { display: flex; align-items: center; gap: var(--e-3); padding: var(--e-2) var(--e-4); border-top: 1px solid var(--linea-suave); font-size: var(--t-pequeno); color: var(--texto-3); }
+  .g-lienzo-tarjeta .control .deslizador { flex: 1; }
+  .g-lienzo-tarjeta .control .num { color: var(--texto); min-width: 64px; text-align: right; }
+
+  /* ---------- Plantillas ---------- */
+  .g-plantilla canvas { height: 600px; }
+  .g-plantilla.inicio canvas { height: 340px; }
+  /* La barra superior se muestra a su ancho real (1440 px) y a escala del contenedor */
+  .g-barra-viva { height: var(--est-barra); width: 1440px; flex: none; }
+
+  .g-pie-pagina { padding: var(--e-8) 0 0; border-top: 1px solid var(--linea-suave); display: flex; justify-content: space-between; gap: var(--e-4); font-size: var(--t-pequeno); color: var(--texto-3); }
+
+  @media (max-width: 1100px) {
+    .g-contenido { padding: 0 var(--e-6) var(--e-12); }
+    .g-r4, .g-tarjetas-escena { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 860px) {
+    .g-cuerpo { grid-template-columns: minmax(0, 1fr); }
+    .g-nav { display: none; }
+    .g-contenido { padding: 0 var(--e-4) var(--e-12); }
+    .g-r2, .g-r3, .g-principio, .g-capas, .g-icono-anatomia, .g-tarjetas-modulo, .g-graficas { grid-template-columns: minmax(0, 1fr); }
+    .g-barra .g-ruta, .g-barra .chip { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================ Barra superior ============================ -->
+<header class="barra g-barra">
+  <a class="marca" href="#inicio" data-ayuda="Volta|Volta"><span class="g-simbolo" data-simbolo></span><b>Volta</b></a>
+  <span class="separador-v"></span>
+  <span class="g-pagina">Lenguaje de diseño</span>
+  <span class="chip suave">Guía viva</span>
+  <span class="sp"></span>
+  <span class="g-ruta">docs/04_lenguaje_de_diseno.md</span>
+  <span class="separador-v"></span>
+  <a class="btn btn-compacto" href="mecanica.html" data-ayuda="Abrir el prototipo de Mecánica|Mechanics prototype"><svg class="ico"><use href="#m-mecanica"/></svg>Prototipo de Mecánica</a>
+  <button class="btn btn-icono" data-accion="tema" id="b-tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
+</header>
+
+<div class="g-cuerpo">
+<!-- ============================ Navegación ============================ -->
+<nav class="g-nav" aria-label="Secciones">
+  <div class="panel-cab">Contenido</div>
+  <ul id="g-indice">
+    <li><a href="#principios"><span class="n">1</span>Principios</a></li>
+    <li><a href="#marca"><span class="n">2</span>Marca</a>
+      <ul class="sub"><li><a href="#simbolo">Símbolo</a></li><li><a href="#logotipo">Logotipo e icono</a></li><li><a href="#usos">Usos</a></li></ul></li>
+    <li><a href="#color"><span class="n">3</span>Color</a>
+      <ul class="sub"><li><a href="#neutros">Neutros</a></li><li><a href="#fisica">Paleta física</a></li><li><a href="#reglas-color">Reglas del color</a></li><li><a href="#estados">Estados de interfaz</a></li><li><a href="#mapas">Mapas de color</a></li></ul></li>
+    <li><a href="#tipografia"><span class="n">4</span>Tipografía</a>
+      <ul class="sub"><li><a href="#familias">Familias</a></li><li><a href="#escala">Escala</a></li><li><a href="#cantidades">Escritura de cantidades</a></li><li><a href="#voz">Voz y redacción</a></li></ul></li>
+    <li><a href="#geometria"><span class="n">5</span>Geometría</a>
+      <ul class="sub"><li><a href="#espaciado">Espaciado</a></li><li><a href="#radios">Radios y alturas</a></li><li><a href="#elevacion">Elevación</a></li><li><a href="#trazos">Trazos del lienzo</a></li><li><a href="#movimiento">Movimiento</a></li></ul></li>
+    <li><a href="#iconografia"><span class="n">6</span>Iconografía</a>
+      <ul class="sub"><li><a href="#icono-reglas">Reglas y cuadrícula</a></li><li><a href="#icono-set">Set completo</a></li></ul></li>
+    <li><a href="#componentes"><span class="n">7</span>Componentes</a>
+      <ul class="sub">
+        <li><a href="#c-botones">Botones</a></li><li><a href="#c-campos">Campos</a></li><li><a href="#c-seleccion">Deslizador y selección</a></li>
+        <li><a href="#c-pestanas">Pestañas</a></li><li><a href="#c-menus">Menús</a></li><li><a href="#c-ayuda">Ayuda emergente</a></li>
+        <li><a href="#c-comandos">Paleta de comandos</a></li><li><a href="#c-dialogo">Diálogo y notificación</a></li><li><a href="#c-chips">Chips y modo</a></li>
+        <li><a href="#c-arbol">Árbol y paleta</a></li><li><a href="#c-inspector">Inspector</a></li><li><a href="#c-tiempo">Línea de tiempo y gráficas</a></li><li><a href="#c-tabla">Tabla y energía</a></li>
+        <li><a href="#c-tarjetas">Tarjetas</a></li><li><a href="#c-vacio">Estado vacío</a></li><li><a href="#c-flotantes">Flotantes del lienzo</a></li>
+      </ul></li>
+    <li><a href="#lienzo"><span class="n">8</span>Gramática del lienzo</a>
+      <ul class="sub">
+        <li><a href="#l-capas">Capas</a></li><li><a href="#l-geometria">Geometría fija</a></li><li><a href="#l-materia">Materia</a></li>
+        <li><a href="#l-magnitudes">Magnitudes</a></li><li><a href="#l-construccion">Construcción</a></li><li><a href="#l-etiquetas">Etiquetas</a></li>
+        <li><a href="#l-edicion">Edición</a></li><li><a href="#l-eventos">Eventos</a></li><li><a href="#l-pendientes">Dominios</a></li>
+      </ul></li>
+    <li><a href="#plantillas"><span class="n">9</span>Plantillas</a>
+      <ul class="sub"><li><a href="#p-barra">Barra superior</a></li><li><a href="#p-espacio">Espacio de trabajo</a></li><li><a href="#p-inicio">Inicio y biblioteca</a></li></ul></li>
+  </ul>
+  <p class="g-nav-pie">Implementación en <code>sistema/</code>: tokens, componentes, iconos y gramática del lienzo.</p>
+</nav>
+
+<!-- ============================ Contenido ============================ -->
+<main class="g-contenido">
+<div class="g-ancho">
+
+  <!-- ============================ Portada ============================ -->
+  <header class="g-portada" id="inicio">
+    <div class="g-firma"><span class="g-simbolo" data-simbolo></span><b>Volta</b></div>
+    <h1>Lenguaje de diseño</h1>
+    <p class="g-entrada">Contrato visual único de la aplicación. Esta guía usa las piezas reales del sistema: los tokens, los componentes y la gramática del lienzo que dibujan cada módulo. Todo lo que aparece aquí está vivo; cambia el tema para verlo en oscuro.</p>
+    <div class="g-datos" id="g-datos"></div>
+    <figure class="g-muestra g-portada-lienzo">
+      <div class="g-escenario lienzo"><canvas id="lz-portada"></canvas></div>
+      <figcaption class="g-pie"><span class="uso">El símbolo de Volta es un choque elástico. Aquí, el mismo rebote dibujado con la gramática del lienzo.</span><span class="clases"><code>Volta.Trazo</code></span></figcaption>
+    </figure>
+  </header>
+
+  <!-- ============================ 1. Principios ============================ -->
+  <section class="g-seccion" id="principios" data-seccion>
+    <div class="g-cab"><span class="g-num">01</span><h2>Principios</h2>
+      <p class="g-entrada">Cinco reglas que deciden todo lo demás. Cuando algo no está previsto en esta guía, se resuelve con ellas.</p></div>
+
+    <div class="g-principio">
+      <div><span class="g-num">1.1</span><h3>El color significa física</h3>
+        <p>La interfaz es tinta sobre papel, en escala de grises. El color aparece solo para codificar magnitudes físicas, siempre con el mismo significado en todos los módulos. Un botón nunca es azul; una velocidad siempre lo es.</p></div>
+      <div class="g-muestra"><div class="g-p1">
+        <div class="controles">
+          <button class="btn btn-primario"><svg class="ico"><use href="#i-reproducir"/></svg>Reproducir</button>
+          <div class="segmentado" data-exclusivo><button>½×</button><button aria-pressed="true">1×</button><button>2×</button></div>
+          <label class="casilla"><input type="checkbox" checked>Velocidad<span class="muestra" style="color:var(--f-movimiento)"></span></label>
+          <label class="casilla"><input type="checkbox" checked>Gravedad<span class="muestra" style="color:var(--f-cambio)"></span></label>
+        </div>
+        <canvas id="lz-p1" style="height:200px"></canvas>
+      </div></div>
+    </div>
+
+    <div class="g-principio">
+      <div><span class="g-num">1.2</span><h3>Dibujo técnico, no ilustración</h3>
+        <p>Lo físico se dibuja con las convenciones del dibujo técnico y de los libros de física: rayado en los apoyos, trazo continuo para lo real, discontinuo para lo previsto y punteado para lo auxiliar. Sin sombras, degradados ni texturas decorativas.</p></div>
+      <div class="g-muestra"><div class="g-escenario lienzo"><canvas id="lz-p2" style="height:200px"></canvas></div></div>
+    </div>
+
+    <div class="g-principio">
+      <div><span class="g-num">1.3</span><h3>Los números son instrumentos</h3>
+        <p>Toda cantidad se escribe según ISO 80000: símbolo en cursiva, unidad en redonda, cifras tabulares y nunca un número sin su unidad.</p></div>
+      <div class="g-muestra"><div class="g-p3">
+        <div class="lectura"><span class="sim">v</span><span class="num"> = 4.960&#8239;</span><span class="u" style="color:var(--texto-2)">m/s</span></div>
+        <div class="partes"><span>Símbolo en cursiva</span><span>Cifras tabulares</span><span>Espacio fino</span><span>Unidad en redonda</span></div>
+      </div></div>
+    </div>
+
+    <div class="g-principio">
+      <div><span class="g-num">1.4</span><h3>El lienzo manda</h3>
+        <p>Los paneles son silenciosos, de bajo contraste y sin adornos. El mayor contraste de la pantalla está en el lienzo, donde ocurre la física.</p></div>
+      <div class="g-muestra"><div class="g-escenario lienzo"><canvas id="lz-p4" style="height:220px"></canvas></div></div>
+    </div>
+
+    <div class="g-principio">
+      <div><span class="g-num">1.5</span><h3>Una sola gramática</h3>
+        <p>Mismos gestos, mismos componentes y mismas reglas de dibujo en todos los módulos. Cada módulo solo añade símbolos a la gramática común: una fuerza es la misma flecha en mecánica, en electrostática y en magnetismo.</p></div>
+      <div class="g-muestra"><div class="g-p5">
+        <div><canvas id="lz-p5a" style="height:150px"></canvas><div class="etq">Mecánica</div></div>
+        <div><canvas id="lz-p5b" style="height:150px"></canvas><div class="etq">Electrostática</div></div>
+        <div><canvas id="lz-p5c" style="height:150px"></canvas><div class="etq">Magnetismo</div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ============================ 2. Marca ============================ -->
+  <section class="g-seccion" id="marca" data-seccion>
+    <div class="g-cab"><span class="g-num">02</span><h2>Marca</h2>
+      <p class="g-entrada">El nombre es Volta. El símbolo es el rebote: una línea de suelo con su rayado y una trayectoria en V que toca el suelo en el vértice, con una partícula en el extremo derecho. La V es un choque elástico, física dibujada con el lenguaje del propio producto.</p></div>
+
+    <div class="g-sub" id="simbolo">
+      <h3>Símbolo</h3>
+      <p class="g-desc">Va en tinta sobre papel o en papel sobre tinta. Se dibuja en una rejilla de 32 × 32 con los mismos elementos que el lienzo: superficie con rayado, trayectoria y partícula.</p>
+      <div class="g-r2">
+        <figure class="g-muestra">
+          <div class="g-marca-grande" style="grid-template-columns:1fr">
+            <div class="papel"><div class="g-construccion" id="g-construccion"><svg id="g-construccion-rejilla" viewBox="0 0 32 32" aria-hidden="true"></svg><span class="g-simbolo" data-simbolo></span></div></div>
+          </div>
+          <figcaption class="g-pie"><span class="uso">Construcción sobre la rejilla de 32 × 32: el vértice toca el suelo en (16, 23) y la partícula está en (26, 6.5).</span><span class="clases"><code>marca/simbolo.svg</code></span></figcaption>
+        </figure>
+        <figure class="g-muestra">
+          <div class="g-marca-grande">
+            <div class="papel"><span class="g-simbolo" data-simbolo></span><span class="etq">Tinta sobre papel</span></div>
+            <div class="tinta"><span class="g-simbolo" data-simbolo></span><span class="etq">Papel sobre tinta</span></div>
+          </div>
+          <figcaption class="g-pie"><span class="uso">El símbolo toma <code>currentColor</code>: hereda la tinta del contexto.</span><span class="clases"><code>stroke="currentColor"</code></span></figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="g-sub" id="logotipo">
+      <h3>Logotipo e icono de aplicación</h3>
+      <p class="g-desc">El logotipo es «Volta» en IBM Plex Sans semibold con espaciado de −1 %, junto al símbolo. El icono de aplicación es el símbolo en papel sobre una placa de tinta.</p>
+      <div class="g-r2">
+        <figure class="g-muestra">
+          <div class="g-escenario columna" style="align-items:flex-start;gap:var(--e-6);background:var(--lienzo)">
+            <span class="g-logo l44"><span class="g-simbolo" data-simbolo></span><b>Volta</b></span>
+            <span class="g-logo l20"><span class="g-simbolo" data-simbolo></span><b>Volta</b></span>
+            <a class="marca" href="#inicio"><span class="g-simbolo" data-simbolo></span><b>Volta</b></a>
+          </div>
+          <figcaption class="g-pie"><span class="uso">Tres tamaños: portada, encabezado y barra superior de la aplicación.</span><span class="clases"><code>.marca</code></span></figcaption>
+        </figure>
+        <figure class="g-muestra">
+          <div class="g-escenario" style="background:var(--lienzo);justify-content:center">
+            <div class="g-iconos-app">
+              <figure><img src="../marca/icono-app.svg" width="128" height="128" alt="Icono de Volta a 128 px"><span>128</span></figure>
+              <figure><img src="../marca/icono-app.svg" width="64" height="64" alt="Icono de Volta a 64 px"><span>64</span></figure>
+              <figure><img src="../marca/icono-app.svg" width="32" height="32" alt="Icono de Volta a 32 px"><span>32</span></figure>
+              <figure><img src="../marca/icono-app.svg" width="16" height="16" alt="Icono de Volta a 16 px"><span>16</span></figure>
+            </div>
+          </div>
+          <figcaption class="g-pie"><span class="uso">Placa de tinta con radio de 56 sobre 256 y el símbolo a escala 6.</span><span class="clases"><code>marca/icono-app.svg</code></span></figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="g-sub" id="usos">
+      <h3>Usos correctos e incorrectos</h3>
+      <p class="g-desc">El símbolo nunca va en color ni con efectos; tampoco se deforma ni se coloca sobre fondos que le quiten contraste.</p>
+      <div class="g-r3">
+        <div class="g-caso"><div class="cuerpo"><span class="g-logo l20"><span class="g-simbolo" data-simbolo></span><b>Volta</b></span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Correcto</span>Tinta sobre papel.</div></div>
+        <div class="g-caso"><div class="cuerpo" style="background:var(--tinta);color:var(--sobre-tinta)"><span class="g-logo l20" style="color:var(--sobre-tinta)"><span class="g-simbolo" data-simbolo></span><b>Volta</b></span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Correcto</span>Papel sobre tinta.</div></div>
+        <div class="g-caso no"><div class="cuerpo"><span class="g-logo l20 g-mal-color"><span class="g-simbolo" data-simbolo></span><b>Volta</b></span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>En color: el azul significa velocidad.</div></div>
+        <div class="g-caso no"><div class="cuerpo"><span class="g-logo l20 g-mal-efecto"><span class="g-simbolo" data-simbolo></span><b>Volta</b></span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Con sombras u otros efectos.</div></div>
+        <div class="g-caso no"><div class="cuerpo"><span class="g-logo l20 g-mal-deformado"><span class="g-simbolo" data-simbolo></span><b>Volta</b></span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Deformado o con otras proporciones.</div></div>
+        <div class="g-caso no"><div class="cuerpo g-mal-contraste"><span class="g-logo l20" style="color:inherit"><span class="g-simbolo" data-simbolo></span><b>VOLTA</b></span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Sin contraste o en mayúsculas sostenidas.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ 3. Color ============================ -->
+  <section class="g-seccion" id="color" data-seccion>
+    <div class="g-cab"><span class="g-num">03</span><h2>Color</h2>
+      <p class="g-entrada">La interfaz vive en una escala de neutros casi puros con un leve sesgo cálido de papel. Fuera de ellos solo existen las nueve familias físicas y dos estados de interfaz. Los valores de esta sección se leen de <code>tokens/tokens.json</code>.</p></div>
+
+    <div class="g-sub" id="neutros">
+      <h3>Neutros: papel y tinta</h3>
+      <p class="g-desc">Quince tokens para superficies, líneas y texto, en claro y en oscuro. El contraste se calcula sobre <code>--panel</code> para los tokens de texto.</p>
+      <div class="g-rampas" id="g-rampas"></div>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno columna"><table class="g-tabla" id="g-neutros"></table></div></figure>
+      <h4 style="margin:var(--e-6) 0 var(--e-2);font-size:var(--t-enfasis);font-weight:var(--peso-fuerte)">Tokens del lienzo</h4>
+      <p class="g-prosa" style="margin-bottom:var(--e-3)">La cuadrícula y los ejes del lienzo tienen sus propios neutros, más tenues que las líneas de interfaz.</p>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno columna"><table class="g-tabla" id="g-neutros-lienzo"></table></div></figure>
+    </div>
+
+    <div class="g-sub" id="fisica">
+      <h3>Paleta física</h3>
+      <p class="g-desc">Nueve familias. Cada una tiene un tono de trazo para vectores y líneas y un tinte al 14 % para rellenos suaves, y funciona en los dos temas con un contraste de al menos 3:1 sobre el lienzo. Cada vector se dibuja con <code>Volta.Trazo</code> a la vez en claro y en oscuro.</p>
+      <div class="g-r2" id="g-familias"></div>
+    </div>
+
+    <div class="g-sub" id="reglas-color">
+      <h3>Reglas del color</h3>
+      <p class="g-desc">Cuatro reglas que se aplican en todos los módulos.</p>
+      <div class="g-r2">
+        <div class="g-caso"><div class="cuerpo lienzo"><canvas id="lz-rc1"></canvas></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>El color nunca va solo</span>Todo vector lleva su símbolo y toda serie su etiqueta: quien no distingue colores lee todo.</div></div>
+        <div class="g-caso"><div class="cuerpo lienzo"><canvas id="lz-rc2"></canvas></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>La materia no tiene color</span>Partículas, cuerpos y cargas van en tinta; el signo de una carga es un glifo, no un color.</div></div>
+        <div class="g-caso"><div class="cuerpo lienzo"><canvas id="lz-rc3"></canvas></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Varias series, un color</span>La velocidad de A y la de B se distinguen por el tipo de trazo y la etiqueta, no por otro color.</div></div>
+        <div class="g-caso"><div class="cuerpo izq" style="background:var(--panel)"><div class="g-pila" id="g-energias" style="width:100%;gap:var(--e-2)"></div></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>La energía toma el color de quien la guarda</span>El total y la energía interna de un gas van en tinta; el trabajo, energía en tránsito, en tinta discontinua.</div></div>
+        <div class="g-caso no"><div class="cuerpo lienzo"><canvas id="lz-rc5"></canvas></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Vectores sin símbolo y cargas en color: el color queda solo y la materia pierde la tinta.</div></div>
+        <div class="g-caso no"><div class="cuerpo izq" style="background:var(--panel)"><div style="display:flex;gap:var(--e-2);flex-wrap:wrap"><button class="btn btn-secundario" style="color:var(--f-movimiento);border-color:var(--f-movimiento)">Reproducir</button><span class="chip" style="color:var(--f-cambio);border-color:var(--f-cambio)">Guardado</span></div></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Colores físicos en la interfaz: un botón nunca es azul.</div></div>
+      </div>
+    </div>
+
+    <div class="g-sub" id="estados">
+      <h3>Estados de interfaz, selección y foco</h3>
+      <p class="g-desc">Los únicos colores fuera de la física son el error y el aviso, y solo en texto e icono. La selección y el foco son contornos de tinta: el foco del teclado es un anillo de 2 px separado 2 px del control.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch;gap:var(--e-3)">
+          <table class="g-tabla" id="g-estados-color" style="margin:calc(-1 * var(--e-6)) calc(-1 * var(--e-6)) 0;width:calc(100% + 2 * var(--e-6))"></table>
+          <div style="display:flex;align-items:center;gap:var(--e-2);color:var(--aviso);font-size:var(--t-pequeno)"><svg class="ico"><use href="#i-aviso"/></svg>El paso se redujo cerca del choque para conservar la precisión.</div>
+          <div style="display:flex;align-items:center;gap:var(--e-2);color:var(--error);font-size:var(--t-pequeno)"><svg class="ico"><use href="#i-error"/></svg>No se pudo exportar el video: la carpeta no admite escritura.</div>
+        </div><figcaption class="g-pie"><span class="uso">Error y aviso solo colorean texto, icono y el borde de un campo inválido.</span><span class="clases"><code>--error</code><code>--aviso</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario" style="gap:var(--e-6);justify-content:center">
+          <div class="g-var"><button class="btn btn-secundario g-foco">Exportar datos</button><span class="etq">Foco del teclado</span></div>
+          <div class="g-var"><div class="campo g-foco-campo g-campo-ancho" style="width:150px"><input value="0.50" aria-label="Masa"><span class="u">kg</span></div><span class="etq">Campo con foco</span></div>
+          <div class="g-var"><button class="herr" aria-pressed="true" style="width:150px"><svg class="ico"><use href="#o-resorte"/></svg><span>Resorte</span></button><span class="etq">Herramienta activa</span></div>
+        </div><figcaption class="g-pie"><span class="uso">Selección y foco con contorno de tinta; nunca con un color de acento.</span><span class="clases"><code>:focus-visible</code><code>.campo:focus-within</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="g-sub" id="mapas">
+      <h3>Mapas de color para campos</h3>
+      <p class="g-desc">Tres mapas para pintar campos escalares. Los vectores y textos que se dibujan encima llevan halo del color del lienzo.</p>
+      <figure class="g-muestra"><div class="g-escenario columna" style="gap:var(--e-4)">
+        <div class="g-mapa"><span></span><span>Claro</span><span>Oscuro</span></div>
+        <div class="g-mapa"><span><b>Grises</b>Magnitudes positivas</span><canvas data-mapa="grises" data-tema="claro"></canvas><canvas data-mapa="grises" data-tema="oscuro"></canvas></div>
+        <div class="g-mapa"><span><b>Divergente</b>Cantidades con signo</span><canvas data-mapa="divergente" data-tema="claro"></canvas><canvas data-mapa="divergente" data-tema="oscuro"></canvas></div>
+        <div class="g-mapa"><span><b>Familia</b>Magnitud de una familia</span><canvas data-mapa="familia" data-tema="claro"></canvas><canvas data-mapa="familia" data-tema="oscuro"></canvas></div>
+      </div><figcaption class="g-pie"><span class="uso">Grises de lienzo a tinta; divergente de azul a bermellón pasando por el lienzo; familia de lienzo al trazo (aquí, magnético).</span><span class="clases"><code>--mapa-divergente-negativo</code><code>--mapa-divergente-positivo</code></span></figcaption></figure>
+      <figure class="g-muestra"><div class="g-escenario lienzo"><canvas id="lz-mapa" style="height:260px"></canvas></div>
+        <figcaption class="g-pie"><span class="uso">Potencial de un dipolo con el mapa divergente; cargas y etiquetas encima, con halo.</span><span class="clases"><code>tz.carga()</code><code>halo: true</code></span></figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ============================ 4. Tipografía ============================ -->
+  <section class="g-seccion" id="tipografia" data-seccion>
+    <div class="g-cab"><span class="g-num">04</span><h2>Tipografía</h2>
+      <p class="g-entrada">Una familia técnica para la interfaz y los números, y una tipografía de publicación científica para los símbolos. Todo en tipo oración, con tres pesos y sin mayúsculas sostenidas.</p></div>
+
+    <div class="g-sub" id="familias">
+      <h3>Familias</h3>
+      <p class="g-desc">En los prototipos se cargan de Google Fonts; en la aplicación van incluidas (licencia OFL) para funcionar sin internet.</p>
+      <div class="g-r4 g-familias-tipo">
+        <figure class="g-muestra"><div class="g-escenario"><span class="g-aa">Aa</span><span style="color:var(--texto-2)">Condiciones iniciales</span></div>
+          <figcaption class="g-pie"><span class="uso"><b style="color:var(--texto);font-weight:500">IBM Plex Sans</b> · interfaz · 400, 500, 600</span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario"><span class="g-aa num">01</span><span class="num" style="color:var(--texto-2)">−9.807 · 6.67 × 10⁻¹¹</span></div>
+          <figcaption class="g-pie"><span class="uso"><b style="color:var(--texto);font-weight:500">IBM Plex Mono</b> · números y código · 400, 500</span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario"><span class="g-aa sim" style="font-size:56px">vθ</span><span style="color:var(--texto-2)"><span class="sim">m</span>, <span class="sim">v</span>, <span class="sim">t</span>, <span class="sim">θ</span>, <span class="sim">E</span>, <span class="sim">F</span></span></div>
+          <figcaption class="g-pie"><span class="uso"><b style="color:var(--texto);font-weight:500">STIX Two Text</b> · símbolos, en cursiva</span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario">
+          <math display="block"><msub><mi>E</mi><mi mathvariant="normal">k</mi></msub><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>m</mi><msup><mi>v</mi><mn>2</mn></msup></math>
+          <span style="color:var(--texto-2);font-size:var(--t-pequeno)">MathML nativo en WebView2</span></div>
+          <figcaption class="g-pie"><span class="uso"><b style="color:var(--texto);font-weight:500">STIX Two Math</b> · fórmulas</span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="g-sub" id="escala">
+      <h3>Escala</h3>
+      <p class="g-desc">Ocho tamaños con su interlineado. Pesos: 400 normal, 500 controles y énfasis, 600 títulos; nunca 700.</p>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno columna">
+        <div class="g-escala-fila"><span class="tok">--t-micro</span><span class="med">11 / 14</span><span><span class="muestra" style="font-size:var(--t-micro);line-height:var(--t-micro-alto)">0 0.5 1 1.5 2 · Ctrl K · Marcas de cuadrícula</span><span class="uso">Números de ejes, marcas de cuadrícula, atajos</span></span></div>
+        <div class="g-escala-fila"><span class="tok">--t-pequeno</span><span class="med">12 / 16</span><span><span class="muestra" style="font-size:var(--t-pequeno);line-height:var(--t-pequeno-alto)">Masa · Gráficas · Energía · Eventos</span><span class="uso">Etiquetas de campos, ayudas, pestañas</span></span></div>
+        <div class="g-escala-fila"><span class="tok">--t-base</span><span class="med">13 / 18</span><span><span class="muestra" style="font-size:var(--t-base);line-height:var(--t-base-alto)">Arrastra un objeto de la paleta al lienzo para añadirlo a la escena.</span><span class="uso">Texto general de la interfaz</span></span></div>
+        <div class="g-escala-fila"><span class="tok">--t-enfasis</span><span class="med">14 / 20</span><span><span class="muestra" style="font-size:var(--t-enfasis);line-height:var(--t-enfasis-alto);font-weight:500">Bola · Inspector</span><span class="uso">Nombre del objeto en el inspector, títulos de panel</span></span></div>
+        <div class="g-escala-fila"><span class="tok">--t-subtitulo</span><span class="med">16 / 22</span><span><span class="muestra" style="font-size:var(--t-subtitulo);line-height:var(--t-subtitulo-alto);font-weight:600">¿Descartar los cambios de la escena?</span><span class="uso">Encabezados de diálogo</span></span></div>
+        <div class="g-escala-fila"><span class="tok">--t-titulo</span><span class="med">20 / 26</span><span><span class="muestra" style="font-size:var(--t-titulo);line-height:var(--t-titulo-alto);font-weight:600">Escenarios recientes</span><span class="uso">Títulos de sección en Inicio</span></span></div>
+        <div class="g-escala-fila"><span class="tok">--t-pantalla</span><span class="med">28 / 34</span><span><span class="muestra" style="font-size:var(--t-pantalla);line-height:var(--t-pantalla-alto);font-weight:600">Biblioteca de escenarios</span><span class="uso">Título de pantalla</span></span></div>
+        <div class="g-escala-fila"><span class="tok">--t-display</span><span class="med">44 / 48</span><span><span class="muestra" style="font-size:var(--t-display);line-height:var(--t-display-alto);font-weight:600;letter-spacing:-0.01em">Volta</span><span class="uso">Solo en Inicio y en la marca</span></span></div>
+      </div><figcaption class="g-pie"><span class="uso">Cada token tiene su pareja de interlineado.</span><span class="clases"><code>--t-*</code><code>--t-*-alto</code></span></figcaption></figure>
+      <figure class="g-muestra"><div class="g-escenario" style="justify-content:space-between">
+        <div class="g-pesos">
+          <span style="font-weight:400">Normal<small>400 · texto</small></span>
+          <span style="font-weight:500">Medio<small>500 · controles</small></span>
+          <span style="font-weight:600">Fuerte<small>600 · títulos</small></span>
+        </div>
+        <div class="g-caso no" style="width:340px"><div class="cuerpo" style="min-height:60px;font-size:var(--t-base)"><span>Condiciones iniciales</span><span style="letter-spacing:.06em">CONDICIONES</span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Nunca</span>Mayúsculas sostenidas.</div></div>
+      </div><figcaption class="g-pie"><span class="uso">Tipo oración en todo: «Condiciones iniciales», no en mayúsculas.</span><span class="clases"><code>--peso-normal</code><code>--peso-medio</code><code>--peso-fuerte</code></span></figcaption></figure>
+    </div>
+
+    <div class="g-sub" id="cantidades">
+      <h3>Escritura de cantidades (ISO 80000)</h3>
+      <p class="g-desc">Símbolos en cursiva serif, unidades en redonda, espacio fino que no se corta entre número y unidad, punto decimal y signo menos verdadero.</p>
+      <div class="g-r2" id="g-iso"></div>
+      <figure class="g-muestra" style="margin-top:var(--e-4)"><div class="g-escenario">
+        <div class="g-formateador" style="width:100%">
+          <div class="campo"><input id="fmt-valor" value="6.6743e-11" aria-label="Valor" spellcheck="false"></div>
+          <div class="campo texto"><input id="fmt-unidad" value="N·m²/kg²" aria-label="Unidad"></div>
+          <div style="display:flex;gap:var(--e-3);align-items:center"><div class="segmentado" data-exclusivo id="fmt-cifras" data-ayuda="Cifras significativas|Significant figures"><button data-c="3">3</button><button data-c="4" aria-pressed="true">4</button><button data-c="5">5</button></div><label class="casilla"><input type="checkbox" class="interruptor" id="fmt-prefijo">Prefijo SI</label></div>
+          <div class="salida"><span class="sim">G</span><span class="num" style="color:var(--texto-2)"> = </span><span class="num" id="fmt-salida"></span></div>
+        </div>
+      </div><figcaption class="g-pie"><span class="uso">Formateador real de la gramática: escribe un número y la unidad; las lecturas en vivo usan 4 cifras significativas.</span><span class="clases"><code>Volta.cantidad(valor, unidad, cifras)</code></span></figcaption></figure>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno columna">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 304px;width:100%">
+        <table class="tabla" style="margin:var(--e-2) 0">
+          <thead><tr><th>Magnitud</th><th>Valor</th><th style="text-align:left">Unidad</th><th>Prefijo SI</th></tr></thead>
+          <tbody>
+            <tr><td class="texto">Posición <span class="sim">x</span></td><td>2.286</td><td class="texto u" style="text-align:left">m</td><td>2.286&#8239;<span class="u">m</span></td></tr>
+            <tr><td class="texto">Fuerza <span class="sim">F</span></td><td>0.006355</td><td class="texto u" style="text-align:left">N</td><td>6.355&#8239;<span class="u">mN</span></td></tr>
+            <tr><td class="texto">Potencial <span class="sim">V</span></td><td>12710</td><td class="texto u" style="text-align:left">V</td><td>12.71&#8239;<span class="u">kV</span></td></tr>
+            <tr><td class="texto">Constante <span class="sim">G</span></td><td>6.674 × 10⁻¹¹</td><td class="texto u" style="text-align:left">N·m²/kg²</td><td>—</td></tr>
+          </tbody>
+        </table>
+        <div class="g-panel" style="margin:var(--e-3);padding:var(--e-3)"><div class="lecturas" id="g-lect-prefijo"></div></div>
+        </div>
+      </div><figcaption class="g-pie"><span class="uso">En tablas e inspectores los números van a la derecha y la unidad en su propia columna en <code>--texto-3</code>. Las lecturas en vivo usan prefijo SI cuando el valor lo pide.</span><span class="clases"><code>.tabla</code><code>.lecturas</code><code>Volta.conPrefijo()</code></span></figcaption></figure>
+      <div class="g-r3" style="margin-top:var(--e-3)">
+        <div class="g-caso"><div class="cuerpo izq" style="flex-direction:column;align-items:flex-start;gap:4px"><span class="g-cantidad"><span class="sim">P</span><span class="num"> = 101.3&#8239;</span>kPa</span><span class="g-nota" style="margin:0">Presión: <span class="sim">P</span>, como en el examen y los libros japoneses; ISO admite también <span class="sim">p</span>.</span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Presión</span><span class="sim">P</span></div></div>
+        <div class="g-caso"><div class="cuerpo izq" style="flex-direction:column;align-items:flex-start;gap:4px"><span class="g-cantidad"><span class="sim">Φ<sub class="r">cal</sub></span><span class="num"> = 42.0&#8239;</span>W</span><span class="g-nota" style="margin:0">Flujo de calor: <span class="sim">Φ</span>, para no confundirlo con la presión.</span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Flujo de calor</span><span class="sim">Φ</span></div></div>
+        <div class="g-caso"><div class="cuerpo izq" style="flex-direction:column;align-items:flex-start;gap:4px"><span class="g-cantidad"><span class="num">35&#8239;</span>° · <span class="num">3.00&#8239;</span>m · <span class="num">0.50</span></span><span class="g-nota" style="margin:0">Valores de variables: los decimales de su paso de ajuste. Marcas de ejes: 0, 0.5, 1, 1.5, sin ceros finales.</span></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Variables y marcas</span>Decimales del paso</div></div>
+      </div>
+    </div>
+
+    <div class="g-sub" id="voz">
+      <h3>Voz y redacción</h3>
+      <p class="g-desc">Español, tipo oración y verbos para las acciones. Se nombra lo que el usuario reconoce, no cómo está hecho.</p>
+      <div class="g-r2">
+        <div class="g-caso"><div class="cuerpo"><button class="btn btn-secundario"><svg class="ico"><use href="#i-exportar"/></svg>Exportar datos</button><button class="btn">Añadir variable</button></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Correcto</span>Verbos para acciones.</div></div>
+        <div class="g-caso no"><div class="cuerpo"><button class="btn btn-secundario">Exportación</button><button class="btn">Nueva Variable…</button></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Sustantivos y mayúsculas de título.</div></div>
+        <div class="g-caso"><div class="cuerpo"><label class="casilla"><input type="checkbox" checked>Trayectoria prevista<span class="muestra discontinua" style="color:var(--texto-3)"></span></label></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Correcto</span>Lo que el usuario reconoce.</div></div>
+        <div class="g-caso no"><div class="cuerpo"><label class="casilla"><input type="checkbox" checked>Salida densa del integrador<span class="muestra discontinua" style="color:var(--texto-3)"></span></label></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Cómo está hecho por dentro.</div></div>
+        <div class="g-caso"><div class="cuerpo izq" style="flex-direction:column;align-items:flex-start;gap:0"><div class="campo es-error g-campo-largo"><input value="sqrt(2*g*h)" aria-label="Altura"><span class="u">m</span></div><p class="mensaje-error">La expresión da una velocidad y este campo espera una longitud.</p></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Correcto</span>Qué pasó y cómo arreglarlo.</div></div>
+        <div class="g-caso no"><div class="cuerpo izq" style="flex-direction:column;align-items:flex-start;gap:0"><div class="campo es-error g-campo-largo"><input value="sqrt(2*g*h)" aria-label="Altura"><span class="u">m</span></div><p class="mensaje-error">Error E-204: dimensiones incompatibles.</p></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Códigos internos sin salida.</div></div>
+        <div class="g-caso"><div class="cuerpo"><div class="ayuda"><span>Velocidad <kbd>V</kbd></span><span class="en">velocity</span></div></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-check"/></svg>Correcto</span>El término en inglés va en la ayuda emergente.</div></div>
+        <div class="g-caso no"><div class="cuerpo"><label class="casilla"><input type="checkbox" checked>Velocity<span class="muestra" style="color:var(--f-movimiento)"></span></label></div><div class="pie"><span class="veredicto"><svg class="ico"><use href="#i-cerrar"/></svg>Incorrecto</span>Inglés en la interfaz.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ 5. Geometría ============================ -->
+  <section class="g-seccion" id="geometria" data-seccion>
+    <div class="g-cab"><span class="g-num">05</span><h2>Geometría</h2>
+      <p class="g-entrada">Todo se apoya en una rejilla base de 4 px. Bordes de 1 px, paneles planos y radios pequeños; la elevación queda para lo que flota.</p></div>
+
+    <div class="g-sub" id="espaciado">
+      <h3>Rejilla y espaciado</h3>
+      <p class="g-desc">Diez pasos de espaciado. Las barras miden exactamente el valor del token.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch"><div class="g-espacios" id="g-espacios"></div></div>
+          <figcaption class="g-pie"><span class="uso">2, 4, 6, 8, 12, 16, 20, 24, 32 y 48 px.</span><span class="clases"><code>--e-*</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch;gap:var(--e-3)">
+          <div class="g-rejilla-base"><button class="btn btn-secundario">Exportar datos</button><div class="campo" style="width:132px"><input value="0.50" aria-label="Masa"><span class="u">kg</span></div><span class="chip" style="margin-top:4px">MEXT 2019</span></div>
+          <div class="g-r3" style="font-size:var(--t-pequeno);color:var(--texto-3);gap:var(--e-2)">
+            <span><b class="num" style="color:var(--texto)">44</b> barra superior</span>
+            <span><b class="num" style="color:var(--texto)"><span data-token="est-panel-izq"></span> · <span data-token="est-panel-der"></span></b> paneles laterales</span>
+            <span><b class="num" style="color:var(--texto)">248</b> panel inferior</span>
+          </div>
+        </div><figcaption class="g-pie"><span class="uso">Rejilla base de 4 px; los bordes y divisores son de 1 px con <code>--linea-suave</code>.</span><span class="clases"><code>--est-*</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="g-sub" id="radios">
+      <h3>Radios y alturas de control</h3>
+      <p class="g-desc">Cuatro radios, más la píldora que solo usan los chips. Tres alturas de control.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario"><div class="g-radios">
+          <figure><div class="caja" style="border-radius:var(--r-casilla)"></div><span><b>3</b>Casillas</span></figure>
+          <figure><div class="caja" style="border-radius:var(--r-control)"></div><span><b>5</b>Controles</span></figure>
+          <figure><div class="caja" style="border-radius:var(--r-tarjeta)"></div><span><b>8</b>Tarjetas y menús</span></figure>
+          <figure><div class="caja" style="border-radius:var(--r-dialogo)"></div><span><b>12</b>Diálogos</span></figure>
+          <figure><div class="caja" style="border-radius:var(--r-pildora);height:28px"></div><span><b>Píldora</b>Chips</span></figure>
+        </div></div><figcaption class="g-pie"><span class="uso">El radio crece con el tamaño y la elevación de la superficie.</span><span class="clases"><code>--r-*</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario" style="justify-content:center"><div class="g-alturas">
+          <div class="g-altura"><button class="btn btn-secundario btn-compacto">Compacto</button><span class="g-cota-v" style="height:var(--h-compacto)"></span><span class="med">24</span></div>
+          <div class="g-altura"><button class="btn btn-secundario">Normal</button><span class="g-cota-v" style="height:var(--h-normal)"></span><span class="med">28</span></div>
+          <div class="g-altura"><button class="btn btn-secundario btn-grande">Grande</button><span class="g-cota-v" style="height:var(--h-grande)"></span><span class="med">32</span></div>
+        </div></div><figcaption class="g-pie"><span class="uso">Compacto en cabeceras y flotantes; normal por defecto; grande en Inicio y diálogos.</span><span class="clases"><code>--h-compacto</code><code>--h-normal</code><code>--h-grande</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="g-sub" id="elevacion">
+      <h3>Elevación</h3>
+      <p class="g-desc">Los paneles son planos. Menús y ventanas emergentes llevan borde <code>--linea</code> y sombra; en oscuro, la sombra es más densa y suma un filo de luz.</p>
+      <figure class="g-muestra"><div class="g-elevaciones">
+        <div class="g-elev plano"><b>Panel</b>Plano, divisor de 1 px</div>
+        <div class="g-elev menu-e"><b>Menú</b><code style="align-self:flex-start;margin-top:4px">--sombra-menu</code></div>
+        <div class="g-elev dialogo-e"><b>Diálogo</b><code style="align-self:flex-start;margin-top:4px">--sombra-dialogo</code></div>
+      </div><figcaption class="g-pie"><span class="uso">Tres niveles: plano, flotante y modal. El modal se acompaña de <code>--velo</code>.</span><span class="clases"><code>--sombra-menu</code><code>--sombra-dialogo</code><code>--velo</code></span></figcaption></figure>
+    </div>
+
+    <div class="g-sub" id="trazos">
+      <h3>Trazos del lienzo</h3>
+      <p class="g-desc">La tabla 7.2 del contrato, dibujada con <code>Volta.Trazo</code>. Los grosores son píxeles de pantalla y no escalan con el zoom.</p>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno columna"><table class="g-tabla" id="g-trazos"></table></div>
+        <figcaption class="g-pie"><span class="uso">Grosores y patrones en <code>Volta.G</code> y <code>Volta.PATRON</code>.</span><span class="clases"><code>--trazo-*</code></span></figcaption></figure>
+      <figure class="g-muestra"><div class="g-escenario lienzo"><canvas id="lz-puntas" style="height:200px"></canvas></div>
+        <figcaption class="g-pie"><span class="uso">Puntas de vector: triángulo lleno de largo 4.5× el grosor y ancho 3.5× (mínimo 9 × 7 px). Cotas y ejes: punta abierta de dos trazos.</span><span class="clases"><code>tz.flechaPx(…, { punta })</code></span></figcaption></figure>
+    </div>
+
+    <div class="g-sub" id="movimiento">
+      <h3>Movimiento</h3>
+      <p class="g-desc">Tres duraciones y una curva, sin rebotes. Se respeta «reducir movimiento». El tiempo de la simulación nunca se suaviza.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch">
+          <div class="g-mov" id="g-mov">
+            <span><b>Rápido · 90 ms</b>Hover</span><div class="g-pista"><i style="transition-duration:var(--mov-rapido)"></i></div>
+            <span><b>Medio · 160 ms</b>Menús y paneles</span><div class="g-pista"><i style="transition-duration:var(--mov-medio)"></i></div>
+            <span><b>Lento · 240 ms</b>Diálogos</span><div class="g-pista"><i style="transition-duration:var(--mov-lento)"></i></div>
+          </div>
+          <div><button class="btn btn-secundario" id="b-mov"><svg class="ico"><use href="#i-reproducir"/></svg>Reproducir</button></div>
+        </div><figcaption class="g-pie"><span class="uso">Las tres duraciones con la misma curva; pulsa «Reproducir».</span><span class="clases"><code>--mov-*</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario lienzo"><canvas id="lz-curva" style="height:228px"></canvas></div>
+          <figcaption class="g-pie"><span class="uso">Progreso contra tiempo de la curva <code>cubic-bezier(.2, 0, 0, 1)</code>: arranque firme y llegada suave.</span><span class="clases"><code>--mov-curva</code></span></figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ 6. Iconografía ============================ -->
+  <section class="g-seccion" id="iconografia" data-seccion>
+    <div class="g-cab"><span class="g-num">06</span><h2>Iconografía</h2>
+      <p class="g-entrada">Los iconos son dibujos técnicos en miniatura: el resorte es el mismo zigzag del lienzo y el apoyo lleva el mismo rayado.</p></div>
+
+    <div class="g-sub" id="icono-reglas">
+      <h3>Reglas y cuadrícula</h3>
+      <p class="g-desc">Rejilla de 20 × 20 con 2 px de margen. Se dibuja a 20 px y se usa a 16 o 20 px.</p>
+      <figure class="g-muestra"><div class="g-escenario" style="gap:var(--e-8)">
+        <div class="g-icono-anatomia">
+          <svg class="rejilla" id="g-icono-rejilla" viewBox="-0.5 -0.5 21 21" aria-label="Rejilla de iconos con el resorte"></svg>
+          <ul class="g-reglas">
+            <li><svg class="ico"><use href="#i-cuadricula"/></svg><span><b>Rejilla de 20 × 20</b> con 2 px de margen: zona viva de 16 × 16.</span></li>
+            <li><svg class="ico"><use href="#o-resorte"/></svg><span><b>Trazo de 1.5 px</b>, extremos y uniones redondeados, sin relleno salvo en puntos: círculos llenos de radio 2.</span></li>
+            <li><svg class="ico"><use href="#i-capas"/></svg><span><b><code>stroke="currentColor"</code></b>: el icono toma el color del texto.</span></li>
+            <li><svg class="ico"><use href="#o-plano-inclinado"/></svg><span><b>Geometría ortogonal y a 45°</b>; las curvas, arcos de circunferencia.</span></li>
+            <li><svg class="ico"><use href="#o-suelo"/></svg><span><b>Los objetos son su dibujo en el lienzo</b>: el apoyo lleva tres rayas a 45°.</span></li>
+            <li><svg class="ico"><use href="#o-carga-positiva"/></svg><span><b>Sin texto</b> dentro de los iconos, salvo signos físicos: +, −, N, S, V, A.</span></li>
+          </ul>
+        </div>
+      </div><figcaption class="g-pie"><span class="uso">Zona viva punteada; el margen, en <code>--campo</code>.</span><span class="clases"><code>.ico</code><code>.ico-20</code></span></figcaption></figure>
+      <div class="g-r2" style="margin-top:var(--e-3)">
+        <figure class="g-muestra"><div class="g-escenario" style="justify-content:center"><div class="g-tamanos">
+          <figure><svg class="ico"><use href="#o-resorte"/></svg>16</figure>
+          <figure><svg class="ico ico-20"><use href="#o-resorte"/></svg>20</figure>
+          <figure><button class="btn btn-icono" data-ayuda="Resorte|Spring"><svg class="ico"><use href="#o-resorte"/></svg></button>botón</figure>
+          <figure><button class="herr" style="width:120px"><svg class="ico"><use href="#o-resorte"/></svg><span>Resorte</span></button>paleta</figure>
+        </div></div><figcaption class="g-pie"><span class="uso">16 px en botones y menús; 20 px en la paleta de objetos.</span><span class="clases"><code>.btn-icono .ico</code><code>.herr .ico</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario" style="justify-content:center"><div class="g-tamanos">
+          <figure><svg class="ico40"><use href="#m-mecanica"/></svg>m-mecanica</figure>
+          <figure><svg class="ico40"><use href="#m-electrostatica"/></svg>m-electrostatica</figure>
+          <figure><svg class="ico40"><use href="#m-ondas"/></svg>m-ondas</figure>
+        </div></div><figcaption class="g-pie"><span class="uso">Emblemas de módulo: rejilla de 40 × 40, trazo de 1.75 px, mismas reglas.</span><span class="clases"><code>.tarjeta-modulo .emblema</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="g-sub" id="icono-set">
+      <h3>Set completo</h3>
+      <p class="g-desc">Nombres en español, en minúsculas y con guiones. Prefijos: <code>i-</code> interfaz, <code>o-</code> objetos, <code>n-</code> instrumentos, <code>m-</code> módulos. El set se lee de <code>iconos/sprite.js</code>; también hay un <a href="../iconos/catalogo.html">catálogo propio</a>.</p>
+      <figure class="g-muestra" id="g-set-muestra">
+        <div class="g-set-cab">
+          <div class="campo texto"><svg class="ico" style="color:var(--texto-3)"><use href="#i-buscar"/></svg><input id="set-buscar" placeholder="Buscar un icono" aria-label="Buscar un icono"></div>
+          <div class="segmentado" data-exclusivo id="set-tam"><button data-t="16">16</button><button data-t="20" aria-pressed="true">20</button></div>
+          <span class="sp" style="flex:1"></span>
+          <span class="g-nota" id="set-cuenta" style="margin:0"></span>
+        </div>
+        <div id="g-set"></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============================ 7. Componentes ============================ -->
+  <section class="g-seccion" id="componentes" data-seccion>
+    <div class="g-cab"><span class="g-num">07</span><h2>Componentes</h2>
+      <p class="g-entrada">Todos vienen de <code>componentes/componentes.css</code> y el comportamiento común de <code>componentes/espacio.js</code>. Los ejemplos son interactivos.</p></div>
+
+    <!-- Botones -->
+    <div class="g-sub" id="c-botones">
+      <h3>Botones</h3>
+      <p class="g-desc">Cuatro variantes y tres tamaños. Solo el primario es sólido; lleva tinta, nunca color.</p>
+      <div class="g-comp">
+        <figure class="g-muestra"><div class="g-escenario" style="gap:var(--e-8)">
+          <div class="g-var"><button class="btn btn-primario"><svg class="ico"><use href="#i-reproducir"/></svg>Reproducir</button><span class="etq">Primario</span><code>.btn-primario</code></div>
+          <div class="g-var"><button class="btn btn-secundario"><svg class="ico"><use href="#i-exportar"/></svg>Exportar datos</button><span class="etq">Secundario</span><code>.btn-secundario</code></div>
+          <div class="g-var"><button class="btn">Cancelar</button><span class="etq">Fantasma</span><code>.btn</code></div>
+          <div class="g-var"><button class="btn btn-icono" data-ayuda="Añadir objeto|Add object|A"><svg class="ico"><use href="#i-mas"/></svg></button><span class="etq">Solo icono</span><code>.btn-icono</code></div>
+          <div class="g-var"><button class="btn btn-primario btn-reproducir" data-ayuda="Reproducir|Play|Espacio"><svg class="ico"><use href="#i-reproducir"/></svg></button><span class="etq">Transporte</span><code>.btn-reproducir</code></div>
+        </div><figcaption class="g-pie"><span class="uso">Primario: una sola acción principal por zona. Secundario: acciones de apoyo. Fantasma: acciones frecuentes de poco peso. Solo icono: siempre con ayuda emergente.</span><span class="clases"><code>.btn</code></span></figcaption></figure>
+
+        <figure class="g-muestra"><div class="g-escenario" style="gap:var(--e-8)">
+          <div class="g-var"><div style="display:flex;gap:var(--e-2);align-items:center"><button class="btn btn-secundario btn-compacto">Encuadrar</button><button class="btn btn-compacto btn-icono" data-ayuda="Acercar|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button></div><span class="etq">Compacto · 24</span><code>.btn-compacto</code></div>
+          <div class="g-var"><div style="display:flex;gap:var(--e-2);align-items:center"><button class="btn btn-secundario">Encuadrar</button><button class="btn btn-icono" data-ayuda="Acercar|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button></div><span class="etq">Normal · 28</span><code>.btn</code></div>
+          <div class="g-var"><div style="display:flex;gap:var(--e-2);align-items:center"><button class="btn btn-primario btn-grande">Nueva escena</button><button class="btn btn-grande btn-icono" data-ayuda="Acercar|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button></div><span class="etq">Grande · 32</span><code>.btn-grande</code></div>
+          <div class="g-var"><div style="display:flex;gap:var(--e-2);align-items:center"><button class="btn btn-icono" data-conmuta aria-pressed="true" data-ayuda="Ajuste a la cuadrícula|Snap to grid|G"><svg class="ico"><use href="#i-ajuste-iman"/></svg></button><button class="btn btn-icono" data-conmuta aria-pressed="false" data-ayuda="Mostrar cuadrícula|Show grid"><svg class="ico"><use href="#i-cuadricula"/></svg></button></div><span class="etq">Conmutable</span><code>[data-conmuta]</code></div>
+        </div><figcaption class="g-pie"><span class="uso">Los conmutables muestran su estado con <code>aria-pressed</code>; haz clic para alternarlos.</span><span class="clases"><code>.btn-compacto</code><code>.btn-grande</code><code>[aria-pressed]</code></span></figcaption></figure>
+
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch">
+          <table class="g-estados">
+            <thead><tr><th></th><th>Normal</th><th>Hover</th><th>Presionado</th><th>Deshabilitado</th><th>Foco</th></tr></thead>
+            <tbody>
+              <tr><td>Primario</td><td><button class="btn btn-primario">Reproducir</button></td><td><button class="btn btn-primario g-hover">Reproducir</button></td><td><button class="btn btn-primario g-activo">Reproducir</button></td><td><button class="btn btn-primario" disabled>Reproducir</button></td><td><button class="btn btn-primario g-foco">Reproducir</button></td></tr>
+              <tr><td>Secundario</td><td><button class="btn btn-secundario">Exportar</button></td><td><button class="btn btn-secundario g-hover">Exportar</button></td><td><button class="btn btn-secundario g-activo">Exportar</button></td><td><button class="btn btn-secundario" disabled>Exportar</button></td><td><button class="btn btn-secundario g-foco">Exportar</button></td></tr>
+              <tr><td>Fantasma</td><td><button class="btn">Cancelar</button></td><td><button class="btn g-hover">Cancelar</button></td><td><button class="btn" aria-pressed="true">Cancelar</button></td><td><button class="btn" disabled>Cancelar</button></td><td><button class="btn g-foco">Cancelar</button></td></tr>
+              <tr><td>Solo icono</td><td><button class="btn btn-icono" aria-label="Deshacer"><svg class="ico"><use href="#i-deshacer"/></svg></button></td><td><button class="btn btn-icono g-hover" aria-label="Deshacer"><svg class="ico"><use href="#i-deshacer"/></svg></button></td><td><button class="btn btn-icono" aria-pressed="true" aria-label="Deshacer"><svg class="ico"><use href="#i-deshacer"/></svg></button></td><td><button class="btn btn-icono" disabled aria-label="Deshacer"><svg class="ico"><use href="#i-deshacer"/></svg></button></td><td><button class="btn btn-icono g-foco" aria-label="Deshacer"><svg class="ico"><use href="#i-deshacer"/></svg></button></td></tr>
+            </tbody>
+          </table>
+        </div><figcaption class="g-pie"><span class="uso">Matriz de estados. Hover, presionado y foco se fuerzan aquí para documentarlos; en uso real los da el puntero o el teclado.</span><span class="clases"><code>:hover</code><code>:active</code><code>:disabled</code><code>:focus-visible</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Campos -->
+    <div class="g-sub" id="c-campos">
+      <h3>Campos numéricos</h3>
+      <p class="g-desc">El número va a la derecha en Plex Mono, la unidad en <code>--texto-3</code>. Un campo acepta números, unidades, expresiones y referencias a variables.</p>
+      <div class="g-r3">
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch">
+          <div class="fila"><label for="c-masa">Masa</label><div class="campo"><input id="c-masa" value="0.50"><span class="u">kg</span></div></div>
+          <div class="fila"><label>Nombre</label><div class="campo texto"><input value="Bola" aria-label="Nombre"></div></div>
+        </div><figcaption class="g-pie"><span class="uso">Número con unidad y texto.</span><span class="clases"><code>.campo</code><code>.campo.texto</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch">
+          <div class="fila"><span class="etq">Posición</span><div class="fila-doble"><div class="campo"><span class="eje">x</span><input value="0" aria-label="x"><span class="u">m</span></div><div class="campo"><span class="eje">y</span><input value="1.20" aria-label="y"><span class="u">m</span></div></div></div>
+          <div class="fila"><span class="etq">Ángulo</span><div class="fila-doble"><div class="campo"><span class="eje">α</span><input value="35" aria-label="α"><span class="u">°</span></div><div></div></div></div>
+        </div><figcaption class="g-pie"><span class="uso">Con eje: componentes y coordenadas.</span><span class="clases"><code>.eje</code><code>.fila-doble</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch">
+          <div class="fila"><span class="etq">Altura</span><div class="campo es-variable" data-ayuda="Ligado a la variable h|Bound to variable"><span class="chip-var"><span class="sim">h</span></span><span class="valor-var">1.20</span><span class="u">m</span></div></div>
+          <div class="fila"><span class="etq">Rapidez</span><div class="campo es-variable" data-ayuda="Ligado a la variable v₀|Bound to variable"><span class="chip-var"><span class="sim">v<sub class="r">0</sub></span></span><span class="valor-var">4.00</span><span class="u">m/s</span></div></div>
+        </div><figcaption class="g-pie"><span class="uso">Ligado a una variable: borde discontinuo y chip.</span><span class="clases"><code>.es-variable</code><code>.chip-var</code></span></figcaption></figure>
+      </div>
+      <div class="g-r2" style="margin-top:var(--e-3)">
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch">
+          <div class="fila"><label for="c-expr">Altura</label><div class="campo" id="c-expr-campo"><input id="c-expr" value="2*h" spellcheck="false"><span class="u">m</span></div><p class="mensaje-error" id="c-expr-error" hidden></p></div>
+          <p class="ayuda-fila" id="c-expr-valor"></p>
+        </div><figcaption class="g-pie"><span class="uso">Expresión viva con <span class="sim">h</span>, <span class="sim">g</span>, <span class="sim">v</span><sub>0</sub> y <span class="sim">t</span>. Prueba <code>sqrt(2*g*h)</code> o <code>v0*t</code>.</span><span class="clases"><code>.campo</code><code>.es-error</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch">
+          <div class="fila"><label>Longitud</label><div class="campo es-error"><input value="3 kg" aria-label="Longitud"><span class="u">m</span></div><p class="mensaje-error">Este campo espera una longitud y «kg» es una unidad de masa. Escribe, por ejemplo, 3 m o 30 cm.</p></div>
+          <div class="fila"><label>Masa</label><div class="campo"><input value="72 g" aria-label="Masa"><span class="u">kg</span></div></div>
+          <p class="ayuda-fila">Acepta unidades al escribir: 72 g se guarda como 0.072 kg.</p>
+        </div><figcaption class="g-pie"><span class="uso">Error: texto y borde en <code>--error</code> y un mensaje que dice qué pasó y cómo arreglarlo, en la columna del control. Ayuda de fila debajo, en <code>--texto-3</code>.</span><span class="clases"><code>.es-error</code><code>.fila .mensaje-error</code><code>.ayuda-fila</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Deslizador, segmentado, casillas -->
+    <div class="g-sub" id="c-seleccion">
+      <h3>Deslizador, control segmentado, casilla e interruptor</h3>
+      <p class="g-desc">Controles para elegir y ajustar. Ninguno usa color salvo la muestra de una casilla, que representa un trazo del lienzo.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch;gap:var(--e-4)">
+          <div class="var"><span class="sim">h</span><input class="deslizador" type="range" min="0.4" max="1.6" step="0.05" value="1.2" id="d-demo" aria-label="h"><span class="valor"><span id="d-demo-v">1.20</span><span class="u">m</span></span></div>
+          <div class="var"><span class="sim">e</span><input class="deslizador" type="range" min="0" max="1" step="0.01" value="0.25" aria-label="e"><span class="valor">0.25</span></div>
+        </div><figcaption class="g-pie"><span class="uso">Riel, relleno hasta el valor y perilla. <code>espacio.js</code> pinta el relleno con <code>--p</code>.</span><span class="clases"><code>input.deslizador</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:flex-start;gap:var(--e-3)">
+          <div style="display:flex;gap:var(--e-3);flex-wrap:wrap;align-items:center">
+            <div class="segmentado texto" data-exclusivo><button aria-pressed="true">Preciso</button><button>Multitud</button></div>
+            <div class="segmentado" data-exclusivo><button><span class="sim">x</span></button><button aria-pressed="true"><span class="sim">y</span></button><button>|<span class="sim">v</span>|</button></div>
+            <div class="segmentado texto" data-exclusivo><button>Gráficas</button><button aria-pressed="true">Tabla</button><button>Energía</button><button>Eventos</button></div>
+          </div>
+          <div class="segmentado" data-exclusivo><button>¼×</button><button>½×</button><button aria-pressed="true">1×</button><button>2×</button><button>4×</button></div>
+        </div><figcaption class="g-pie"><span class="uso">De 2 a 5 opciones excluyentes. Cifras en Plex Mono; con <code>.texto</code>, en Plex Sans.</span><span class="clases"><code>.segmentado</code><code>.segmentado.texto</code><code>[data-exclusivo]</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch;gap:0">
+          <label class="casilla"><input type="checkbox" checked>Velocidad<span class="muestra" style="color:var(--f-movimiento)"></span></label>
+          <label class="casilla"><input type="checkbox" checked>Componentes<span class="muestra discontinua" style="color:var(--f-movimiento)"></span></label>
+          <label class="casilla"><input type="checkbox">Aceleración<span class="muestra" style="color:var(--f-cambio)"></span></label>
+          <label class="casilla"><input type="checkbox" checked>Estroboscopio<span class="detalle">Δt = 0.10 s</span></label>
+        </div><figcaption class="g-pie"><span class="uso">Casilla con etiqueta y muestra del trazo que activa: continua o discontinua.</span><span class="clases"><code>.casilla</code><code>.muestra</code><code>.detalle</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch;gap:var(--e-2)">
+          <label class="casilla"><input type="checkbox" class="interruptor" checked>Ajustar a la cuadrícula</label>
+          <label class="casilla"><input type="checkbox" class="interruptor">Mostrar el error estimado</label>
+          <label class="casilla"><input type="checkbox" class="interruptor" checked>Autoguardado</label>
+        </div><figcaption class="g-pie"><span class="uso">Interruptor: preferencias que se aplican al instante.</span><span class="clases"><code>input.interruptor</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Pestañas -->
+    <div class="g-sub" id="c-pestanas">
+      <h3>Pestañas</h3>
+      <p class="g-desc">Pestañas de panel para cambiar de vista dentro del mismo espacio.</p>
+      <figure class="g-muestra"><div class="g-escenario columna" style="align-items:stretch;gap:var(--e-3)">
+        <div class="pestanas" role="tablist" id="g-pest">
+          <button class="pestana" role="tab" aria-selected="true" aria-controls="g-pp1">Gráficas</button>
+          <button class="pestana" role="tab" aria-selected="false" aria-controls="g-pp2">Tabla</button>
+          <button class="pestana" role="tab" aria-selected="false" aria-controls="g-pp3">Energía</button>
+          <button class="pestana" role="tab" aria-selected="false" aria-controls="g-pp4">Eventos</button>
+        </div>
+        <div id="g-pp1" data-grupo="g-pest" class="g-prosa">Tres gráficas de cualquier cantidad contra el tiempo o contra otra cantidad.</div>
+        <div id="g-pp2" data-grupo="g-pest" class="g-prosa" hidden>La tabla de datos, con una fila por cada paso de muestreo y exportación a CSV.</div>
+        <div id="g-pp3" data-grupo="g-pest" class="g-prosa" hidden>El registro de energía: a dónde va cada joule. Debe cuadrar siempre.</div>
+        <div id="g-pp4" data-grupo="g-pest" class="g-prosa" hidden>Los eventos de la simulación: choques, cambios de fase e interruptores.</div>
+      </div><figcaption class="g-pie"><span class="uso">Pestañas de panel; <code>espacio.js</code> muestra el panel indicado en <code>aria-controls</code>.</span><span class="clases"><code>.pestanas[role=tablist]</code><code>.pestana[role=tab]</code></span></figcaption></figure>
+    </div>
+
+    <!-- Menús -->
+    <div class="g-sub" id="c-menus">
+      <h3>Menú desplegable y menú contextual</h3>
+      <p class="g-desc">Superficies flotantes con radio de 8, borde y sombra. Los atajos van a la derecha en Plex Mono.</p>
+      <figure class="g-muestra"><div class="g-escenario fondo" style="align-items:flex-start">
+        <div class="g-menus">
+          <div class="g-var"><div class="menu">
+            <div class="menu-titulo">Exportar</div>
+            <div class="menu-item"><svg class="ico"><use href="#i-imagen"/></svg>Imagen PNG<span class="atajo">Ctrl E</span></div>
+            <div class="menu-item activo"><svg class="ico"><use href="#i-imagen"/></svg>Imagen SVG</div>
+            <div class="menu-item"><svg class="ico"><use href="#i-video"/></svg>Video MP4</div>
+            <div class="menu-sep"></div>
+            <div class="menu-item"><svg class="ico"><use href="#i-tabla"/></svg>Datos en CSV<span class="atajo">Ctrl Mayús E</span></div>
+          </div><span class="etq">Desplegable</span></div>
+          <div class="g-var"><div class="menu">
+            <div class="menu-item"><svg class="ico"><use href="#i-duplicar"/></svg>Duplicar<span class="atajo">Ctrl D</span></div>
+            <div class="menu-item"><svg class="ico"><use href="#i-candado"/></svg>Bloquear<span class="atajo">Ctrl L</span></div>
+            <div class="menu-item"><svg class="ico"><use href="#i-ojo-tachado"/></svg>Ocultar<span class="atajo">H</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-item peligro"><svg class="ico"><use href="#i-borrar"/></svg>Borrar<span class="atajo">Supr</span></div>
+          </div><span class="etq">Contextual</span></div>
+          <div class="g-var">
+            <div class="g-ancla-menu"><button class="btn btn-secundario" id="b-menu-vivo"><svg class="ico"><use href="#i-exportar"/></svg>Exportar<svg class="ico"><use href="#i-chevron-abajo"/></svg></button></div>
+            <span class="etq">Pruébalo: abre el desplegable</span>
+            <div class="g-zona-contextual" id="g-zona-ctx"><canvas id="lz-ctx"></canvas><span>Haz clic derecho sobre el lienzo</span></div>
+          </div>
+        </div>
+      </div><figcaption class="g-pie"><span class="uso">Títulos de grupo en <code>--t-micro</code>, separadores de 1 px y acciones destructivas en <code>--error</code>.</span><span class="clases"><code>.menu</code><code>.menu-item</code><code>.atajo</code><code>.menu-sep</code><code>.peligro</code></span></figcaption></figure>
+    </div>
+
+    <!-- Ayuda -->
+    <div class="g-sub" id="c-ayuda">
+      <h3>Ayuda emergente</h3>
+      <p class="g-desc">Texto en español, el término en inglés debajo y el atajo si existe. Aparece tras 450 ms de reposo del puntero.</p>
+      <figure class="g-muestra"><div class="g-escenario" style="gap:var(--e-8)">
+        <div class="g-ayudas">
+          <div class="ayuda"><span>Encuadrar todo</span></div>
+          <div class="ayuda"><span>Plano inclinado</span><span class="en">Inclined plane</span></div>
+          <div class="ayuda"><span>Reproducir <kbd>Espacio</kbd></span><span class="en">Play</span></div>
+        </div>
+        <span class="g-sep-v"></span>
+        <div style="display:flex;gap:var(--e-1)">
+          <button class="btn btn-icono" data-ayuda="Reiniciar|Reset|Inicio"><svg class="ico"><use href="#i-reiniciar"/></svg></button>
+          <button class="btn btn-icono" data-ayuda="Retroceder un cuadro|Step back|←"><svg class="ico"><use href="#i-paso-atras"/></svg></button>
+          <button class="btn btn-icono" data-ayuda="Avanzar un cuadro|Step forward|→"><svg class="ico"><use href="#i-paso-adelante"/></svg></button>
+          <button class="btn btn-icono" data-ayuda="Capas|Layers"><svg class="ico"><use href="#i-capas"/></svg></button>
+        </div>
+        <span class="g-nota" style="margin:0">Pasa el puntero por los botones.</span>
+      </div><figcaption class="g-pie"><span class="uso">Se declara con un atributo: texto, término en inglés y atajo separados por barras.</span><span class="clases"><code>data-ayuda="Texto|Term|Atajo"</code><code>.ayuda</code></span></figcaption></figure>
+    </div>
+
+    <!-- Paleta de comandos -->
+    <div class="g-sub" id="c-comandos">
+      <h3>Paleta de comandos</h3>
+      <p class="g-desc">Buscador con resultados agrupados. En la aplicación se abre con <kbd>Ctrl K</kbd> sobre un velo; aquí está incrustada y funciona con el teclado.</p>
+      <figure class="g-muestra"><div class="g-escenario velado">
+        <div class="comandos" role="dialog" aria-label="Comandos">
+          <div class="comandos-buscar"><svg class="ico ico-20" style="color:var(--texto-3)"><use href="#i-buscar"/></svg><input id="cmd-q" placeholder="Escribe un comando o un objeto" aria-label="Buscar comandos"><kbd>Esc</kbd></div>
+          <div class="comandos-lista" id="cmd-lista"></div>
+        </div>
+      </div><figcaption class="g-pie"><span class="uso">Escribe para filtrar; ↑ y ↓ para moverte; Intro para ejecutar.</span><span class="clases"><code>.comandos</code><code>.comandos-buscar</code><code>.comandos-lista</code></span></figcaption></figure>
+    </div>
+
+    <!-- Diálogo y notificación -->
+    <div class="g-sub" id="c-dialogo">
+      <h3>Diálogo y notificación</h3>
+      <p class="g-desc">El diálogo interrumpe: título, cuerpo y acciones a la derecha, con el primario al final. La notificación no interrumpe: es breve, aparece abajo al centro y se cierra sola.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario velado" style="padding:var(--e-6)">
+          <div class="dialogo" style="width:100%;max-width:440px">
+            <h2>¿Descartar los cambios de la escena?</h2>
+            <p>Los cambios desde la última vez que guardaste se perderán. La escena original sigue en la biblioteca.</p>
+            <div class="acciones"><button class="btn btn-secundario">Cancelar</button><button class="btn btn-primario">Descartar cambios</button></div>
+          </div>
+        </div><figcaption class="g-pie"><span class="uso">Diálogo: radio de 12, sombra de diálogo y velo detrás.</span><span class="clases"><code>.velo</code><code>.dialogo</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:center;justify-content:center;gap:var(--e-5);min-height:236px">
+          <div class="aviso-flotante"><svg class="ico"><use href="#i-check"/></svg>Datos exportados a salto-pendiente.csv<button class="btn btn-compacto">Abrir carpeta</button></div>
+          <div style="display:flex;gap:var(--e-2)"><button class="btn btn-secundario" id="b-dialogo-vivo">Abrir diálogo</button><button class="btn btn-secundario" id="b-aviso-vivo">Mostrar notificación</button></div>
+        </div><figcaption class="g-pie"><span class="uso">Notificación: tinta, una frase y como mucho una acción.</span><span class="clases"><code>.aviso-flotante</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Chips y modo -->
+    <div class="g-sub" id="c-chips">
+      <h3>Chips e indicador de modo</h3>
+      <p class="g-desc">Los chips son la única forma de píldora. El indicador de modo dice si la simulación es precisa o multitudinaria.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario columna" style="align-items:flex-start;gap:var(--e-4)">
+          <div style="display:flex;gap:var(--e-2);flex-wrap:wrap"><span class="chip"><svg class="ico"><use href="#i-tutorial"/></svg>Tutorial</span><span class="chip"><svg class="ico"><use href="#i-ejemplo"/></svg>Ejemplo</span><span class="chip"><svg class="ico"><use href="#i-mext"/></svg>MEXT 2019</span><span class="chip">Propio</span></div>
+          <div style="display:flex;gap:var(--e-2);flex-wrap:wrap;align-items:center"><span class="chip">Contorno</span><span class="chip suave">Suave</span><span class="chip lleno">Lleno</span></div>
+        </div><figcaption class="g-pie"><span class="uso">Chip de tipo: Tutorial, Ejemplo, MEXT y Propio. Variantes de contorno, suave y llena.</span><span class="clases"><code>.chip</code><code>.chip.suave</code><code>.chip.lleno</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario" style="gap:var(--e-8)">
+          <div class="g-var"><span class="modo" data-ayuda="Modo preciso: eventos exactos|Precise mode">Preciso</span><span class="etq">Eventos exactos</span></div>
+          <div class="g-var"><span class="modo multitud" data-ayuda="Modo multitud: muchos cuerpos|Crowd mode">Multitud</span><span class="etq">Muchos cuerpos</span></div>
+        </div><figcaption class="g-pie"><span class="uso">Punto lleno para preciso, anillo para multitud; siempre con su palabra.</span><span class="clases"><code>.modo</code><code>.modo.multitud</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Árbol y paleta -->
+    <div class="g-sub" id="c-arbol">
+      <h3>Árbol de escena y paleta de objetos</h3>
+      <p class="g-desc">Viven en el panel izquierdo, de <span data-token="est-panel-izq"></span>. Las acciones del nodo aparecen al pasar el puntero.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario fondo" style="justify-content:center">
+          <div class="g-panel g-panel-izq">
+            <div class="panel-cab">Escena<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir objeto|Add object"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+            <div class="arbol" id="g-arbol">
+              <div class="nodo" aria-selected="true"><svg class="ico"><use href="#o-particula"/></svg><span class="nombre">Bola</span><span class="acciones fijas"><svg class="ico"><use href="#i-ojo"/></svg></span></div>
+              <div class="nodo"><svg class="ico"><use href="#o-bloque"/></svg><span class="nombre">Bloque</span><span class="acciones"><svg class="ico"><use href="#i-ojo"/></svg><svg class="ico"><use href="#i-candado-abierto"/></svg></span></div>
+              <div class="nodo"><svg class="ico"><use href="#o-resorte"/></svg><span class="nombre">Resorte</span><span class="acciones"><svg class="ico"><use href="#i-ojo"/></svg><svg class="ico"><use href="#i-candado-abierto"/></svg></span></div>
+              <div class="nodo"><svg class="ico"><use href="#o-suelo"/></svg><span class="nombre">Suelo</span><span class="acciones fijas"><svg class="ico"><use href="#i-candado"/></svg></span></div>
+              <div class="nodo global"><svg class="ico"><use href="#o-gravedad"/></svg><span class="nombre">Gravedad</span><span class="dato">9.80&#8239;m/s²</span></div>
+            </div>
+          </div>
+        </div><figcaption class="g-pie"><span class="uso">Nodo con icono, nombre y acciones al pasar el puntero (ver, bloquear). Lo global, en gris.</span><span class="clases"><code>.arbol</code><code>.nodo</code><code>.acciones</code><code>.nodo.global</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario fondo" style="justify-content:center">
+          <div class="g-panel g-panel-izq g-paleta-panel">
+            <div class="panel-cab">Objetos</div>
+            <div class="paleta" data-exclusivo>
+              <button class="herr" data-ayuda="Partícula|Particle"><svg class="ico"><use href="#o-particula"/></svg><span>Partícula</span></button>
+              <button class="herr" aria-pressed="true" data-ayuda="Bloque|Block"><svg class="ico"><use href="#o-bloque"/></svg><span>Bloque</span></button>
+              <button class="herr" data-ayuda="Resorte|Spring"><svg class="ico"><use href="#o-resorte"/></svg><span>Resorte</span></button>
+              <button class="herr" data-ayuda="Suelo|Ground"><svg class="ico"><use href="#o-suelo"/></svg><span>Suelo</span></button>
+              <button class="herr" data-ayuda="Plano inclinado|Inclined plane"><svg class="ico"><use href="#o-plano-inclinado"/></svg><span>Plano inclinado</span></button>
+              <button class="herr" data-ayuda="Pared|Wall"><svg class="ico"><use href="#o-pared"/></svg><span>Pared</span></button>
+            </div>
+          </div>
+        </div><figcaption class="g-pie"><span class="uso">Paleta de objetos en dos columnas; la herramienta activa con <code>aria-pressed</code>.</span><span class="clases"><code>.paleta</code><code>.herr</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Inspector -->
+    <div class="g-sub" id="c-inspector">
+      <h3>Inspector: filas, grupos, lecturas y variables</h3>
+      <p class="g-desc">El panel derecho, de <span data-token="est-panel-der"></span>. Las lecturas y las variables están conectadas a la simulación de la línea de tiempo de abajo.</p>
+      <div class="g-r3">
+        <figure class="g-muestra"><div class="g-escenario fondo sin-relleno" style="justify-content:center;padding:var(--e-4) 0">
+          <div class="g-panel g-panel-der">
+            <div class="panel-cab">Inspector</div>
+            <div class="insp-cab"><div class="miniatura"><svg class="ico"><use href="#o-particula"/></svg></div><div><div class="t1">Bola</div><div class="t2" id="insp-estado">Partícula · en vuelo</div></div></div>
+            <details class="grupo" open>
+              <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg>Condiciones iniciales</summary>
+              <div class="fila"><label for="i-masa">Masa</label><div class="campo"><input id="i-masa" value="0.50"><span class="u">kg</span></div></div>
+              <div class="fila"><span class="etq">Posición</span><div class="fila-doble"><div class="campo"><span class="eje">x</span><input value="0" aria-label="x"><span class="u">m</span></div><div class="campo es-variable"><span class="eje">y</span><span class="chip-var"><span class="sim">h</span></span><span class="valor-var" id="insp-h"></span><span class="u">m</span></div></div></div>
+              <div class="fila"><span class="etq">Velocidad</span><div class="fila-doble"><div class="campo es-variable"><span class="chip-var"><span class="sim">v<sub class="r">0</sub></span></span><span class="valor-var" id="insp-v"></span><span class="u">m/s</span></div><div class="campo"><span class="eje">α</span><input value="0" aria-label="α"><span class="u">°</span></div></div></div>
+            </details>
+            <details class="grupo">
+              <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg>Material</summary>
+              <div class="fila"><label>Restitución</label><div class="campo es-variable"><span class="chip-var"><span class="sim">e</span></span><span class="valor-var">0.70</span><span class="u"></span></div></div>
+            </details>
+          </div>
+        </div><figcaption class="g-pie"><span class="uso">Fila de etiqueta y control; grupo plegable con título.</span><span class="clases"><code>.insp-cab</code><code>details.grupo</code><code>.fila</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario fondo sin-relleno" style="justify-content:center;padding:var(--e-4) 0">
+          <div class="g-panel g-panel-der">
+            <details class="grupo" open style="border-top:0">
+              <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
+              <div class="lecturas" id="g-lecturas"></div>
+            </details>
+            <details class="grupo" open>
+              <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg>Mostrar</summary>
+              <label class="casilla"><input type="checkbox" checked>Velocidad<span class="muestra" style="color:var(--f-movimiento)"></span></label>
+              <label class="casilla"><input type="checkbox">Gravedad<span class="muestra" style="color:var(--f-cambio)"></span></label>
+            </details>
+          </div>
+        </div><figcaption class="g-pie"><span class="uso">Lecturas en vivo: símbolo, valor a la derecha y unidad en su columna.</span><span class="clases"><code>.lecturas</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario fondo sin-relleno" style="justify-content:center;padding:var(--e-4) 0">
+          <div class="g-panel g-panel-der">
+            <div class="panel-cab">Variables<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir variable|Add variable"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+            <div class="variables" id="g-variables"></div>
+          </div>
+        </div><figcaption class="g-pie"><span class="uso">Variables con deslizador; las constantes, en gris y sin control.</span><span class="clases"><code>.variables</code><code>.var</code><code>.var.constante</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Línea de tiempo y gráficas -->
+    <div class="g-sub" id="c-tiempo">
+      <h3>Línea de tiempo y tarjetas de gráfica</h3>
+      <p class="g-desc">Una bola que cae y rebota con una restitución <span class="sim">e</span>. Arrastra el cabezal o reproduce: las gráficas, las lecturas y el lienzo siguen el mismo instante. Los rombos son los choques.</p>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno columna">
+        <div class="g-tiempo">
+          <div class="inf-cab">
+            <div class="transporte">
+              <button class="btn btn-icono" id="lt-reiniciar" data-ayuda="Reiniciar|Reset|Inicio"><svg class="ico"><use href="#i-reiniciar"/></svg></button>
+              <button class="btn btn-primario btn-reproducir" id="lt-play" data-ayuda="Reproducir|Play"><svg class="ico"><use href="#i-reproducir"/></svg></button>
+            </div>
+            <div class="reloj" id="lt-reloj"></div>
+            <div class="segmentado" data-exclusivo id="lt-vel" data-ayuda="Velocidad de reproducción|Playback speed"><button data-v="0.25">¼×</button><button data-v="0.5">½×</button><button data-v="1" aria-pressed="true">1×</button></div>
+            <span style="flex:1"></span>
+            <span class="modo">Preciso</span>
+          </div>
+          <div class="linea-tiempo"><canvas id="lt"></canvas></div>
+          <div class="g-graficas">
+            <div class="grafica"><div class="grafica-cab"><span><span class="sim">y</span> contra <span class="sim">t</span></span><span class="lect" id="gl1"></span></div><canvas id="g1"></canvas></div>
+            <div class="grafica"><div class="grafica-cab"><span><span class="sim">v<sub>y</sub></span> contra <span class="sim">t</span></span><span class="lect" id="gl2"></span></div><canvas id="g2"></canvas></div>
+            <div class="grafica"><div class="grafica-cab"><span>Energía</span><span class="leyenda"><span style="color:var(--f-movimiento)"><i></i><var class="sim">E<sub class="r">k</sub></var></span><span style="color:var(--f-cambio)"><i></i><var class="sim">E<sub class="r">p</sub></var></span><span style="color:var(--f-termico)"><i class="discontinua"></i><var class="sim">Q</var></span></span><span class="lect" id="gl3"></span></div>
+              <canvas id="g3"></canvas></div>
+          </div>
+        </div>
+      </div><figcaption class="g-pie"><span class="uso">Línea de tiempo: riel, progreso, cabezal, eventos y marcas. Tarjeta de gráfica: título con símbolos, lectura actual y gráfica con cursor sincronizado.</span><span class="clases"><code>Volta.LineaTiempo</code><code>Volta.grafica</code><code>.grafica</code></span></figcaption></figure>
+      <figure class="g-muestra"><div class="g-escenario lienzo"><canvas id="lz-sim" style="height:220px"></canvas></div>
+        <figcaption class="g-pie"><span class="uso">El lienzo sigue a la línea de tiempo: traza real, trayectoria prevista, estroboscopio y eventos.</span><span class="clases"><code>tz.trayectoria()</code><code>tz.fantasma()</code><code>tz.eventoAnillo()</code></span></figcaption></figure>
+    </div>
+
+    <!-- Tabla y registro de energía -->
+    <div class="g-sub" id="c-tabla">
+      <h3>Tabla de eventos y registro de energía</h3>
+      <p class="g-desc">Las otras pestañas del panel inferior. También siguen a la línea de tiempo: la fila del instante actual se resalta y las barras dicen a dónde fue cada joule.</p>
+      <div class="g-r2">
+        <figure class="g-muestra"><div class="g-escenario sin-relleno"><div class="g-tabla-datos lista-eventos" style="padding:0"><table class="tabla" id="g-tabla-eventos"></table></div></div>
+          <figcaption class="g-pie"><span class="uso">Tabla de datos: cabecera fija, números a la derecha en Plex Mono y la fila actual en <code>--campo</code>.</span><span class="clases"><code>.tabla</code><code>tr.actual</code><code>td.texto</code></span></figcaption></figure>
+        <figure class="g-muestra"><div class="g-escenario"><div class="barras" id="g-barras" style="width:100%"></div></div>
+          <figcaption class="g-pie"><span class="uso">Registro de energía: cada barra del color de quien guarda la energía; el total, en tinta. Debe cuadrar siempre.</span><span class="clases"><code>.barras</code><code>.barra-e</code><code>.barras-pie</code></span></figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Tarjetas -->
+    <div class="g-sub" id="c-tarjetas">
+      <h3>Tarjetas de módulo y de escenario</h3>
+      <p class="g-desc">Las tarjetas de Inicio y de la biblioteca. La miniatura de un escenario se dibuja con la gramática del lienzo, no es una captura.</p>
+      <figure class="g-muestra"><div class="g-escenario fondo"><div class="g-tarjetas-modulo">
+        <a class="tarjeta-modulo" href="mecanica.html"><svg class="emblema"><use href="#m-mecanica"/></svg><h3>Mecánica</h3><p>Cuerpos 2D con restricciones y eventos exactos: proyectiles, fuerzas, choques, oscilaciones y fluidos.</p><div class="pie"><span class="chip suave">7 espacios</span><span class="chip suave">32 escenarios</span></div></a>
+        <a class="tarjeta-modulo" href="#c-tarjetas"><svg class="emblema"><use href="#m-electrostatica"/></svg><h3>Electrostática</h3><p>Cargas, campos y potencial; conductores y dieléctricos; cargas en movimiento.</p><div class="pie"><span class="chip suave">3 espacios</span><span class="chip suave">18 escenarios</span></div></a>
+        <a class="tarjeta-modulo" href="#c-tarjetas"><svg class="emblema"><use href="#m-ondas"/></svg><h3>Ondas y sonido</h3><p>Medio unidimensional, cubeta de ondas, efecto Doppler y acústica.</p><div class="pie"><span class="chip suave">3 espacios</span><span class="chip suave">14 escenarios</span></div></a>
+      </div></div><figcaption class="g-pie"><span class="uso">Tarjeta de módulo: emblema de 40 px, nombre, descripción y datos.</span><span class="clases"><code>.tarjeta-modulo</code><code>.emblema</code></span></figcaption></figure>
+      <figure class="g-muestra"><div class="g-escenario fondo"><div class="g-tarjetas-escena">
+        <div class="tarjeta-escena"><div class="mini"><canvas data-escena="pendiente"></canvas></div><div class="cuerpo"><span class="titulo">Salto hacia una pendiente</span><span class="meta">Mecánica<span class="chip">MEXT 2019</span></span></div></div>
+        <div class="tarjeta-escena"><div class="mini"><canvas data-escena="pendulo"></canvas></div><div class="cuerpo"><span class="titulo">Péndulo simple</span><span class="meta">Mecánica<span class="chip">Ejemplo</span></span></div></div>
+        <div class="tarjeta-escena"><div class="mini"><canvas data-escena="cargas"></canvas></div><div class="cuerpo"><span class="titulo">Dos cargas puntuales</span><span class="meta">Electrostática<span class="chip">Ejemplo</span></span></div></div>
+        <div class="tarjeta-escena"><div class="mini"><canvas data-escena="resorte"></canvas></div><div class="cuerpo"><span class="titulo">Primeros pasos: un resorte</span><span class="meta">Mecánica<span class="chip">Tutorial</span></span></div></div>
+      </div></div><figcaption class="g-pie"><span class="uso">Tarjeta de escenario: miniatura dibujada, título, módulo y tipo.</span><span class="clases"><code>.tarjeta-escena</code><code>.mini</code><code>.meta</code></span></figcaption></figure>
+    </div>
+
+    <!-- Estado vacío -->
+    <div class="g-sub" id="c-vacio">
+      <h3>Estado vacío</h3>
+      <p class="g-desc">Una ilustración de línea, una frase que dice qué hacer y una acción.</p>
+      <figure class="g-muestra"><div class="g-escenario columna" style="padding:0">
+        <div class="vacio"><svg class="ico"><use href="#i-grafica"/></svg><b>Aún no hay gráficas</b><span>Arrastra una cantidad desde el inspector para graficarla contra el tiempo.</span><button class="btn btn-secundario" style="margin-top:var(--e-2)"><svg class="ico" style="width:16px;height:16px;color:inherit"><use href="#i-mas"/></svg>Añadir gráfica</button></div>
+      </div><figcaption class="g-pie"><span class="uso">Para paneles y listas sin contenido.</span><span class="clases"><code>.vacio</code></span></figcaption></figure>
+    </div>
+
+    <!-- Flotantes -->
+    <div class="g-sub" id="c-flotantes">
+      <h3>Controles flotantes del lienzo</h3>
+      <p class="g-desc">Capas, coordenadas del cursor y zoom. Flotan en las esquinas con fondo de panel y nunca tapan el centro del lienzo.</p>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno">
+        <div class="lienzo-area g-lienzo-flotantes" id="g-area-flot">
+          <canvas id="lz-flot"></canvas>
+          <div class="flotante ar-der" role="group" aria-label="Capas"><svg class="ico"><use href="#i-capas"/></svg><button class="capa-btn" aria-pressed="true" data-conmuta>Vectores</button><button class="capa-btn" aria-pressed="true" data-conmuta>Traza</button><button class="capa-btn" aria-pressed="false" data-conmuta>Cotas</button></div>
+          <div class="flotante ab-izq"><span class="sim">x</span><span class="num" id="flot-x">—</span><span class="sim">y</span><span class="num" id="flot-y">—</span></div>
+          <div class="aviso-flotante aviso-lienzo"><svg class="ico"><use href="#i-evento"/></svg><span>Choque con el suelo en <span class="sim">t</span> = 0.4949&#8239;s</span><button class="btn btn-compacto">Ir al evento</button></div>
+          <div class="flotante ab-der"><button class="btn btn-icono btn-compacto" data-ayuda="Alejar|Zoom out|−"><svg class="ico"><use href="#i-zoom-menos"/></svg></button><span class="num">100&#8239;%</span><button class="btn btn-icono btn-compacto" data-ayuda="Acercar|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button><span class="sep"></span><button class="btn btn-compacto"><svg class="ico"><use href="#i-encuadrar"/></svg>Encuadrar</button></div>
+        </div>
+      </div><figcaption class="g-pie"><span class="uso">Mueve el puntero sobre el lienzo para ver las coordenadas en vivo. El aviso sobre el lienzo va abajo al centro, encima de los flotantes.</span><span class="clases"><code>.lienzo-area</code><code>.flotante</code><code>.capa-btn</code><code>.aviso-lienzo</code></span></figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ============================ 8. Gramática del lienzo ============================ -->
+  <section class="g-seccion" id="lienzo" data-seccion>
+    <div class="g-cab"><span class="g-num">08</span><h2>Gramática del lienzo</h2>
+      <p class="g-entrada">Cómo se dibuja la física. Está implementada en <code>lienzo/trazo.js</code> y ningún módulo dibuja por su cuenta lo que esta gramática ya resuelve. Cada lienzo de esta sección es una llamada real a <code>Volta.Trazo</code>.</p></div>
+
+    <div class="g-sub" id="l-capas">
+      <h3>Capas</h3>
+      <p class="g-desc">Diez capas, de abajo arriba. Apágalas para ver qué aporta cada una a la escena.</p>
+      <figure class="g-muestra"><div class="g-capas">
+        <canvas id="lz-capas"></canvas>
+        <div class="lista" id="g-capas-lista"></div>
+      </div><figcaption class="g-pie"><span class="uso">El orden de las capas decide qué tapa a qué: la edición siempre encima, el fondo siempre debajo.</span><span class="clases"><code>tz.limpiar()</code><code>tz.cuadricula()</code></span></figcaption></figure>
+    </div>
+
+    <div class="g-sub" id="l-geometria"><h3>Geometría fija</h3><p class="g-desc">Superficies, paredes, apoyos y pivotes: lo que no se mueve.</p><div class="g-r2" data-lienzos="geometria"></div></div>
+    <div class="g-sub" id="l-materia"><h3>Materia</h3><p class="g-desc">La materia se dibuja en tinta y no tiene color.</p><div class="g-r2" data-lienzos="materia"></div></div>
+    <div class="g-sub" id="l-magnitudes"><h3>Magnitudes</h3><p class="g-desc">Vectores del color de su familia y siempre con su símbolo.</p><div class="g-r2" data-lienzos="magnitudes"></div></div>
+    <div class="g-sub" id="l-construccion"><h3>Construcción</h3><p class="g-desc">Ejes, cotas, ángulos y trayectorias: lo que ayuda a leer el dibujo.</p><div class="g-r2" data-lienzos="construccion"></div></div>
+    <div class="g-sub" id="l-etiquetas"><h3>Etiquetas</h3><p class="g-desc">Símbolo en cursiva del color de la magnitud y valor en Plex Mono <code>--texto-2</code>.</p><div class="g-r2" data-lienzos="etiquetas"></div></div>
+    <div class="g-sub" id="l-edicion"><h3>Edición</h3><p class="g-desc">Selección, asas y guías: la capa más alta. Nada cambia de color al editar.</p><div class="g-r2" data-lienzos="edicion"></div></div>
+    <div class="g-sub" id="l-eventos"><h3>Eventos</h3><p class="g-desc">El evento no tiene color: lo que importa es el instante.</p><div class="g-r2" data-lienzos="eventos"></div></div>
+
+    <div class="g-sub" id="l-pendientes">
+      <h3>Convenciones de los dominios</h3>
+      <p class="g-desc">El resto de la tabla 7.3. Cada dominio las añade en <code>lienzo/dominios/&lt;módulo&gt;.js</code>; el estado se comprueba leyendo esos archivos al cargar esta página.</p>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno columna"><table class="g-tabla" id="g-pendientes"></table></div>
+        <figcaption class="g-pie"><span class="uso">Cada dominio añade estos símbolos en <code>lienzo/dominios/&lt;módulo&gt;.js</code> extendiendo <code>Volta.Trazo.prototype</code>.</span><span class="clases"><code>Volta.Trazo.prototype</code></span></figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ============================ 9. Plantillas ============================ -->
+  <section class="g-seccion" id="plantillas" data-seccion>
+    <div class="g-cab"><span class="g-num">09</span><h2>Plantillas de pantalla</h2>
+      <p class="g-entrada">Todo módulo usa la plantilla de espacio de trabajo sin cambiar su estructura; solo cambian la paleta, el inspector, los instrumentos y el lienzo.</p></div>
+
+    <div class="g-sub" id="p-barra">
+      <h3>Barra superior</h3>
+      <p class="g-desc">Marca, módulo ▸ espacio, nombre de escena, transporte, tiempo, velocidad, modo y acciones. Mide 44 px.</p>
+      <figure class="g-muestra"><div class="g-escenario sin-relleno" style="min-height:0">
+        <header class="barra g-barra-viva">
+          <a class="marca" href="#inicio"><span class="g-simbolo" data-simbolo></span><b>Volta</b></a>
+          <span class="separador-v"></span>
+          <nav class="migas"><button class="btn btn-compacto">Mecánica<svg class="ico"><use href="#i-chevron-abajo"/></svg></button><span class="sep">/</span><button class="btn btn-compacto">Cinemática y proyectiles<svg class="ico"><use href="#i-chevron-abajo"/></svg></button></nav>
+          <span class="escena-titulo"><span class="chip">MEXT 2019</span>&nbsp; <b>Salto hacia una pendiente</b></span>
+          <span class="sp"></span>
+          <div class="transporte">
+            <button class="btn btn-icono" data-ayuda="Reiniciar|Reset|Inicio"><svg class="ico"><use href="#i-reiniciar"/></svg></button>
+            <button class="btn btn-icono" data-ayuda="Retroceder un cuadro|Step back|←"><svg class="ico"><use href="#i-paso-atras"/></svg></button>
+            <button class="btn btn-primario btn-reproducir" data-ayuda="Reproducir|Play|Espacio"><svg class="ico"><use href="#i-reproducir"/></svg></button>
+            <button class="btn btn-icono" data-ayuda="Avanzar un cuadro|Step forward|→"><svg class="ico"><use href="#i-paso-adelante"/></svg></button>
+          </div>
+          <div class="reloj"><span class="sim">t</span>0.5716<span class="u">s</span></div>
+          <div class="segmentado" data-exclusivo><button>½×</button><button aria-pressed="true">1×</button><button>2×</button></div>
+          <span class="sp"></span>
+          <span class="modo">Preciso</span>
+          <span class="separador-v"></span>
+          <button class="btn btn-icono" data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
+          <button class="btn btn-icono" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
+        </header>
+      </div><figcaption class="g-pie"><span class="uso">A su ancho real de 1440 px, reducida para caber aquí. Una sola acción sólida en la barra: reproducir.</span><span class="clases"><code>.barra</code><code>.marca</code><code>.migas</code><code>.transporte</code><code>.reloj</code></span></figcaption></figure>
+    </div>
+
+    <div class="g-sub" id="p-espacio">
+      <h3>Espacio de trabajo</h3>
+      <p class="g-desc">Paneles redimensionables alrededor del lienzo. Medidas en píxeles a 1440 × 900, acotadas con la propia gramática.</p>
+      <figure class="g-muestra g-plantilla"><div class="g-escenario lienzo"><canvas id="lz-plantilla-espacio"></canvas></div>
+        <figcaption class="g-pie"><span class="uso">Implementación de referencia: <a href="mecanica.html">prototipo de Mecánica</a>.</span><span class="clases"><code>.espacio</code><code>--est-barra</code><code>--est-panel-izq</code><code>--est-panel-der</code><code>--est-panel-inf</code></span></figcaption></figure>
+    </div>
+
+    <div class="g-sub" id="p-inicio">
+      <h3>Inicio y biblioteca</h3>
+      <p class="g-desc">Inicio: barra superior, módulos como tarjetas con emblema, recientes y biblioteca. Biblioteca: filtros a la izquierda y cuadrícula de tarjetas de escenario.</p>
+      <figure class="g-muestra g-plantilla inicio"><div class="g-escenario lienzo"><canvas id="lz-plantilla-inicio"></canvas></div>
+        <figcaption class="g-pie"><span class="uso">Solo la barra superior tiene medida fija en el contrato; el ancho de contenido y las columnas de Inicio están por definir.</span><span class="clases"><code>.tarjeta-modulo</code><code>.tarjeta-escena</code></span></figcaption></figure>
+    </div>
+  </section>
+
+  <footer class="g-pie-pagina">
+    <span>Volta · Lenguaje de diseño</span>
+    <span>Contrato: <code>docs/04_lenguaje_de_diseno.md</code> · Implementación: <code>sistema/</code></span>
+  </footer>
+</div>
+</main>
+</div>
+
+<div class="aviso-flotante g-aviso-vivo oculto" id="g-aviso" role="status" aria-live="polite"><svg class="ico"><use href="#i-check"/></svg><span id="g-aviso-texto"></span></div>
+
+<script type="module" src="../lienzo/trazo.js"></script>
+<script type="module" src="../lienzo/grafica.js"></script>
+<script type="module" src="../componentes/linea-tiempo.js"></script>
+<script type="module" src="../componentes/espacio.js"></script>
+<script type="module" src="guia.js"></script>
+</body>
+</html>

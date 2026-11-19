@@ -1,0 +1,47 @@
+name: Release
+
+# Al publicar una release (gh release create vX.Y.Z), compila Volta para
+# Windows y adjunta el instalador y el ejecutable portátil a esa release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Etiqueta de la release a la que adjuntar (por ejemplo v0.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Instalador y portátil para Windows
+    runs-on: windows-latest
+    env:
+      ETIQUETA: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - run: npm test
+      - run: npx tauri build
+      - name: Adjuntar a la release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = $env:ETIQUETA.TrimStart('v')
+          $instalador = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          $portatil = "Volta_${version}_x64_portable.exe"
+          Copy-Item src-tauri/target/release/volta.exe $portatil
+          gh release upload $env:ETIQUETA $instalador.FullName $portatil --clobber
