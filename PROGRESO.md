@@ -5,10 +5,12 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.2.0 (publicada el 2026-11-19)
+- Versión: 0.2.0 publicada; 0.3.0 en preparación (CHANGELOG [Sin publicar] al día)
 - Repo: https://github.com/Eliam4510/volta-fisica
-- Lenguaje de diseño, iconos, guía y prototipos de Inicio, Mecánica,
-  Electrostática y Termodinámica: hechos (ver `docs/04_lenguaje_de_diseno.md`).
+- Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
+  Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
+- Agentes en curso: Circuitos (pantalla y motor) y Laboratorio de Mecánica
+  (caja de arena). Sus archivos están sin seguimiento hasta revisarlos.
 
 ## Pendiente (ordenado)
 
@@ -21,10 +23,10 @@ física > funciones faltantes > rendimiento > pulido.
 
 ### Plataforma
 - [x] `sistema/nucleo/formato.js` con pruebas.
-- [ ] Extraer a `sistema/nucleo/`: integradores (DOPRI5, Verlet, Boris) y Brent.
-- [ ] Pruebas de exactitud: caída libre, tiro, rebotes, oscilador armónico.
-- [x] Guardar, abrir y autoguardar escenas (`.volta`) — Mecánica e Inicio.
-- [x] Exportar CSV y PNG — Mecánica.
+- [x] Integradores en `sistema/nucleo/integradores.js` (DOPRI5, RK4, Verlet, Brent); falta Boris (Magnetismo).
+- [x] Pruebas de exactitud: caída libre, tiro, rebotes, oscilador armónico, deriva a 100 s.
+- [x] Guardar, abrir y autoguardar escenas (`.volta`) — Mecánica, Termodinámica, Electrostática e Inicio. Falta Gravitación.
+- [x] Exportar CSV y PNG — Mecánica, Termodinámica, Electrostática, Gravitación.
 - [x] Deshacer y rehacer — Mecánica.
 - [x] `nucleo/unidades.js`: campos con unidades y expresiones, análisis dimensional (Mecánica).
 - [x] Diálogos nativos de Windows para guardar, exportar y abrir.
@@ -40,8 +42,9 @@ física > funciones faltantes > rendimiento > pulido.
 ### Otros módulos
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
 - [x] Motor de Electrostática + `nucleo/integradores.js` (59 pruebas).
-- [ ] Gravitación (agente en curso). Circuitos (agente en curso).
-- [ ] Gravitación, Circuitos, Ondas, Óptica, Magnetismo, Moderna.
+- [x] Gravitación: motor (40 pruebas) y pantalla «Órbitas» con cinco escenas.
+- [ ] Circuitos (agente en curso).
+- [ ] Ondas, Óptica, Magnetismo, Moderna.
 
 ## Autocrítica 1 (2026-11-19 01:05)
 
@@ -62,6 +65,24 @@ literatura de sistemas híbridos (detección de eventos, Zeno):
 | Función | Exportar CSV y guardar escenas solo en Mecánica | Llevarlo a Electrostática, Termodinámica y Gravitación |
 | Rendimiento | Sin pruebas de rendimiento | `vitest bench` de los motores |
 | Hecho | Guardado con descarga del navegador | Diálogos nativos (tauri-plugin-dialog y fs) |
+
+## Autocrítica 2 (2026-11-19, tras los ciclos de Electrostática y choques)
+
+Comparado con Box2D v3 (Soft Step, contactos especulativos, árbol de AABB,
+islas que duermen), Bullet y PhysX (cuerpos rígidos con rotación, LCP por
+Gauss–Seidel proyectado, CCD) y MuJoCo (contacto blando convexo con
+regularización):
+
+| Prioridad | Hallazgo | Tarea |
+|---|---|---|
+| Hecho | Efecto túnel con partículas rápidas; choques simultáneos perdidos; el radio no contaba contra superficies; una partícula apoyada atravesaba paredes | Paso acotado por rapidez, impulsos secuenciales, varios apoyos por partícula (pruebas en `mecanica.test.js`) |
+| Exactitud | La estabilización de Baumgarte deja ≈ 10⁻⁴·E0 de deriva de energía en pilas de discos | Post-estabilización (proyectar posiciones y velocidades sobre las restricciones activas al iniciar cada tramo; Cline y Pai, 2003) |
+| Exactitud | Las restricciones unilaterales se resuelven como igualdades: con apoyos redundantes (un disco en una esquina) J·M⁻¹·Jᵀ es singular y `resolver` reparte las reacciones de forma arbitraria | Regularizar (A + εI, como el CFM de ODE y MuJoCo) o resolver un LCP (Gauss–Seidel proyectado) |
+| Rendimiento | Un montón inelástico de 10 discos genera ≈ 5000 eventos en 5 s; los eventos de pares son O(n²) por paso | Fase amplia (rejilla uniforme) para candidatos a choque; reposo agrupado (islas que duermen); modo multitud de paso fijo |
+| Función | Los discos no giran: no hay rodadura ni fricción entre discos | Rotación con momento de inercia y fricción en el contacto disco-disco |
+| Función | Gravitación no guarda ni abre escenas `.volta`; Electrostática y Gravitación no aceptan unidades en los campos | Llevar `archivos.js` y `unidades.js` a esas pantallas |
+| Rendimiento | Sigue sin haber pruebas de rendimiento | `vitest bench` de los motores |
+| Pulido | La etiqueta del eje vertical queda bajo la barra de capas (`trazo.ejes`); los subíndices de v_c y v_e se confunden a 10 px; falta favicon | Corregir en las piezas compartidas cuando no haya agentes usándolas |
 
 ## Problemas conocidos
 
