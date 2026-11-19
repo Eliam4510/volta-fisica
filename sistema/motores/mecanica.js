@@ -377,9 +377,12 @@ function dinamica(S, modo, y, restr) {
  * solapan un poco (la estabilización deja restos de 10⁻⁶ m), el choque se mide
  * desde ese solape; si no, un hueco que ya es negativo nunca cambiaría de signo
  * y los cuerpos se atravesarían.
+ * din(y) es la dinámica del modo en y (con caché: el integrador evalúa f y
+ * todos los eventos sobre el mismo arreglo al final de cada paso).
  * @param {any} S @param {any} modo @param {any[]} restr @param {number[]} y0
+ * @param {(y: number[]) => {acc: number[], lambdas: Record<string, number>}} [din]
  */
-function eventosDelModo(S, modo, restr, y0) {
+function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, restr)) {
   /** @type {import('../nucleo/integradores.js').DefinicionEvento[]} */
   const ev = [];
   const n = S.n;
@@ -407,7 +410,7 @@ function eventosDelModo(S, modo, restr, y0) {
     const iP = s.i, sup = S.sup[s.sup];
     ev.push({
       nombre: `despegue:${clave}`, direccion: -1, terminal: true,
-      g: (t, y) => (dinamica(S, modo, y, restr).lambdas[`contacto:${clave}`] ?? 0),
+      g: (t, y) => (din(y).lambdas[`contacto:${clave}`] ?? 0),
     });
     if (sup.tipo === 'segmento' || sup.a0 != null) {
       ev.push({ nombre: `fin:${clave}`, direccion: -1, terminal: true, g: (t, y) => margenSuperficie(sup, [y[4 * iP], y[4 * iP + 1]]) });
@@ -417,7 +420,7 @@ function eventosDelModo(S, modo, restr, y0) {
         // Deja de estar pegado cuando la fricción necesaria supera μs·N
         ev.push({
           nombre: `desliza:${clave}`, direccion: -1, terminal: true,
-          g: (t, y) => { const L = dinamica(S, modo, y, restr).lambdas; return (sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) - Math.abs(L[`pegado:${clave}`]); },
+          g: (t, y) => { const L = din(y).lambdas; return (sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) - Math.abs(L[`pegado:${clave}`]); },
         });
       } else {
         ev.push({
@@ -433,7 +436,7 @@ function eventosDelModo(S, modo, restr, y0) {
     const est = modo.cuerdas[c.id];
     const r = c.tipo === 'polea' ? restriccionPolea(c) : restriccionDistancia(c, modo, false);
     if (est.tensa) {
-      ev.push({ nombre: `floja:${c.id}`, direccion: -1, terminal: true, g: (t, y) => dinamica(S, modo, y, restr).lambdas[`${c.tipo}:${c.id}`] ?? 0 });
+      ev.push({ nombre: `floja:${c.id}`, direccion: -1, terminal: true, g: (t, y) => din(y).lambdas[`${c.tipo}:${c.id}`] ?? 0 });
     } else {
       ev.push({ nombre: `tensa:${c.id}`, direccion: -1, terminal: true, g: (t, y) => r.evaluar(y).C });
     }
@@ -476,7 +479,7 @@ function eventosDelModo(S, modo, restr, y0) {
     const R = radio(S, i) + radio(S, j);
     if (!(R > 0)) continue;
     if (modo.pares[`${i}:${j}`]) {
-      ev.push({ nombre: `separa:${i}:${j}`, direccion: -1, terminal: true, g: (t, y) => dinamica(S, modo, y, restr).lambdas[`par:${i}:${j}`] ?? 0 });
+      ev.push({ nombre: `separa:${i}:${j}`, direccion: -1, terminal: true, g: (t, y) => din(y).lambdas[`par:${i}:${j}`] ?? 0 });
     } else {
       const h0 = Math.hypot(y0[4 * i] - y0[4 * j], y0[4 * i + 1] - y0[4 * j + 1]) - R;
       const off = h0 <= TOL_HUECO && h0 > -0.5 * R ? Math.min(h0, 0) - TOL_HUECO : 0;
@@ -709,8 +712,14 @@ export function simularMecanica(escena) {
     k++;
     const restr = restriccionesDelModo(S, modo);
     const m = modo;
+    // Caché de la última evaluación: f(tR, yR) y los eventos en tR comparten arreglo
+    /** @type {number[] | null} */
+    let ultY = null;
+    /** @type {any} */
+    let ultD = null;
+    const din = (/** @type {number[]} */ yy) => { if (yy !== ultY) { ultD = dinamica(S, m, yy, restr); ultY = yy; } return ultD; };
     const f = (tt, yy) => {
-      const { acc } = dinamica(S, m, yy, restr);
+      const { acc } = din(yy);
       const d = new Array(yy.length);
       for (let i = 0; i < S.n; i++) { d[4 * i] = yy[4 * i + 2]; d[4 * i + 1] = yy[4 * i + 3]; d[4 * i + 2] = acc[2 * i]; d[4 * i + 3] = acc[2 * i + 1]; }
       return d;
@@ -722,7 +731,7 @@ export function simularMecanica(escena) {
     const tHasta = silenciados.size ? Math.min(DUR, t + PAUSA) : DUR;
     const sol = integrar(f, t, y, tHasta, {
       rtol: RTOL, atol: RTOL * 1e-2, maxPasos: 200000, hMaxDe,
-      eventos: eventosDelModo(S, modo, restr, y).filter(e => !silenciados.has(e.nombre)),
+      eventos: eventosDelModo(S, modo, restr, y, din).filter(e => !silenciados.has(e.nombre)),
       hMax: escena.pasoMax ?? Math.max(1e-3, DUR / 400),
     });
     const tFin = sol.t[sol.t.length - 1];
