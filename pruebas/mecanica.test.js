@@ -666,3 +666,66 @@ describe('superficies que se mueven: sobre un cuerpo o llevadas por un conductor
     expect(balance(sim, 1)).toBeLessThan(1e-12);
   });
 });
+
+describe('movimiento impuesto por tramos de aceleración (perfil)', () => {
+  const balance = (sim, D) => {
+    const E0 = energiaMecanica(sim, 0).E;
+    let peor = 0;
+    for (let k = 0; k <= 200; k++) { const e = energiaMecanica(sim, D * k / 200); peor = Math.max(peor, Math.abs(e.E + e.Qc + e.Qi - e.W - E0)); }
+    return peor / Math.max(1, Math.abs(E0));
+  };
+
+  it('un cuerpo sigue una gráfica v–t por tramos: x es el área bajo la curva', () => {
+    // Acelera 40 s a 1.25 m/s² (hasta 50 m/s) y frena igual otros 40 s: 2000 m
+    const sim = simularMecanica({ duracion: 90, g: [0, 0], particulas: [{ id: 'C', m: 1, p: [0, 0], v: [0, 0], cinematica: true, perfil: [[40, 1.25, 0], [80, -1.25, 0]] }] });
+    for (const [t, x, v] of [[20, 250, 25], [40, 1000, 50], [60, 1750, 25], [80, 2000, 0], [90, 2000, 0]]) {
+      const s = estadoMecanica(sim, t)[0];
+      cerca(s.x, x, 1e-9); cerca(s.vx, v, 1e-9);
+    }
+  });
+
+  it('ascensor que arranca y frena: el bloque va pegado al piso y la cabina entrega m·g·Δy + ΔK', () => {
+    const m = 5;
+    const sim = simularMecanica({
+      duracion: 7,
+      particulas: [{ id: 'cabina', m: 1, p: [0, 0], v: [0, 0], cinematica: true, perfil: [[2, 0, 2], [5, 0, 0], [7, 0, -2]] }, { id: 'B', m, p: [0, 0], v: [0, 0] }],
+      superficies: [{ id: 'piso', tipo: 'segmento', a: [-1, 0], b: [1, 0], sobre: 'cabina' }],
+    });
+    expect(sim.eventos).toEqual([]);
+    // Mientras sube acelerando, la normal es m(g + a): W(2) = m(g + a)·Δy
+    cerca(energiaMecanica(sim, 2).W, m * (g + 2) * 4, 1e-9);
+    const B = estadoMecanica(sim, 7)[1];
+    cerca(B.y, 20, 1e-9); cerca(B.vy, 0, 1e-9);
+    cerca(energiaMecanica(sim, 7).W, m * g * 20, 1e-9);
+    expect(balance(sim, 7)).toBeLessThan(1e-9);
+  });
+
+  it('si el ascensor frena más fuerte que g, el bloque se despega del piso en ese instante', () => {
+    const sim = simularMecanica({
+      duracion: 1.5,
+      particulas: [{ id: 'cabina', m: 1, p: [0, 0], v: [0, 0], cinematica: true, perfil: [[1, 0, 2], [1.2, 0, -15]] }, { id: 'B', m: 1, p: [0, 0], v: [0, 0] }],
+      superficies: [{ id: 'piso', tipo: 'segmento', a: [-1, 0], b: [1, 0], sobre: 'cabina' }],
+    });
+    const desp = sim.eventos.find(e => e.clave.startsWith('despegue:'));
+    expect(desp).toBeDefined();
+    cerca(desp.t, 1, 1e-12);
+    // Después vuela libre: sube con 2 m/s y g
+    const B = estadoMecanica(sim, 1.1)[1];
+    cerca(B.vy, 2 - g * 0.1, 1e-9);
+    expect(balance(sim, 1.5)).toBeLessThan(1e-9);
+  });
+});
+
+describe('cuerpos cinemáticos y superficies fijas', () => {
+  it('un cinemático sobre el suelo fijo lo atraviesa sin eventos ni reacciones', () => {
+    const sim = simularMecanica({
+      duracion: 3,
+      particulas: [{ id: 'C', m: 1, p: [0, 0], v: [2, -1], cinematica: true }],
+      superficies: [{ id: 'suelo', tipo: 'segmento', a: [-5, 0], b: [20, 0] }],
+    });
+    expect(sim.incompleta).toBeNull();
+    expect(sim.eventos).toEqual([]);
+    const s = estadoMecanica(sim, 3)[0];
+    cerca(s.x, 6, 1e-12); cerca(s.y, -3, 1e-12);
+  });
+});

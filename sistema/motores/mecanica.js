@@ -40,6 +40,9 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {[number, number]} [F]    Fuerza constante aplicada (N)
  * @property {boolean} [cinematica]    Conductor de masa infinita que se mueve con velocidad constante v
  *   (una mano que sube despacio, una cinta): no siente fuerzas; su trabajo sale en energiaMecanica().W
+ * @property {Array<[number, number, number]>} [perfil] Solo con cinematica: aceleración impuesta por
+ *   tramos, [hasta t (s), ax, ay] en orden; después del último, aceleración nula (un ascensor que
+ *   arranca y frena, un coche que sigue una gráfica v–t)
  *
  * @typedef {Object} Superficie
  * @property {string} id
@@ -158,7 +161,44 @@ function preparar(e) {
   // masa infinita que se mueve a velocidad constante pase lo que pase: la mano
   // que sube un peso despacio, una cinta, un ascensor. Su masa inversa es 0.
   const im = P.map(p => (p.cinematica ? 0 : 1 / p.m));
-  return { P, idx, g, sup, con, n: P.length, im, b: e.b || 0, cAire: e.cAire || 0 };
+  // Tramos de aceleración impuesta de los cinemáticos, ordenados por su final
+  const perfiles = P.map(p => (p.cinematica && Array.isArray(p.perfil) && p.perfil.length
+    ? p.perfil.filter(f => Array.isArray(f) && f.length >= 3 && f.every(Number.isFinite)).map(f => [f[0], f[1], f[2]]).sort((a, b) => a[0] - b[0])
+    : null));
+  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0 };
+  actualizarImpuestas(S, 0);
+  return S;
+}
+
+/**
+ * Aceleración impuesta de cada cinemático en el tramo que empieza en t. Los
+ * tramos de la simulación se cortan en los cambios de tramo del perfil, así
+ * que dentro de cada uno es constante (no hace falta pasar t a la dinámica).
+ * @param {any} S @param {number} t
+ */
+function actualizarImpuestas(S, t) {
+  S.perfiles.forEach((pf, i) => {
+    if (!pf) return;
+    const k = pf.find(f => t < f[0] - 1e-12);
+    S.aImp[i] = k ? [k[1], k[2]] : [0, 0];
+  });
+}
+/** Próximo cambio de tramo de algún perfil después de t (Infinity si no hay). @param {any} S @param {number} t */
+function proximoCorte(S, t) {
+  let c = Infinity;
+  for (const pf of S.perfiles) if (pf) for (const f of pf) if (f[0] > t + 1e-12) { c = Math.min(c, f[0]); break; }
+  return c;
+}
+
+/**
+ * ¿La partícula i y la superficie no interactúan? Un cuerpo no choca con su
+ * propia superficie, y un cinemático no siente una superficie fija o llevada
+ * por otro cinemático: ninguno de los dos puede ceder (la fila de la
+ * restricción sería nula).
+ * @param {any} S @param {number} i @param {any} sup
+ */
+function ajenos(S, i, sup) {
+  return sup.j === i || (S.im[i] === 0 && (sup.j < 0 || S.im[sup.j] === 0));
 }
 
 /** Estado inicial empaquetado [x, y, vx, vy] por partícula. */
@@ -499,7 +539,11 @@ function dinamica(S, modo, y, restr) {
     }
     const k = ev.length;
     const a0 = new Array(2 * n);
-    for (let i = 0; i < n; i++) { a0[2 * i] = F[2 * i] * im[i]; a0[2 * i + 1] = F[2 * i + 1] * im[i]; }
+    for (let i = 0; i < n; i++) {
+      // Un cinemático lleva la aceleración de su perfil (cero si no tiene)
+      if (S.P[i].cinematica) { a0[2 * i] = S.aImp[i][0]; a0[2 * i + 1] = S.aImp[i][1]; continue; }
+      a0[2 * i] = F[2 * i] * im[i]; a0[2 * i + 1] = F[2 * i + 1] * im[i];
+    }
     let lam = [];
     if (k) {
       // (J M⁻¹ Jᵀ) λ = −J a0 − J̇v − 2α Ċ − β² C
@@ -548,7 +592,7 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
   // rueda por el suelo puede chocar con la pared)
   for (let i = 0; i < n; i++) {
     S.sup.forEach((sup, js) => {
-      if (modo.contactos[`${i}:${js}`] || sup.j === i) return;
+      if (modo.contactos[`${i}:${js}`] || ajenos(S, i, sup)) return;
       const r = restriccionSuperficie(sup, i, radio(S, i));
       const C0 = r.evaluar(y0).C, dentro0 = margenSuperficie(sup, puntoRel(sup, y0, i)) >= 0;
       // Un hueco inicial nulo o negativo no cambiaría de signo: se mide desde él
@@ -787,7 +831,7 @@ export function simularMecanica(escena) {
   // Contactos iniciales: partícula apoyada sobre una superficie (C ≈ 0 y sin velocidad hacia fuera)
   S.sup.forEach((sup, js) => {
     for (let i = 0; i < S.n; i++) {
-      if (sup.j === i) continue;
+      if (ajenos(S, i, sup)) continue;
       const { C, Cp } = restriccionSuperficie(sup, i, radio(S, i)).evaluar(y);
       if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9 && dentroDeSuperficie(sup, puntoRel(sup, y, i))) modo.contactos[`${i}:${js}`] = { i, sup: js, pegado: false };
     }
@@ -948,7 +992,7 @@ export function simularMecanica(escena) {
       for (let i = 0; i < S.n; i++) {
         const ri = radio(S, i);
         S.sup.forEach((sup, js) => {
-          if (sup.j === i) return;     // un cuerpo no choca con su propia superficie
+          if (ajenos(S, i, sup)) return;     // su propia superficie, o dos cuerpos que no pueden empujarse
           const clave = `${i}:${js}`, actual = modo.contactos[clave], p = puntoRel(sup, y, i);
           const { C, Cp } = restriccionSuperficie(sup, i, ri).evaluar(y);
           if (actual) {
@@ -993,7 +1037,7 @@ export function simularMecanica(escena) {
     }
     for (let i = 0; i < S.n; i++) {
       S.sup.forEach((sup, js) => {
-        if (sup.j === i) return;
+        if (ajenos(S, i, sup)) return;
         const clave = `${i}:${js}`, p = puntoRel(sup, y, i);
         if (modo.contactos[clave] || excluir.has('sup:' + clave) || margenSuperficie(sup, p) < 0) return;
         const e = restriccionSuperficie(sup, i, radio(S, i)).evaluar(y);
@@ -1036,6 +1080,29 @@ export function simularMecanica(escena) {
   resolverSimultaneos(false);
   revisarDespegues();
   proyectarPosiciones();
+
+  /** Anota como eventos los apoyos, pares y cuerdas que se perdieron en este instante (salvo «excepto»). */
+  const anotarPerdidas = (activasAntes, excepto) => {
+    const activasDespues = activas(modo);
+    for (const a of activasAntes) {
+      if (activasDespues.has(a) || a === excepto) continue;
+      const [tipo, ...resto2] = a.split(':');
+      let nombreEv = '', claveEv = '';
+      if (tipo === 'contacto') {
+        const i = Number(resto2[0]), sup = S.sup[Number(resto2[1])];
+        const borde = margenSuperficie(sup, puntoRel(sup, y, i)) <= 1e-6;
+        nombreEv = borde ? `Sale del borde (${S.P[i].id})` : `Se despega (${S.P[i].id})`;
+        claveEv = `${borde ? 'fin' : 'despegue'}:${resto2.join(':')}`;
+      } else if (tipo === 'par') {
+        nombreEv = `Se separan ${S.P[Number(resto2[0])].id} y ${S.P[Number(resto2[1])].id}`;
+        claveEv = `separa:${resto2.join(':')}`;
+      } else {
+        nombreEv = `La cuerda ${resto2.join(':')} se afloja`;
+        claveEv = `floja:${resto2.join(':')}`;
+      }
+      eventos.push({ t, nombre: nombreEv, clave: claveEv, perdida: 0, y: y.slice() });
+    }
+  };
 
   // Los eventos del clavo no son monótonos (cambian de forma al entrar en el
   // alcance de la cuerda): con clavos, el paso se acota también por la duración
@@ -1081,7 +1148,9 @@ export function simularMecanica(escena) {
     const silenciados = silencio;
     silenciadosActuales = silenciados;
     silencio = new Set();
-    const tHasta = silenciados.size ? Math.min(DUR, t + PAUSA) : DUR;
+    // Cada tramo acaba como muy tarde en el próximo cambio de aceleración impuesta
+    actualizarImpuestas(S, t);
+    const tHasta = Math.min(silenciados.size ? Math.min(DUR, t + PAUSA) : DUR, proximoCorte(S, t));
     const sol = integrar(f, t, y, tHasta, {
       rtol: RTOL, atol: RTOL * 1e-2, maxPasos: Math.max(1, PRESUPUESTO - pasosUsados), hMaxDe,
       detener: () => reloj() - inicioReloj > TIEMPO_MAX,
@@ -1102,6 +1171,15 @@ export function simularMecanica(escena) {
         break;
       }
       if (sol.estado !== 'completo') { incompleta = { t, motivo: `El integrador se detuvo (${sol.estado}).` }; break; }
+      // Cambio de aceleración impuesta: un apoyo que sostenía puede pasar a
+      // tirar (un ascensor que frena más que g) y debe soltarse aquí
+      if (t < DUR - 1e-12 && Math.abs(t - proximoCorte(S, t - 1e-9)) <= 1e-9) {
+        actualizarImpuestas(S, t);
+        modo = copiarModo(modo);
+        const antes = activas(modo);
+        revisarDespegues();
+        anotarPerdidas(antes, '');
+      }
       continue;     // llegó al final, o al final de la pausa
     }
     const ev = sol.eventos[sol.eventos.length - 1];
@@ -1222,25 +1300,7 @@ export function simularMecanica(escena) {
     // Apoyos, pares y cuerdas que se pierden en este instante por otra causa
     // (un choque simultáneo, una superficie nueva): también son eventos
     const propia = { despegue: 'contacto', fin: 'contacto', separa: 'par', floja: 'cuerda' }[partes[0]];
-    const activasDespues = activas(modo);
-    for (const a of activasAntes) {
-      if (activasDespues.has(a) || (propia && a === `${propia}:${partes.slice(1).join(':')}`)) continue;
-      const [tipo, ...resto2] = a.split(':');
-      let nombreEv = '', claveEv = '';
-      if (tipo === 'contacto') {
-        const i = Number(resto2[0]), sup = S.sup[Number(resto2[1])];
-        const borde = margenSuperficie(sup, puntoRel(sup, y, i)) <= 1e-6;
-        nombreEv = borde ? `Sale del borde (${S.P[i].id})` : `Se despega (${S.P[i].id})`;
-        claveEv = `${borde ? 'fin' : 'despegue'}:${resto2.join(':')}`;
-      } else if (tipo === 'par') {
-        nombreEv = `Se separan ${S.P[Number(resto2[0])].id} y ${S.P[Number(resto2[1])].id}`;
-        claveEv = `separa:${resto2.join(':')}`;
-      } else {
-        nombreEv = `La cuerda ${resto2.join(':')} se afloja`;
-        claveEv = `floja:${resto2.join(':')}`;
-      }
-      eventos.push({ t, nombre: nombreEv, clave: claveEv, perdida: 0, y: y.slice() });
-    }
+    anotarPerdidas(activasAntes, propia ? `${propia}:${partes.slice(1).join(':')}` : '');
   }
   if (!incompleta && t < DUR - 1e-9) incompleta = { t, motivo: `Se alcanzó el límite de ${LIMITE} eventos.` };
   return { tramos, eventos, escena, S: { n: S.n, ids: S.P.map(p => p.id), m: S.P.map(p => p.m) }, duracion: DUR, tFin: t, incompleta };
