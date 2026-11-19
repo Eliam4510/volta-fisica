@@ -9,6 +9,10 @@
 import {
   K_COULOMB as K, campo, potencial, simularCargas, estadoEn, energiaEstado, componentesVelocidad,
 } from '../motores/electrostatica.js';
+import { aCSV, muestrear } from '../nucleo/csv.js';
+import { crearEscena, numero, texto, magnitud } from '../nucleo/escena.js';
+import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
 
 (function () {
   'use strict';
@@ -29,6 +33,8 @@ import {
     k:  { sim: 'k', val: K, constante: true, u: 'N·m²/C²', si: 1 },
   };
   const vsi = n => V[n].val * V[n].si;
+  const VAL0 = Object.fromEntries(Object.entries(V).map(([k, d]) => [k, d.val]));
+  const NOMBRES_VAR = Object.keys(V).filter(k => !V[k].constante);
 
   // ---------------------------------------------------------------------
   // Escena. Una magnitud ligada a una variable se guarda como {v, f}
@@ -619,6 +625,60 @@ import {
     lt.duracion = DUR; lt.simulado = SIM.tFin;
     lt.eventos = SIM.eventos.filter(e => e.t > 0).map(e => ({ t: e.t, nombre: e.nombre }));
     todo();
+    if (autoguardar) autoguardado.guardar('electrostatica', escenaActual());
+  }
+
+  // ---------------------------------------------------------------------
+  // Escena: guardar, abrir y autoguardado (formato .volta). Lo que llega de
+  // un archivo se valida y se acota antes de usarlo: los nombres se insertan
+  // en el marcado y las magnitudes van al integrador.
+  // ---------------------------------------------------------------------
+  let autoguardar = false;
+  function escenaActual() {
+    return crearEscena({ modulo: 'electrostatica', espacio: 'cargas-y-campos', titulo: 'Cargas y campos', datos: JSON.parse(instantanea()) });
+  }
+  function cargaSegura(c, libre) {
+    const mag = (v, min, max) => magnitud(v, NOMBRES_VAR, NaN, min, max);
+    const ok = v => typeof v === 'object' || Number.isFinite(v);
+    const id = libre ? 'P' : texto(c.id, '', 12);
+    const q = mag(c.q, -1, 1), x = mag(c.x, -1e3, 1e3), y = mag(c.y, -1e3, 1e3);
+    if (!id || !ok(q) || !ok(x) || !ok(y)) return null;
+    if (typeof q === 'number' ? q === 0 : q.f === 0) return null;
+    const carga = { id, nombre: texto(c.nombre, libre ? 'Partícula' : id), fija: !libre, q, x, y };
+    if (!libre) return carga;
+    const m = mag(c.m, 1e-9, 1e6), v0 = mag(c.v0, 0, 1e4);
+    if (!ok(m) || (typeof m === 'object' && !(m.f > 0))) return null;
+    return { ...carga, m, v0: ok(v0) ? v0 : 0, alfa: numero(c.alfa, 0, -360, 360) };
+  }
+  function datosSeguros(d = {}) {
+    const vars = Object.fromEntries(NOMBRES_VAR.map(k => [k, numero(d.vars?.[k], VAL0[k], V[k].min, V[k].max)]));
+    const base = escenaInicial(), e = d.escena && typeof d.escena === 'object' ? d.escena : {};
+    const fuente = Array.isArray(e.cargas) ? e.cargas.slice(0, 40).filter(c => c && typeof c === 'object') : [];
+    const ids = new Set(['P']), fijas = [];
+    for (const c of fuente.filter(c => c.fija !== false)) {
+      const r = cargaSegura(c, false);
+      if (r && !ids.has(r.id)) { ids.add(r.id); fijas.push(r); }
+    }
+    const libre = fuente.filter(c => c.fija === false).map(c => cargaSegura(c, true)).find(Boolean);
+    // Sin partícula válida no hay nada que simular: se conserva la del examen
+    const cargas = libre ? [...fijas, libre] : base.cargas;
+    const sonda = { x: numero(e.sonda?.x, base.sonda.x, -1e3, 1e3), y: numero(e.sonda?.y, base.sonda.y, -1e3, 1e3) };
+    return { escena: { cargas, sonda }, vars };
+  }
+  function cargarDatos(d) {
+    const antes = instantanea();
+    restaurar(JSON.stringify(d)); registrar(antes); irA(0); encuadrar(); zoomTexto(); dibujar();
+  }
+  function guardar() {
+    guardarEscena(escenaActual()).then(r => { if (r) aviso('Escena guardada'); }, err => aviso(`No se pudo guardar: ${err}`));
+  }
+  function abrir() {
+    abrirEscena({ modulo: 'electrostatica' }).then(e => { cargarDatos(datosSeguros(e.datos)); aviso(`Escena abierta: ${texto(e.titulo, 'sin título', 60)}`); })
+      .catch(err => aviso(texto(err.message, 'No se pudo abrir la escena.', 200)));
+  }
+  function escenaDelExamen() {
+    cargarDatos({ escena: escenaInicial(), vars: Object.fromEntries(NOMBRES_VAR.map(k => [k, VAL0[k]])) });
+    aviso('Escena inicial: MEXT 2020 P2');
   }
 
   // ---------------------------------------------------------------------
@@ -757,13 +817,17 @@ import {
   // ---------------------------------------------------------------------
   // Exportación
   // ---------------------------------------------------------------------
-  function descargar(nombre, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
+  // CSV con precisión completa y BOM (nucleo/csv.js) y diálogo nativo
+  // «Guardar como» en la aplicación (componentes/exportar.js). Muestras cada
+  // 0.01 s hasta donde llega la simulación (un choque la termina antes).
   function exportarCSV() {
-    let txt = 't (s),x (m),y (m),vx (m/s),vy (m/s),Ek (J),U (J)\n';
-    for (let k = 0; k * 0.01 <= DUR + 1e-9; k++) { const tt = k * 0.01, s = estado(tt), e = energia(s); txt += [tt.toFixed(2), s.x, s.y, s.vx, s.vy, e.K, e.U].map(n => (typeof n === 'number' ? n.toPrecision(10) : n)).join(',') + '\n'; }
-    descargar('electrostatica_mext_2020_p2.csv', new Blob([txt], { type: 'text/csv' }));
+    const filas = muestrear(0, SIM.tFin, 0.01, tt => { const s = estado(tt), e = energia(s); return [tt, s.x, s.y, s.vx, s.vy, e.K, e.U]; });
+    const csv = aCSV(['t (s)', 'x (m)', 'y (m)', 'vx (m/s)', 'vy (m/s)', 'Ek (J)', 'U (J)'], filas);
+    descargarTexto('cargas-y-campos-datos.csv', csv).then(r => { if (r) aviso(`Datos exportados: ${filas.length} filas`); }, () => {});
   }
-  function exportarImagen() { lienzo.toBlob(b => descargar('electrostatica_lienzo.png', b)); }
+  function exportarImagen() {
+    descargarLienzo(lienzo, 'cargas-y-campos.png').then(r => { if (r) aviso('Imagen exportada'); });
+  }
   $('#b-exportar').addEventListener('click', exportarCSV);
 
   // ---------------------------------------------------------------------
@@ -777,6 +841,9 @@ import {
     ['i-encuadrar', 'Encuadrar todo', 'F', () => { encuadrar(); zoomTexto(); dibujar(); }],
     ['i-deshacer', 'Deshacer', 'Ctrl Z', deshacer],
     ['i-rehacer', 'Rehacer', 'Ctrl Y', rehacer],
+    ['i-guardar', 'Guardar escena', 'Ctrl S', guardar],
+    ['i-carpeta', 'Abrir escena', 'Ctrl O', abrir],
+    ['i-reiniciar', 'Volver a la escena del examen (MEXT 2020 P2)', '', escenaDelExamen],
     ['i-tema-oscuro', 'Cambiar tema claro u oscuro', '', () => Volta.ponerTema(document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')],
     ['o-carga-positiva', 'Añadir carga positiva', '', () => { irA(0); document.querySelector('[data-objeto="carga+"]').click(); }],
     ['o-carga-negativa', 'Añadir carga negativa', '', () => { irA(0); document.querySelector('[data-objeto="carga-"]').click(); }],
@@ -817,6 +884,8 @@ import {
     if (ev.target.matches && ev.target.matches('input, textarea')) return;
     if (ctrl && tecla === 'z') { ev.preventDefault(); if (ev.shiftKey) rehacer(); else deshacer(); return; }
     if (ctrl && tecla === 'y') { ev.preventDefault(); rehacer(); return; }
+    if (ctrl && tecla === 's') { ev.preventDefault(); guardar(); return; }
+    if (ctrl && tecla === 'o') { ev.preventDefault(); abrir(); return; }
     if (ctrl) return;
     if (ev.code === 'Space') { ev.preventDefault(); if (!ev.repeat) alternar(); espacioPulsado = true; }
     else if (ev.key === 'ArrowRight') irA(Math.min(DUR, t + 1 / 60));
@@ -843,6 +912,11 @@ import {
     if (q.get('malla') === '1') capas.malla = true;
     if (q.get('fuentes') === 'todas') vista.fuentes = 'todas';
     document.querySelectorAll('.capa-btn').forEach(b => b.setAttribute('aria-pressed', String(capas[b.dataset.capa])));
+    // Escena abierta desde Inicio, o la última sesión (no en capturas ni con parámetros)
+    const limpio = ![...q.keys()].length;
+    const previa = escenaPendiente('electrostatica') || (limpio ? autoguardado.leer('electrostatica', { modulo: 'electrostatica' }) : null);
+    if (previa) { const d = datosSeguros(previa.datos); escena = d.escena; for (const k in d.vars) V[k].val = d.vars[k]; }
+    autoguardar = limpio || !!previa;
     simular(); construirVariables();
     if (q.has('sel')) sel = q.get('sel');
     if (q.has('t')) t = Math.max(0, Math.min(DUR, parseFloat(q.get('t'))));

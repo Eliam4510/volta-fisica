@@ -34,13 +34,13 @@ export function serializar(escena) {
 /**
  * Lee y valida un archivo de escena. Lanza un Error con un mensaje que dice
  * qué pasó y cómo arreglarlo.
- * @param {string} texto
+ * @param {string} contenido
  * @param {{modulo?: string}} [esperado]
  * @returns {Escena}
  */
-export function leerEscena(texto, esperado = {}) {
+export function leerEscena(contenido, esperado = {}) {
   let obj;
-  try { obj = JSON.parse(texto.replace(/^﻿/, '')); }
+  try { obj = JSON.parse(contenido.replace(/^﻿/, '')); }
   catch { throw new Error('El archivo no es una escena de Volta: no tiene formato JSON válido.'); }
   if (!obj || typeof obj !== 'object' || obj.formato !== FORMATO) {
     throw new Error('El archivo no es una escena de Volta: le falta la cabecera "volta-escena".');
@@ -55,7 +55,7 @@ export function leerEscena(texto, esperado = {}) {
     throw new Error('La escena está incompleta: le faltan el módulo o los datos.');
   }
   if (esperado.modulo && obj.modulo !== esperado.modulo) {
-    throw new Error(`Esta escena es del módulo «${obj.modulo}»; ábrela desde ese módulo.`);
+    throw new Error(`Esta escena es del módulo «${texto(obj.modulo, 'desconocido', 40)}»; ábrela desde ese módulo.`);
   }
   return obj;
 }
@@ -68,4 +68,38 @@ export function leerEscena(texto, esperado = {}) {
 export function numero(v, defecto, min = -Infinity, max = Infinity) {
   const x = typeof v === 'number' && Number.isFinite(v) ? v : defecto;
   return Math.min(max, Math.max(min, x));
+}
+
+/**
+ * Texto corto de los datos de una escena (nombres de objetos). Las pantallas
+ * lo insertan en el marcado, así que se quitan los caracteres que abren
+ * etiquetas o atributos y los de control.
+ * @param {unknown} v @param {string} defecto @param {number} [max=24]
+ */
+export function texto(v, defecto, max = 24) {
+  if (typeof v !== 'string') return defecto;
+  // eslint-disable-next-line no-control-regex
+  const limpio = v.replace(/[<>&"'`\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
+  return limpio || defecto;
+}
+
+/**
+ * Magnitud que puede ser un número en SI o estar ligada a una variable de la
+ * escena como {v: nombre, f: factor} (valor = f · variable). Devuelve la
+ * magnitud saneada o `defecto` si no es válida.
+ * @param {unknown} p
+ * @param {string[]} variables  nombres de variables admitidos
+ * @param {number | {v: string, f: number}} defecto
+ * @param {number} [min] @param {number} [max]  cota del número libre (SI)
+ * @returns {number | {v: string, f: number}}
+ */
+export function magnitud(p, variables, defecto, min = -Infinity, max = Infinity) {
+  if (typeof p === 'number') return Number.isFinite(p) ? Math.min(max, Math.max(min, p)) : defecto;
+  if (p && typeof p === 'object') {
+    const o = /** @type {{v?: unknown, f?: unknown}} */ (p);
+    if (typeof o.v === 'string' && variables.includes(o.v) && typeof o.f === 'number' && Number.isFinite(o.f) && Math.abs(o.f) <= 1e3) {
+      return { v: o.v, f: o.f };
+    }
+  }
+  return defecto;
 }
