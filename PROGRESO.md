@@ -29,17 +29,17 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] `nucleo/unidades.js`: campos con unidades y expresiones, análisis dimensional (Mecánica).
 - [x] Diálogos nativos de Windows para guardar, exportar y abrir.
 - [x] `npm run tipos` (TypeScript sobre núcleo y motores).
-- [ ] Añadir `npm run tipos` a CI cuando Electrostática pase la revisión de tipos.
+- [x] `npm run tipos` en CI.
 
 ### Mecánica
 - [x] Motor de proyectiles extraído (`sistema/motores/proyectiles.js`) con pruebas
   contra 2019 P3, 2019 1-(2), lanzamiento oblicuo y balance de energía.
-- [ ] Motor numérico general (Dormand–Prince + eventos) para superficies
-  arbitrarias, varias partículas, resortes y cuerdas.
+- [x] Motor general (`motores/mecanica.js`): contactos, cuerdas, varillas, poleas, resortes, fricción, clavos, choques; 15 pruebas analíticas.
+- [ ] Caja de arena de Mecánica (`mecanica-laboratorio.html`) sobre el motor general (agente en curso).
 
 ### Otros módulos
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
-- [ ] Motor de Electrostática + `nucleo/integradores.js` (agente en curso).
+- [x] Motor de Electrostática + `nucleo/integradores.js` (59 pruebas).
 - [ ] Gravitación (agente en curso). Circuitos (agente en curso).
 - [ ] Gravitación, Circuitos, Ondas, Óptica, Magnetismo, Moderna.
 
@@ -54,9 +54,9 @@ literatura de sistemas híbridos (detección de eventos, Zeno):
 | Hecho | Con e ≈ 1 el motor agotaba eventos y la partícula quedaba congelada (Zeno) | Regla post-Zeno con prueba (v0.2.0) |
 | Hecho | Deshacer y rehacer de Mecánica no hacían nada | Historial (v0.2.0) |
 | Bug | La paleta de objetos de Mecánica no coloca nada; el campo Masa no afecta la simulación | Masa editable con unidades; paleta cuando exista el motor general |
-| Exactitud | Mecánica solo resuelve una partícula con superficies fijas por fórmulas | Motor general con DOPRI5 + eventos (`nucleo/integradores.js`): resortes, cuerdas, fricción, varias partículas |
-| Exactitud | Falta validar péndulo simple (periodo exacto con integral elíptica), choques 2D elásticos (momento y energía) | Pruebas cuando exista el motor general |
-| Exactitud | Conservación del momento lineal sin pruebas | Pruebas de choques entre cuerpos |
+| Hecho | Mecánica solo resolvía una partícula con fórmulas | Motor general con DOPRI5 + eventos |
+| Hecho | Péndulo con integral elíptica, choques 2D | Pruebas en `pruebas/mecanica.test.js` |
+| Hecho | Conservación del momento | Pruebas de choques 1D y 2D |
 | Función | Sin modo multitud: no hay fase amplia de colisiones (rejilla uniforme o barrido y poda) ni fase estrecha (círculo-segmento, SAT) | Diseñar el modo multitud con paso fijo y subpasos (estilo Soft Step) |
 | Hecho | Campos numéricos sin unidades ni expresiones | `nucleo/unidades.js` (Mecánica); falta llevarlo a los demás módulos |
 | Función | Exportar CSV y guardar escenas solo en Mecánica | Llevarlo a Electrostática, Termodinámica y Gravitación |
@@ -87,3 +87,4 @@ literatura de sistemas híbridos (detección de eventos, Zeno):
    `gh release create vX.Y.Z --title "Volta X.Y.Z" --notes-file notas.md`.
 5. El flujo `release.yml` compila y adjunta instalador y portátil.
 - 2026-11-19 01:20 — Unidades y expresiones, diálogos nativos, motor de gas; CI separado en pruebas y compilación.
+- 2026-11-19 01:50 — Integradores, Electrostática y motor general de Mecánica con pruebas (229). Agentes: gravitación, circuitos, caja de arena de Mecánica.
