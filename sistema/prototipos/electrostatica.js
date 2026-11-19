@@ -1,10 +1,10 @@
 /* ==========================================================================
-   Volta · prototipo de Electrostática — "Cargas y campos"
+   Volta · Electrostática — espacio «Cargas y campos»
    Escena MEXT 2020 P2: dos cargas +q fijas en A(−a, 0) y B(a, 0) y una
    partícula de carga −q y masa m que se suelta en C(0, a). La física
    (Coulomb 1/r², superposición, Dormand–Prince 5(4) con salida densa y
    eventos por Brent) vive en el motor puro sistema/motores/electrostatica.js,
-   probado aparte. Misma estructura que el prototipo de Mecánica.
+   probado aparte. Misma estructura que la pantalla de Mecánica.
    ========================================================================== */
 import {
   K_COULOMB as K, campo, potencial, simularCargas, estadoEn, energiaEstado, componentesVelocidad,
@@ -776,7 +776,7 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
     const b = ev.target.closest('.herr'); if (!b) return;
     const tipo = b.dataset.objeto;
     setTimeout(() => {
-      if (tipo !== 'carga+' && tipo !== 'carga-') { soltarHerramienta(); aviso('Este prototipo coloca cargas puntuales; el resto de objetos llega con el motor completo.'); return; }
+      if (tipo !== 'carga+' && tipo !== 'carga-') { soltarHerramienta(); aviso('Este espacio coloca cargas puntuales; conductores, dieléctricos y placas llegan en una próxima versión.'); return; }
       if (herramienta === tipo) { soltarHerramienta(); return; }
       herramienta = tipo; aviso('Haz clic en el lienzo para colocar la carga. Esc cancela.');
     }, 0);
@@ -787,7 +787,7 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
     setTimeout(() => {
       document.querySelectorAll('#paleta-instrumentos .herr').forEach(x => x.setAttribute('aria-pressed', 'false'));
       if (tipo === 'sonda') seleccionar('sonda');
-      else aviso('Este prototipo trae la sonda de campo; los demás instrumentos llegan con el motor completo.');
+      else aviso('Este espacio trae la sonda de campo; los demás instrumentos llegan en una próxima versión.');
     }, 0);
   });
   function soltarHerramienta() { herramienta = null; document.querySelectorAll('#paleta-objetos .herr').forEach(b => b.setAttribute('aria-pressed', 'false')); lienzo.style.cursor = 'default'; }
