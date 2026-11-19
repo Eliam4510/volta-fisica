@@ -26,7 +26,10 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Guardar, abrir y autoguardar escenas (`.volta`) — Mecánica e Inicio.
 - [x] Exportar CSV y PNG — Mecánica.
 - [x] Deshacer y rehacer — Mecánica.
-- [ ] `nucleo/unidades.js`: campos con unidades y expresiones, análisis dimensional.
+- [x] `nucleo/unidades.js`: campos con unidades y expresiones, análisis dimensional (Mecánica).
+- [x] Diálogos nativos de Windows para guardar, exportar y abrir.
+- [x] `npm run tipos` (TypeScript sobre núcleo y motores).
+- [ ] Añadir `npm run tipos` a CI cuando Electrostática pase la revisión de tipos.
 
 ### Mecánica
 - [x] Motor de proyectiles extraído (`sistema/motores/proyectiles.js`) con pruebas
@@ -35,7 +38,9 @@ física > funciones faltantes > rendimiento > pulido.
   arbitrarias, varias partículas, resortes y cuerdas.
 
 ### Otros módulos
-- [ ] Extraer motores de Electrostática y Termodinámica con pruebas.
+- [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
+- [ ] Motor de Electrostática + `nucleo/integradores.js` (agente en curso).
+- [ ] Gravitación (agente en curso). Circuitos (agente en curso).
 - [ ] Gravitación, Circuitos, Ondas, Óptica, Magnetismo, Moderna.
 
 ## Autocrítica 1 (2026-11-19 01:05)
@@ -53,10 +58,10 @@ literatura de sistemas híbridos (detección de eventos, Zeno):
 | Exactitud | Falta validar péndulo simple (periodo exacto con integral elíptica), choques 2D elásticos (momento y energía) | Pruebas cuando exista el motor general |
 | Exactitud | Conservación del momento lineal sin pruebas | Pruebas de choques entre cuerpos |
 | Función | Sin modo multitud: no hay fase amplia de colisiones (rejilla uniforme o barrido y poda) ni fase estrecha (círculo-segmento, SAT) | Diseñar el modo multitud con paso fijo y subpasos (estilo Soft Step) |
-| Función | Campos numéricos sin unidades ni expresiones (`72 km/h`, `2*h`) | `nucleo/unidades.js` con análisis dimensional |
+| Hecho | Campos numéricos sin unidades ni expresiones | `nucleo/unidades.js` (Mecánica); falta llevarlo a los demás módulos |
 | Función | Exportar CSV y guardar escenas solo en Mecánica | Llevarlo a Electrostática, Termodinámica y Gravitación |
 | Rendimiento | Sin pruebas de rendimiento | `vitest bench` de los motores |
-| Pulido | Guardado con descarga del navegador (va a Descargas) | Diálogo nativo con tauri-plugin-dialog |
+| Hecho | Guardado con descarga del navegador | Diálogos nativos (tauri-plugin-dialog y fs) |
 
 ## Problemas conocidos
 
@@ -81,3 +86,4 @@ literatura de sistemas híbridos (detección de eventos, Zeno):
 4. `node herramientas/notas-release.mjs X.Y.Z > notas.md` y
    `gh release create vX.Y.Z --title "Volta X.Y.Z" --notes-file notas.md`.
 5. El flujo `release.yml` compila y adjunta instalador y portátil.
+- 2026-11-19 01:20 — Unidades y expresiones, diálogos nativos, motor de gas; CI separado en pruebas y compilación.
