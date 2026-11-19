@@ -899,16 +899,19 @@ export function estadoMecanica(sim, t) {
 }
 
 /**
- * Energía mecánica en t: cinética, potencial gravitatoria y elástica.
+ * Energía mecánica en t: cinética, potencial gravitatoria, elástica y la de
+ * las fuerzas constantes aplicadas (U_F = −F·r, conservativa como un campo
+ * uniforme: así el trabajo de F no se confunde con energía disipada).
  * @param {ReturnType<typeof simularMecanica>} sim @param {number} t
  */
 export function energiaMecanica(sim, t) {
   const e = sim.escena, g = e.g ?? [0, -9.8], est = estadoMecanica(sim, t);
-  let K = 0, Ug = 0, Ue = 0;
+  let K = 0, Ug = 0, Ue = 0, UF = 0;
   est.forEach((s, i) => {
-    const m = sim.S.m[i];
+    const m = sim.S.m[i], F = e.particulas[i].F;
     K += 0.5 * m * (s.vx * s.vx + s.vy * s.vy);
     Ug -= m * (g[0] * s.x + g[1] * s.y);
+    if (F) UF -= F[0] * s.x + F[1] * s.y;
   });
   const pos = Object.fromEntries(est.map(s => [s.id, [s.x, s.y]]));
   for (const c of e.conectores || []) {
@@ -916,5 +919,5 @@ export function energiaMecanica(sim, t) {
     const pb = c.b != null ? pos[c.b] : c.ancla;
     Ue += 0.5 * c.k * (norm(sub(pos[c.a], pb)) - c.L0) ** 2;
   }
-  return { K, Ug, Ue, E: K + Ug + Ue };
+  return { K, Ug, Ue, UF, E: K + Ug + Ue + UF };
 }

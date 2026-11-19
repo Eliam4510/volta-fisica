@@ -7,6 +7,13 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Laboratorio de Mecánica: fuerza constante aplicada a una partícula
+  (módulo y dirección), con su vector en el lienzo y su energía potencial
+  U_F = −F·r en las lecturas, las gráficas y el CSV, para que su trabajo no
+  se cuente como energía disipada.
+
 ## [0.4.0] - 2026-11-19
 
 El Laboratorio de Mecánica: una caja de arena donde se construye y se

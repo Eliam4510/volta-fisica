@@ -175,7 +175,8 @@ export function normalizarEscena(d) {
     const nombre = texto(o.nombre, NOMBRE_CLASE[o.tipo === 'superficie' ? o.forma : o.tipo] || o.id, 32);
     if (o.tipo === 'particula') {
       n = { id: o.id, tipo: 'particula', nombre, m: numero(o.m, 1, 1e-6, 1e6), x: numero(o.x, 0, -1e6, 1e6), y: numero(o.y, 0, -1e6, 1e6),
-        v: numero(o.v, 0, 0, 1e5), ang: numero(o.ang, 0, -360, 360), radio: numero(o.radio, 0, 0, 100), sobre: typeof o.sobre === 'string' ? o.sobre : null };
+        v: numero(o.v, 0, 0, 1e5), ang: numero(o.ang, 0, -360, 360), radio: numero(o.radio, 0, 0, 100), sobre: typeof o.sobre === 'string' ? o.sobre : null,
+        F: numero(o.F, 0, 0, 1e9), angF: numero(o.angF, 0, -360, 360) };
     } else if (o.tipo === 'superficie' && ['suelo', 'pared', 'plano', 'segmento'].includes(o.forma)) {
       const a = num2(o.a, [0, 0]), b = num2(o.b, [1, 0]);
       if (largo(resta(b, a)) < 1e-6) continue;
@@ -298,7 +299,10 @@ export function aMotor(esc) {
   }
   const motor = {
     g: [esc.g * cosd(esc.gAng), esc.g * sind(esc.gAng)], b: esc.b, cAire: esc.cAire, eParticulas: esc.eParticulas, duracion: esc.duracion,
-    particulas: particulas.map((p, i) => ({ id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0 })),
+    particulas: particulas.map((p, i) => ({
+      id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0,
+      ...(p.F > 0 ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)] } : {}),
+    })),
     superficies: superficies.map(s => (s.forma === 'arco'
       ? { id: s.id, tipo: 'arco', c: [...s.c], r: s.r, cara: s.cara, e: s.e, mu: s.mu, muS: s.muS ?? s.mu, ...(s.a1 - s.a0 >= 360 - 1e-9 ? {} : { a0: s.a0 * DEG, a1: s.a1 * DEG }) }
       : { id: s.id, tipo: 'segmento', a: [...s.a], b: [...s.b], e: s.e, mu: s.mu, muS: s.muS ?? s.mu })),
@@ -422,6 +426,8 @@ export function fuerzasEn(sim, M, t) {
     const peso = [m * g[0], m * g[1]];
     F[2 * i] += peso[0]; F[2 * i + 1] += peso[1];
     if (largo(peso) > 0) lista[i].push({ tipo: 'peso', F: peso, valor: largo(peso) });
+    const Fa = mot.particulas[i].F;
+    if (Fa) { F[2 * i] += Fa[0]; F[2 * i + 1] += Fa[1]; lista[i].push({ tipo: 'aplicada', F: [...Fa], valor: largo(Fa) }); }
     const arr = [-(mot.b || 0) * v[0] - (mot.cAire || 0) * sp * v[0], -(mot.b || 0) * v[1] - (mot.cAire || 0) * sp * v[1]];
     F[2 * i] += arr[0]; F[2 * i + 1] += arr[1];
     if (largo(arr) > 1e-12) lista[i].push({ tipo: 'arrastre', F: arr, valor: largo(arr) });
@@ -688,7 +694,7 @@ function iniciar() {
   let sel = 'escena', hover = null, herramienta = null, arrastre = null, paneo = null, pendiente = null, cursor = null;
   let recalculoPendiente = false, lento = false, notaCerrada = false;
   const capas = { vectores: true, fuerzas: true, traza: true, estrobo: true, prevista: true, cotas: true };
-  const mostrar = { velocidad: true, componentes: false, aceleracion: false, peso: false, normal: true, tension: true, elastica: false, prevista: true };
+  const mostrar = { velocidad: true, componentes: false, aceleracion: false, peso: false, aplicada: true, normal: true, tension: true, elastica: false, prevista: true };
   const lienzo = $('#lienzo'), area = $('#area');
   const tz = new Trazo(lienzo);
   const params = new URLSearchParams(location.search);
@@ -975,8 +981,8 @@ function iniciar() {
   }
 
   // Fuerzas: símbolos de cada tipo (familia interacción) y casilla que las muestra
-  const SIMBOLO_F = { peso: ['P', ''], normal: ['N', ''], friccion: ['f', ''], tension: ['T', ''], elastica: ['F', 'e'], arrastre: ['F', 'a'] };
-  const CASILLA_F = { peso: 'peso', normal: 'normal', friccion: 'normal', tension: 'tension', elastica: 'elastica', arrastre: 'peso' };
+  const SIMBOLO_F = { peso: ['P', ''], aplicada: ['F', ''], normal: ['N', ''], friccion: ['f', ''], tension: ['T', ''], elastica: ['F', 'e'], arrastre: ['F', 'a'] };
+  const CASILLA_F = { peso: 'peso', aplicada: 'aplicada', normal: 'normal', friccion: 'normal', tension: 'tension', elastica: 'elastica', arrastre: 'peso' };
   let FUERZAS = null, tFuerzas = -1, simFuerzas = null;
   function fuerzasAhora() {
     if (!SIM) return null;
@@ -1156,6 +1162,7 @@ function iniciar() {
     aceleracion: { u: 'm/s²', dim: 'aceleracion' }, tiempo: { u: 's', dim: 'tiempo', def: 's' }, angulo: { u: '°', angulo: true },
     rigidez: { u: 'N/m', dim: [0, 1, -2, 0, 0, 0] }, amort: { u: 'N·s/m', dim: [0, 1, -1, 0, 0, 0] }, arrastre2: { u: 'N·s²/m²', dim: [-1, 1, 0, 0, 0, 0] },
     adim: { u: '', dim: 'adimensional' },
+    fuerza: { u: 'N', dim: 'fuerza', def: 'N' },
   };
   /** Lee un campo: número con unidad, expresión o variable (g). Un número solo va en la unidad del campo. */
   function leerCampo(textoCampo, tipoU) {
@@ -1186,6 +1193,7 @@ function iniciar() {
     return grupo('Mostrar',
       casilla('velocidad', 'Velocidad', 'f-movimiento') + casilla('componentes', 'Componentes de v', 'f-movimiento', true) +
       casilla('aceleracion', 'Aceleración', 'f-cambio') + casilla('peso', 'Peso', 'f-interaccion') +
+      (esc.objetos.some(o => o.tipo === 'particula' && o.F > 0) ? casilla('aplicada', 'Fuerza aplicada', 'f-interaccion') : '') +
       casilla('normal', 'Normal y fricción', 'f-interaccion') + casilla('tension', 'Tensión', 'f-interaccion') +
       casilla('elastica', 'Fuerza elástica', 'f-interaccion') + casilla('prevista', 'Trayectoria prevista', 'texto-3', true));
   }
@@ -1211,6 +1219,7 @@ function iniciar() {
       c += fila('Posición', doble(campo(`${o.id}.x`, p[0], 'longitud', 'x'), campo(`${o.id}.y`, p[1], 'longitud', 'y')));
       c += fila('Velocidad', doble(campo(`${o.id}.v`, o.v, 'velocidad', 'v'), campo(`${o.id}.ang`, o.ang, 'angulo', 'α', 'Ángulo desde el eje x|Direction')));
       c += fila('Radio', campo(`${o.id}.radio`, o.radio, 'longitud', 'r', 'Con radio, choca con otros discos y apoya su borde en las superficies; 0 es una partícula puntual|Radius'));
+      c += fila('Fuerza aplicada', doble(campo(`${o.id}.F`, o.F || 0, 'fuerza', 'F', 'Fuerza constante sobre la partícula durante toda la simulación; 0 la quita|Applied force'), campo(`${o.id}.angF`, o.angF || 0, 'angulo', 'β', 'Dirección de la fuerza desde el eje x|Direction')));
       if (o.sobre) c += fila('Apoyo', `<div class="apoyo"><span>Sobre ${conArticulo(nombreDe(o.sobre))}</span><button class="btn btn-compacto" data-accion-insp="soltar" data-ayuda="Deja de seguir a la superficie|Detach">Soltar</button></div>`);
       h += grupo('Condiciones iniciales', c);
       h += grupoMostrar();
@@ -1319,6 +1328,8 @@ function iniciar() {
       if (prop === 'radio') { if (!(v >= 0)) return 'El radio no puede ser negativo.'; o.radio = v; return; }
       if (prop === 'v') { if (!(v >= 0)) return 'Escribe la rapidez (positiva) y la dirección en α.'; o.v = v; return; }
       if (prop === 'ang') { o.ang = ((v + 180) % 360 + 360) % 360 - 180; return; }
+      if (prop === 'F') { if (!(v >= 0)) return 'Escribe el módulo de la fuerza (positivo) y su dirección en β.'; o.F = v; return; }
+      if (prop === 'angF') { o.angF = ((v + 180) % 360 + 360) % 360 - 180; return; }
       if (prop === 'x' || prop === 'y') {
         const p = posicionParticula(esc, o); p[prop === 'x' ? 0 : 1] = v;
         if (o.sobre) {
@@ -1485,7 +1496,7 @@ function iniciar() {
         const e = energiaMecanica(SIM, Math.min(t, tFinal())), e0 = energiaMecanica(SIM, 0);
         if (tit) tit.textContent = `Energía en t = ${fmt(t, 4)} s`;
         const r = x => sinRuido(x, escalaEnergia());
-        h += filaL('E', 'k', r(e.K), 'J') + filaL('U', 'g', r(e.Ug), 'J') + filaL('U', 'e', r(e.Ue), 'J') + filaL('E', '', r(e.E), 'J') + filaL('Q', '', r(e0.E - e.E), 'J');
+        h += filaL('E', 'k', r(e.K), 'J') + filaL('U', 'g', r(e.Ug), 'J') + filaL('U', 'e', r(e.Ue), 'J') + (hayFuerzaAplicada() ? filaL('U', 'F', r(e.UF), 'J') : '') + filaL('E', '', r(e.E), 'J') + filaL('Q', '', r(e0.E - e.E), 'J');
       }
     } else if (o.tipo === 'particula') {
       const i = M.indice[o.id], s = estadoEn(t)[i];
@@ -1576,11 +1587,12 @@ function iniciar() {
   let cacheE = null;
   /** Un valor que es ruido de redondeo frente a la escala de la escena se escribe como 0. */
   const sinRuido = (x, escala) => (Math.abs(x) < 1e-9 * Math.max(escala, 1e-300) ? 0 : x);
-  const escalaEnergia = () => (SIM ? Math.max(1e-12, ...energias().flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue)])) : 1);
+  const escalaEnergia = () => (SIM ? Math.max(1e-12, ...energias().flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF)])) : 1);
+  const hayFuerzaAplicada = () => !!(M && M.motor.particulas.some(p => p.F));
   function energias() {
     if (cacheE && cacheE.sim === SIM) return cacheE.datos;
     const E0 = energiaMecanica(SIM, 0).E;
-    const datos = MUESTRAS.map(m => { const e = energiaMecanica(SIM, m.t); return { t: m.t, K: e.K, Ug: e.Ug, Ue: e.Ue, E: e.E, Q: E0 - e.E }; });
+    const datos = MUESTRAS.map(m => { const e = energiaMecanica(SIM, m.t); return { t: m.t, K: e.K, Ug: e.Ug, Ue: e.Ue, UF: e.UF, E: e.E, Q: E0 - e.E }; });
     cacheE = { sim: SIM, datos };
     return datos;
   }
@@ -1589,15 +1601,18 @@ function iniciar() {
     const hayUe = d.some(x => Math.abs(x.Ue) > 1e-12), hayQ = d.some(x => Math.abs(x.Q) > 1e-9);
     const s = [{ tramos: cortar(x => [x.t, x.K]), familia: 'movimiento' }, { tramos: cortar(x => [x.t, x.Ug]), familia: 'cambio' }];
     if (hayUe) s.push({ tramos: cortar(x => [x.t, x.Ue]), familia: 'electrico' });
+    if (hayFuerzaAplicada()) s.push({ tramos: cortar(x => [x.t, x.UF]), familia: 'interaccion' });
+    document.querySelectorAll('.ley-uf').forEach(el => { el.hidden = !hayFuerzaAplicada(); });
     if (hayQ) s.push({ tramos: cortar(x => [x.t, x.Q]), familia: 'termico', patron: 'discontinuo' });
     s.push({ tramos: cortar(x => [x.t, x.E + x.Q]), familia: 'tinta', patron: 'punteado' });
     return s;
   }
   function energiaPanel() {
     const tf = tFinal(), e = energiaMecanica(SIM, Math.min(t, tf)), e0 = energiaMecanica(SIM, 0), Q = e0.E - e.E;
-    const filas = [['Cinética', 'f-movimiento', e.K], ['Potencial gravitatoria', 'f-cambio', e.Ug], ['Elástica', 'f-electrico', e.Ue], ['Disipada', 'f-termico', Q], ['Total inicial', 'tinta', e0.E]];
-    const d = energias(), maxAbs = Math.max(1e-12, ...d.flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.Q), Math.abs(x.E + x.Q)]));
-    const conSigno = d.some(x => x.Ug < -1e-12 || x.E + x.Q < -1e-12);
+    const filas = [['Cinética', 'f-movimiento', e.K], ['Potencial gravitatoria', 'f-cambio', e.Ug], ['Elástica', 'f-electrico', e.Ue],
+      ...(hayFuerzaAplicada() ? [['Potencial de la fuerza aplicada', 'f-interaccion', e.UF]] : []), ['Disipada', 'f-termico', Q], ['Total inicial', 'tinta', e0.E]];
+    const d = energias(), maxAbs = Math.max(1e-12, ...d.flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF), Math.abs(x.Q), Math.abs(x.E + x.Q)]));
+    const conSigno = d.some(x => x.Ug < -1e-12 || x.UF < -1e-12 || x.E + x.Q < -1e-12);
     $('#barras').className = 'barras' + (conSigno ? ' con-signo' : '');
     $('#barras').innerHTML = '<div class="barras-tit">Energía en t = ' + fmt(t, 4) + ' s</div>' + filas.map(([n, c, val]) => {
       const w = Math.min(100, Math.abs(val) / maxAbs * (conSigno ? 50 : 100));
@@ -2107,12 +2122,12 @@ function iniciar() {
     const tf = tFinal(), dt = Math.max(0.001, pasoAgradable(tf / 1000)), nom = M.particulas.map(p => p.nombre.replace(/\s+/g, '_'));
     const cols = ['t (s)'];
     nom.forEach(n => cols.push(`x_${n} (m)`, `y_${n} (m)`, `vx_${n} (m/s)`, `vy_${n} (m/s)`, `|v|_${n} (m/s)`));
-    cols.push('Ek (J)', 'Ug (J)', 'Ue (J)', 'E (J)', 'Disipada (J)');
+    cols.push('Ek (J)', 'Ug (J)', 'Ue (J)', 'UF (J)', 'E (J)', 'Disipada (J)');
     const E0 = energiaMecanica(SIM, 0).E;
     const filas = muestrear(0, tf, dt, tt => {
       const s = estadoMecanica(SIM, tt), e = energiaMecanica(SIM, tt), f = [tt];
       s.forEach(q => f.push(q.x, q.y, q.vx, q.vy, Math.hypot(q.vx, q.vy)));
-      f.push(e.K, e.Ug, e.Ue, e.E, E0 - e.E);
+      f.push(e.K, e.Ug, e.Ue, e.UF, e.E, E0 - e.E);
       return f;
     });
     descargarTexto(`${nombreArchivo(esc.titulo)}-datos.csv`, aCSV(cols, filas))

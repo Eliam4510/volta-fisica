@@ -39,7 +39,8 @@ física > funciones faltantes > rendimiento > pulido.
   contra 2019 P3, 2019 1-(2), lanzamiento oblicuo y balance de energía.
 - [x] Motor general (`motores/mecanica.js`): contactos, cuerdas, varillas, poleas, resortes, fricción, clavos, choques; 15 pruebas analíticas.
 - [x] Laboratorio de Mecánica (`mecanica-laboratorio.html`): caja de arena sobre el motor general, 14 escenarios, 19 pruebas.
-- [ ] Laboratorio: fuerza aplicada constante, panel de variables, duplicar, instrumentos (regla, fotopuerta), cuerpos rígidos.
+- [x] Laboratorio: fuerza aplicada constante (con U_F en el balance).
+- [ ] Laboratorio: panel de variables, duplicar, instrumentos (regla, fotopuerta), cuerpos rígidos.
 
 ### Otros módulos
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).

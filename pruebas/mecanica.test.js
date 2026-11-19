@@ -339,3 +339,26 @@ describe('apoyos que se pierden en un instante de evento', () => {
     }
   });
 });
+
+describe('fuerza constante aplicada', () => {
+  it('empuja un bloque sobre un suelo con fricción: a = (F − μ·m·g)/m y la energía cierra con U_F', () => {
+    const m = 2, F = 10, mu = 0.2, acc = (F - mu * m * g) / m;
+    const sim = simularMecanica({
+      duracion: 1.5,
+      particulas: [{ id: 'B', m, p: [0, 0], v: [0, 0], F: [F, 0] }],
+      superficies: [{ id: 'suelo', tipo: 'segmento', a: [-1, 0], b: [20, 0], mu }],
+    });
+    const s = estadoMecanica(sim, 1.5)[0];
+    cerca(s.x, acc * 1.5 * 1.5 / 2, 1e-7);
+    cerca(s.vx, acc * 1.5, 1e-7);
+    // Lo que no es cinética ni U_F lo disipó la fricción: μ·m·g·d
+    const e0 = energiaMecanica(sim, 0), e1 = energiaMecanica(sim, 1.5);
+    cerca(e1.UF, -F * s.x, 1e-9);
+    cerca(e0.E - e1.E, mu * m * g * s.x, 1e-6);
+  });
+  it('sin fricción, la energía con U_F se conserva', () => {
+    const sim = simularMecanica({ duracion: 2, g: [0, 0], particulas: [{ id: 'P', m: 1, p: [0, 0], v: [0, 3], F: [2, 0] }] });
+    cerca(energiaMecanica(sim, 2).E, energiaMecanica(sim, 0).E, 1e-9);
+    cerca(estadoMecanica(sim, 2)[0].x, 2 * 4 / 2, 1e-9);
+  });
+});
