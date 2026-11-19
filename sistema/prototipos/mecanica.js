@@ -6,6 +6,8 @@
 import { simularProyectil, estadoEn, energiaEn } from '../motores/proyectiles.js';
 import { aCSV, muestrear } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
+import { crearEscena, numero } from '../nucleo/escena.js';
+import { guardarEscena, abrirEscena, autoguardado } from '../componentes/archivos.js';
 
 (function () {
   'use strict';
@@ -221,6 +223,36 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
     simular();
     lt.eventos = SIM.eventos.filter(e => e.t > 0).map(e => ({ t: e.t, nombre: e.nombre }));
     todo();
+    if (autoguardar) autoguardado.guardar('mecanica', escenaActual());
+  }
+
+  // ---------------------------------------------------------------------
+  // Escena: guardar, abrir y autoguardado (formato .volta)
+  // ---------------------------------------------------------------------
+  let autoguardar = false;
+  const ORIGINAL = Object.fromEntries(Object.entries(V).map(([k, d]) => [k, d.val]));
+  function escenaActual() {
+    return crearEscena({
+      modulo: 'mecanica', espacio: 'proyectiles', titulo: 'Salto hacia una pendiente',
+      datos: { variables: Object.fromEntries(Object.entries(V).map(([k, d]) => [k, d.val])), alfaGrados: alfa * 180 / Math.PI },
+    });
+  }
+  function aplicarEscena(escena) {
+    const d = escena.datos || {}, vars = d.variables || {};
+    for (const [k, def] of Object.entries(V)) if (!def.constante) def.val = numero(vars[k], def.val, def.min, def.max);
+    alfa = numero(d.alfaGrados, 0, -80, 80) * Math.PI / 180;
+    t = 0; jugando = false;
+    construirVariables(); recalcular();
+  }
+  function restablecer() {
+    for (const [k, v] of Object.entries(ORIGINAL)) V[k].val = v;
+    alfa = 0; t = 0; jugando = false; construirVariables(); recalcular();
+    avisar(area, 'Escena original restablecida');
+  }
+  function guardar() { guardarEscena(escenaActual()); avisar(area, 'Escena guardada'); }
+  function abrir() {
+    abrirEscena({ modulo: 'mecanica' }).then(e => { aplicarEscena(e); avisar(area, `Escena abierta: ${e.titulo}`); })
+      .catch(err => avisar(area, err.message));
   }
 
   // ---------------------------------------------------------------------
@@ -324,6 +356,9 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
   let espacioPulsado = false;
   const COMANDOS = [
     ['i-reproducir', 'Reproducir o pausar', 'Espacio', alternar],
+    ['i-guardar', 'Guardar escena', 'Ctrl S', () => guardar()],
+    ['i-carpeta', 'Abrir escena', 'Ctrl O', () => abrir()],
+    ['i-historial', 'Restablecer la escena original', '', () => restablecer()],
     ['i-reiniciar', 'Reiniciar la simulación', 'Inicio', () => { t = 0; jugando = false; todo(); }],
     ['i-encuadrar', 'Encuadrar todo', 'F', () => { encuadrar(); zoomTexto(); dibujar(); }],
     ['i-tema-oscuro', 'Cambiar tema claro u oscuro', '', () => Volta.ponerTema(document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')],
@@ -358,6 +393,8 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
       return;
     }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); abrirComandos(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); guardar(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'o') { ev.preventDefault(); abrir(); return; }
     if (ev.target.matches('input, textarea')) return;
     if (ev.code === 'Space') { ev.preventDefault(); if (!ev.repeat) alternar(); espacioPulsado = true; }
     else if (ev.key === 'ArrowRight') { jugando = false; t = Math.min(DUR, t + 1 / 60); todo(); }
@@ -374,8 +411,17 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
   Volta.alCambiarTema(() => { tz.temas(); todo(); });
   window.addEventListener('resize', () => { tz.ajustar(); if (!vistaTocada) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); } todo(); });
   document.fonts.ready.then(() => {
-    simular(); construirVariables();
     const q = new URLSearchParams(location.search);
+    // El autoguardado se restaura al abrir normalmente, no en capturas ni enlaces con ?t
+    const limpio = !q.has('t') && !q.has('captura');
+    const guardada = limpio ? autoguardado.leer('mecanica', { modulo: 'mecanica' }) : null;
+    if (guardada) {
+      const d = guardada.datos || {}, vars = d.variables || {};
+      for (const [k, def] of Object.entries(V)) if (!def.constante) def.val = numero(vars[k], def.val, def.min, def.max);
+      alfa = numero(d.alfaGrados, 0, -80, 80) * Math.PI / 180;
+    }
+    autoguardar = limpio;
+    simular(); construirVariables();
     if (q.has('t')) t = Math.max(0, Math.min(DUR, parseFloat(q.get('t'))));
     tz.ajustar(); encuadrar(); escala0 = tz.vista.escala;
     recalcular(); zoomTexto();
