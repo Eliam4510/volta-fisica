@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volta · Óptica geométrica</title>
+<link rel="stylesheet" href="../fuentes/fuentes.css">
+<link rel="icon" href="../marca/icono-app.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="../componentes/componentes.css">
+<script src="../iconos/sprite.js"></script>
+<style>
+  /* Solo ajustes propios de esta pantalla; todo lo demás viene del sistema */
+  .migas { flex: none; }
+  .escena-btn { gap: var(--e-2); min-width: 0; max-width: 520px; padding: 0 var(--e-2); color: var(--texto-3); font-weight: 400; }
+  .escena-btn b { color: var(--texto-2); font-weight: var(--peso-medio); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .escena-btn .ico { color: var(--texto-3); }
+  button.modo { border: 0; background: transparent; cursor: pointer; height: var(--h-compacto); padding: 0 var(--e-2); border-radius: var(--r-control); }
+  button.modo:hover { background: var(--campo-hover); color: var(--texto); }
+  button.modo[aria-pressed="false"]::before { background: transparent; border: 1.5px solid var(--tinta); width: 5px; height: 5px; }
+  #menu-escenas { position: fixed; z-index: 40; min-width: 340px; max-height: calc(100vh - 64px); overflow: auto; }
+  #menu-escenas .menu-item .chip { margin-left: auto; }
+  #menu-escenas .menu-item[aria-current="true"] { background: var(--campo); }
+  .grafica-cab .leyenda .sim { font-size: 13px; }
+  .grafica-cab .sim sub { font-family: var(--fuente-simbolos); font-style: normal; font-size: .7em; }
+  .fila .segmentado { justify-self: start; }
+  .fila .segmentado button { padding: 0 7px; }
+  .lecturas .sim .r { font-style: normal; }
+  .aviso-lienzo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .graficas { padding-top: var(--e-2); }
+  .acciones-fila { display: flex; gap: var(--e-1); flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="espacio">
+  <!-- ============================ Barra superior ============================ -->
+  <header class="barra">
+    <a class="marca" href="inicio.html" data-ayuda="Inicio|Home">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6.5 L16 23 L26 6.5" stroke-width="2.4"/><path d="M4 23 H28" stroke-width="2.4"/><path d="M8.5 23 L5.5 26 M13.5 23 L10.5 26 M18.5 23 L15.5 26 M23.5 23 L20.5 26" stroke-width="1.4"/><circle cx="26" cy="6.5" r="2.6" fill="currentColor" stroke="none"/></svg>
+      <b>Volta</b>
+    </a>
+    <span class="separador-v"></span>
+    <nav class="migas">
+      <button class="btn btn-compacto">Óptica<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+      <span class="sep">/</span>
+      <button class="btn btn-compacto">Óptica geométrica<svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    </nav>
+    <button class="btn btn-compacto escena-btn" id="b-escenas" aria-haspopup="menu" data-ayuda="Cambiar de escena|Scenes"><span id="escena-chip" class="chip">Tutorial</span><b id="escena-nombre"></b><svg class="ico"><use href="#i-chevron-abajo"/></svg></button>
+    <span class="sp"></span>
+    <button class="modo" id="b-modo" aria-pressed="true" data-ayuda="Reflejos parciales: en cada interfaz, la luz se reparte entre el rayo reflejado y el transmitido según Fresnel. Sin ellos solo se sigue el transmitido (y la reflexión total)|Partial reflections|M">Reflejos parciales</button>
+    <span class="separador-v"></span>
+    <button class="btn btn-icono" id="b-deshacer" disabled data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
+    <button class="btn btn-icono" id="b-rehacer" disabled data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
+    <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
+  </header>
+
+  <!-- ============================ Panel izquierdo ============================ -->
+  <aside class="panel panel-izq">
+    <div class="desplaza">
+      <div class="seccion">
+        <div class="panel-cab">Objetos</div>
+        <div class="paleta" id="paleta-objetos">
+          <button class="herr" data-herr="rayo" data-ayuda="Rayo: clic en el lienzo para colocarlo; su asa redonda lo gira|Ray"><svg class="ico"><use href="#o-rayo"/></svg><span>Rayo</span></button>
+          <button class="herr" data-herr="haz" data-ayuda="Haz paralelo|Parallel beam"><svg class="ico"><use href="#o-haz"/></svg><span>Haz paralelo</span></button>
+          <button class="herr" data-herr="puntual" data-ayuda="Fuente puntual: rayos en abanico|Point source"><svg class="ico"><use href="#o-fuente-luz"/></svg><span>Fuente puntual</span></button>
+          <button class="herr" data-herr="objeto" data-ayuda="Objeto luminoso: flecha cuya imagen se busca con los rayos|Luminous object"><svg class="ico"><use href="#o-objeto-luminoso"/></svg><span>Objeto luminoso</span></button>
+          <button class="herr" data-herr="medio" data-ayuda="Medio (vidrio, agua…): rectángulo, prisma, círculo o semicírculo, con índice fijo o dispersivo|Medium"><svg class="ico"><use href="#o-medio"/></svg><span>Medio</span></button>
+          <button class="herr" data-herr="lente-gruesa" data-ayuda="Lente gruesa de vidrio: radios de curvatura y grosor|Thick lens"><svg class="ico"><use href="#o-lente-gruesa"/></svg><span>Lente gruesa</span></button>
+          <button class="herr" data-herr="recipiente" data-ayuda="Recipiente con líquido|Container with liquid"><svg class="ico"><use href="#o-recipiente-liquido"/></svg><span>Recipiente</span></button>
+          <button class="herr" data-herr="espejo" data-ayuda="Espejo plano: refleja por la cara sin rayado|Plane mirror"><svg class="ico"><use href="#o-espejo-plano"/></svg><span>Espejo plano</span></button>
+          <button class="herr" data-herr="espejo-curvo" data-ayuda="Espejo esférico cóncavo o convexo|Spherical mirror"><svg class="ico"><use href="#o-espejo-curvo"/></svg><span>Espejo curvo</span></button>
+          <button class="herr" data-herr="lente" data-ayuda="Lente ideal (delgada): distancia focal|Ideal lens"><svg class="ico"><use href="#o-lente-ideal"/></svg><span>Lente ideal</span></button>
+          <button class="herr" data-herr="divisor" data-ayuda="Divisor de haz: refleja una fracción y deja pasar el resto|Beam splitter"><svg class="ico"><use href="#o-divisor-haz"/></svg><span>Divisor de haz</span></button>
+          <button class="herr" data-herr="bloqueador" data-ayuda="Bloqueador o diafragma|Blocker"><svg class="ico"><use href="#o-bloqueador"/></svg><span>Bloqueador</span></button>
+          <button class="herr" data-herr="pantalla" data-ayuda="Pantalla: muestra la luz que recibe|Screen"><svg class="ico"><use href="#o-pantalla-optica"/></svg><span>Pantalla</span></button>
+          <button class="herr" data-herr="ojo" data-ayuda="Ojo: dónde ve las imágenes que le llegan|Eye"><svg class="ico"><use href="#o-ojo"/></svg><span>Ojo</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Instrumentos</div>
+        <div class="paleta" id="paleta-instrumentos">
+          <button class="herr" data-herr="transportador" data-ayuda="Transportador: normal y ángulos de incidencia y refracción en cada interfaz|Protractor|A"><svg class="ico"><use href="#n-transportador"/></svg><span>Transportador</span></button>
+          <button class="herr" data-herr="regla" data-ayuda="Regla: arrastra sobre el lienzo para medir una distancia|Ruler|R"><svg class="ico"><use href="#n-regla"/></svg><span>Regla</span></button>
+        </div>
+      </div>
+      <div class="seccion">
+        <div class="panel-cab">Escena</div>
+        <div class="arbol" id="arbol"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================ Lienzo ============================ -->
+  <main class="lienzo-area" id="area">
+    <canvas id="lienzo"></canvas>
+    <div class="flotante ar-der" role="group" aria-label="Capas">
+      <svg class="ico"><use href="#i-capas"/></svg>
+      <button class="capa-btn" data-capa="angulos" aria-pressed="true" data-ayuda="Normales y ángulos de incidencia y refracción|Angles|A">Ángulos</button>
+      <button class="capa-btn" data-capa="prolongaciones" aria-pressed="true" data-ayuda="Prolongaciones de los rayos hasta las imágenes virtuales|Extensions|P">Prolongaciones</button>
+      <button class="capa-btn" data-capa="imagenes" aria-pressed="true" data-ayuda="Imágenes halladas con los rayos|Images|I">Imágenes</button>
+      <button class="capa-btn" data-capa="focos" aria-pressed="true" data-ayuda="Focos y eje óptico de lentes y espejos|Focal points">Focos</button>
+      <button class="capa-btn" data-capa="valores" aria-pressed="true">Valores</button>
+    </div>
+    <div class="flotante ab-izq" id="coords"><span class="sim">x</span><span class="num" id="cx">—</span><span class="sim">y</span><span class="num" id="cy">—</span></div>
+    <div class="flotante ab-der">
+      <button class="btn btn-icono btn-compacto" id="b-zoom-menos" data-ayuda="Alejar|Zoom out|−"><svg class="ico"><use href="#i-zoom-menos"/></svg></button>
+      <span class="num" id="zoom">100 %</span>
+      <button class="btn btn-icono btn-compacto" id="b-zoom-mas" data-ayuda="Acercar|Zoom in|+"><svg class="ico"><use href="#i-zoom-mas"/></svg></button>
+      <span class="sep"></span>
+      <button class="btn btn-compacto" id="b-encuadrar" data-ayuda="Encuadrar todo|Fit to view|F"><svg class="ico"><use href="#i-encuadrar"/></svg>Encuadrar</button>
+    </div>
+    <div class="aviso-flotante aviso-lienzo" id="aviso" hidden><svg class="ico"><use href="#i-evento"/></svg><span id="aviso-texto"></span><button class="btn btn-compacto" id="aviso-deshacer">Deshacer</button></div>
+  </main>
+
+  <!-- ============================ Panel derecho ============================ -->
+  <aside class="panel panel-der">
+    <div class="desplaza">
+      <div class="panel-cab">Inspector</div>
+      <div class="insp-cab">
+        <div class="miniatura"><svg class="ico"><use id="insp-ico" href="#o-medio"/></svg></div>
+        <div><div class="t1" id="insp-nombre"></div><div class="t2" id="insp-estado"></div></div>
+      </div>
+      <details class="grupo" open id="grupo-props">
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="props-titulo">Propiedades</span></summary>
+        <div id="propiedades"></div>
+      </details>
+      <details class="grupo" open>
+        <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
+        <div class="lecturas" id="lecturas"></div>
+      </details>
+      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables</div>
+      <div class="variables" id="variables"></div>
+    </div>
+  </aside>
+
+  <!-- ============================ Panel inferior ============================ -->
+  <section class="panel panel-inf">
+    <div class="inf-cab">
+      <div class="pestanas" role="tablist" id="pest">
+        <button class="pestana" role="tab" aria-selected="true" aria-controls="p-graficas">Gráficas</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-interacciones">Interacciones</button>
+        <button class="pestana" role="tab" aria-selected="false" aria-controls="p-imagenes">Imágenes</button>
+      </div>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn btn-compacto" id="b-exportar" data-ayuda="Exportar las interacciones a CSV|Export data"><svg class="ico"><use href="#i-exportar"/></svg>Exportar datos</button>
+    </div>
+    <div class="graficas" id="p-graficas" data-grupo="pest">
+      <div class="grafica"><div class="grafica-cab"><span id="t1"></span><span class="lect" id="l1"></span></div><canvas id="g1"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t2"></span><span class="lect" id="l2"></span></div><canvas id="g2"></canvas></div>
+      <div class="grafica"><div class="grafica-cab"><span id="t3"></span><span class="lect" id="l3"></span></div><canvas id="g3"></canvas></div>
+    </div>
+    <div class="lista-eventos" id="p-interacciones" data-grupo="pest" hidden><table class="tabla" id="t-interacciones"></table></div>
+    <div class="lista-eventos" id="p-imagenes" data-grupo="pest" hidden><table class="tabla" id="t-imagenes"></table></div>
+  </section>
+</div>
+
+<!-- Menú de escenas -->
+<div class="menu" id="menu-escenas" role="menu" hidden></div>
+
+<!-- Paleta de comandos -->
+<div class="velo comandos-velo" id="velo-comandos" hidden>
+  <div class="comandos" role="dialog" aria-label="Comandos">
+    <div class="comandos-buscar"><svg class="ico ico-20" style="color:var(--texto-3)"><use href="#i-buscar"/></svg><input id="cmd-q" placeholder="Escribe un comando o una escena"><kbd>Esc</kbd></div>
+    <div class="comandos-lista" id="cmd-lista"></div>
+  </div>
+</div>
+
+<script type="module" src="../lienzo/trazo.js"></script>
+<script type="module" src="../lienzo/dominios/optica.js"></script>
+<script type="module" src="../lienzo/grafica.js"></script>
+<script type="module" src="../componentes/espacio.js"></script>
+<script type="module" src="optica.js"></script>
+</body>
+</html>

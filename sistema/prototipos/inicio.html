@@ -105,16 +105,18 @@ import { abrirEscena } from '../componentes/archivos.js';
 import { avisar } from '../componentes/exportar.js';
 (function () {
   'use strict';
+  // [id, nombre, descripción, espacios de trabajo, escenas MEXT que existen, pantalla].
+  // Los conteos son los reales: actualizarlos al añadir espacios o escenas MEXT.
   const MODULOS = [
-    ['mecanica', 'Mecánica', 'Partículas y cuerpos sobre superficies, cuerdas, resortes, choques y equilibrio.', 7, 44, 'mecanica.html'],
-    ['gravitacion', 'Gravitación', 'Órbitas, satélites, velocidad de escape y leyes de Kepler.', 3, 8, 'gravitacion.html'],
-    ['termodinamica', 'Termodinámica', 'Gases con émbolos y válvulas, ciclos, y el gas visto desde sus moléculas.', 4, 30, 'termodinamica.html'],
-    ['electrostatica', 'Electrostática', 'Cargas, campo, potencial, conductores, dieléctricos y capacitores.', 3, 18, 'electrostatica.html'],
-    ['circuitos', 'Circuitos', 'Corriente continua, redes de capacitores y transitorios RC, RL y LC.', 2, 10, 'circuitos.html'],
-    ['magnetismo', 'Magnetismo e inducción', 'Campos de corrientes, fuerza de Lorentz e inducción electromagnética.', 3, 13, null],
-    ['ondas', 'Ondas y sonido', 'Cuerdas, tubos, cubeta de ondas, efecto Doppler y pulsaciones.', 3, 21, 'ondas.html'],
-    ['optica', 'Óptica', 'Rayos, refracción, interferencia, películas delgadas y Michelson.', 3, 14, null],
-    ['moderna', 'Física moderna', 'Efecto fotoeléctrico y decaimientos nucleares.', 2, 4, null],
+    ['mecanica', 'Mecánica', 'Partículas y cuerpos sobre superficies, cuerdas, resortes, choques y equilibrio.', 2, 25, 'mecanica.html'],
+    ['gravitacion', 'Gravitación', 'Órbitas, satélites, velocidad de escape y leyes de Kepler.', 1, 2, 'gravitacion.html'],
+    ['termodinamica', 'Termodinámica', 'Gases con émbolos y válvulas, ciclos, y el gas visto desde sus moléculas.', 1, 1, 'termodinamica.html'],
+    ['electrostatica', 'Electrostática', 'Cargas, campo, potencial, conductores, dieléctricos y capacitores.', 1, 1, 'electrostatica.html'],
+    ['circuitos', 'Circuitos', 'Corriente continua, redes de capacitores y transitorios RC, RL y LC.', 1, 3, 'circuitos.html'],
+    ['magnetismo', 'Magnetismo e inducción', 'Campos de corrientes, fuerza de Lorentz e inducción electromagnética.', null, null, null],
+    ['ondas', 'Ondas y sonido', 'Cuerdas, tubos, efecto Doppler, pulsaciones y acústica.', 2, 16, 'ondas.html'],
+    ['optica', 'Óptica', 'Rayos, refracción, interferencia, películas delgadas y Michelson.', 3, 14, 'optica.html'],
+    ['moderna', 'Física moderna', 'Efecto fotoeléctrico y decaimientos nucleares.', null, null, null],
   ];
   const ESCENAS = [
     { t: 'Salto hacia una pendiente', m: 'Mecánica', tipo: 'MEXT', ref: '2019 · P3', mini: 'proyectil', href: 'mecanica.html', reciente: 'Hace 5 min' },
@@ -124,7 +126,7 @@ import { avisar } from '../componentes/exportar.js';
     { t: 'Tiro oblicuo', m: 'Mecánica', tipo: 'Tutorial', ref: 'Paso a paso', mini: 'tiro', href: null },
     { t: 'Resorte y bloque', m: 'Mecánica', tipo: 'Ejemplo', ref: 'Oscilaciones', mini: 'resorte', href: 'mecanica-laboratorio.html?escena=resorte' },
     { t: 'Dipolo eléctrico', m: 'Electrostática', tipo: 'Tutorial', ref: 'Líneas de campo', mini: 'dipolo', href: null },
-    { t: 'Doble rendija de Young', m: 'Óptica', tipo: 'MEXT', ref: '2023 · P5', mini: 'young', href: null },
+    { t: 'Doble rendija de Young', m: 'Óptica', tipo: 'MEXT', ref: '2023 · P5', mini: 'young', href: 'optica-ondas.html?escena=mext-2023-5' },
     { t: 'Ciclo rectangular', m: 'Termodinámica', tipo: 'MEXT', ref: '2018 · P4', mini: 'ciclo', href: null },
     { t: 'Carga de un capacitor', m: 'Circuitos', tipo: 'Ejemplo', ref: 'Transitorio RC', mini: 'rc', href: 'circuitos.html' },
     { t: 'Ambulancia que pasa', m: 'Ondas y sonido', tipo: 'MEXT', ref: '2007 · P5', mini: 'doppler', href: 'ondas-doppler.html?escena=mext-2007-5' },
@@ -223,7 +225,7 @@ import { avisar } from '../componentes/exportar.js';
     <${href ? 'a' : 'div'} class="tarjeta-modulo${href ? '' : ' inactiva'}" ${href ? `href="${href}"` : ''}>
       <div class="fila-emb">${ic('m-' + id, 'emblema')}${href ? '<span class="chip suave">Disponible</span>' : '<span class="chip suave">En preparación</span>'}</div>
       <div><h3>${nombre}</h3><p>${desc}</p></div>
-      <div class="pie"><span class="chip">${esp} espacios de trabajo</span><span class="chip">${mext} MEXT</span></div>
+      ${esp ? `<div class="pie"><span class="chip">${esp} ${esp === 1 ? 'espacio' : 'espacios'} de trabajo</span><span class="chip">${mext} MEXT</span></div>` : ''}
     </${href ? 'a' : 'div'}>`).join('');
 
   const tarjeta = (e, meta) => `
@@ -246,12 +248,13 @@ import { avisar } from '../componentes/exportar.js';
 
   // ---------- Abrir y nueva escena ----------
   // La escena viaja a su pantalla por sessionStorage ("volta.abrir").
-  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html' };
+  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html', optica: 'optica.html' };
+  // Espacios con pantalla propia dentro de un módulo
+  const ESPACIOS = { 'mecanica:laboratorio': 'mecanica-laboratorio.html', 'ondas:doppler': 'ondas-doppler.html', 'optica:interferencia': 'optica-ondas.html', 'optica:peliculas': 'optica-peliculas.html' };
   function abrir() {
     abrirEscena({}).then(e => {
-      // Mecánica tiene dos espacios: el laboratorio abre sus propias escenas
-      const destino = e.modulo === 'mecanica' && e.espacio === 'laboratorio' ? 'mecanica-laboratorio.html'
-        : e.modulo === 'ondas' && e.espacio === 'doppler' ? 'ondas-doppler.html' : PANTALLAS[e.modulo];
+      // Algunos módulos tienen varios espacios, cada uno con su pantalla
+      const destino = ESPACIOS[`${e.modulo}:${e.espacio}`] || PANTALLAS[e.modulo];
       if (!destino) { avisar(document.body, `El módulo «${e.modulo}» todavía no tiene pantalla.`); return; }
       try { sessionStorage.setItem('volta.abrir', JSON.stringify(e)); } catch { /* sin almacenamiento */ }
       location.href = destino;

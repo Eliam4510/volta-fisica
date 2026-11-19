@@ -83,6 +83,7 @@
     { nombre: 'Electrostática', icono: 'm-electrostatica', espacios: [['electrostatica.html', 'Cargas y campos', 'o-carga-positiva']] },
     { nombre: 'Circuitos', icono: 'm-circuitos', espacios: [['circuitos.html', 'Transitorios', 'o-capacitor']] },
     { nombre: 'Ondas y sonido', icono: 'm-ondas', espacios: [['ondas.html', 'Medio 1D', 'o-cuerda'], ['ondas-doppler.html', 'Doppler y acústica', 'o-fuente-sonora']] },
+    { nombre: 'Óptica', icono: 'm-optica', espacios: [['optica.html', 'Óptica geométrica', 'o-lente-ideal'], ['optica-ondas.html', 'Interferencia y difracción', 'o-rendija-doble'], ['optica-peliculas.html', 'Películas e interferómetros', 'o-michelson']] },
   ];
   function iniciarNavegacion() {
     const migas = document.querySelector('.migas');
