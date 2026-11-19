@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.11.0 (publicada el 2026-11-19; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.11.0 (publicada el 2026-11-19 con instalador de 2 990 720 B y portátil de 5 393 920 B; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
