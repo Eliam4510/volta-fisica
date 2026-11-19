@@ -25,10 +25,10 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] `sistema/nucleo/formato.js` con pruebas.
 - [x] Integradores en `sistema/nucleo/integradores.js` (DOPRI5, RK4, Verlet, Brent); falta Boris (Magnetismo).
 - [x] Pruebas de exactitud: caída libre, tiro, rebotes, oscilador armónico, deriva a 100 s.
-- [x] Guardar, abrir y autoguardar escenas (`.volta`) — Mecánica, Termodinámica, Electrostática e Inicio. Falta Gravitación.
+- [x] Guardar, abrir y autoguardar escenas (`.volta`) — Mecánica, Termodinámica, Electrostática, Gravitación e Inicio.
 - [x] Exportar CSV y PNG — Mecánica, Termodinámica, Electrostática, Gravitación.
 - [x] Deshacer y rehacer — Mecánica.
-- [x] `nucleo/unidades.js`: campos con unidades y expresiones, análisis dimensional (Mecánica).
+- [x] `nucleo/unidades.js`: campos con unidades y expresiones, análisis dimensional (Mecánica, Electrostática, Gravitación).
 - [x] Diálogos nativos de Windows para guardar, exportar y abrir.
 - [x] `npm run tipos` (TypeScript sobre núcleo y motores).
 - [x] `npm run tipos` en CI.
@@ -80,7 +80,7 @@ regularización):
 | Exactitud | Las restricciones unilaterales se resuelven como igualdades: con apoyos redundantes (un disco en una esquina) J·M⁻¹·Jᵀ es singular y `resolver` reparte las reacciones de forma arbitraria | Regularizar (A + εI, como el CFM de ODE y MuJoCo) o resolver un LCP (Gauss–Seidel proyectado) |
 | Rendimiento | Un montón inelástico de 10 discos genera ≈ 5000 eventos en 5 s; los eventos de pares son O(n²) por paso | Fase amplia (rejilla uniforme) para candidatos a choque; reposo agrupado (islas que duermen); modo multitud de paso fijo |
 | Función | Los discos no giran: no hay rodadura ni fricción entre discos | Rotación con momento de inercia y fricción en el contacto disco-disco |
-| Función | Gravitación no guarda ni abre escenas `.volta`; Electrostática y Gravitación no aceptan unidades en los campos | Llevar `archivos.js` y `unidades.js` a esas pantallas |
+| Hecho | Gravitación no guardaba escenas `.volta`; Electrostática y Gravitación no aceptaban unidades en los campos | `archivos.js` y `unidades.js` en ambas pantallas |
 | Rendimiento | Sigue sin haber pruebas de rendimiento | `vitest bench` de los motores |
 | Pulido | La etiqueta del eje vertical queda bajo la barra de capas (`trazo.ejes`); los subíndices de v_c y v_e se confunden a 10 px; falta favicon | Corregir en las piezas compartidas cuando no haya agentes usándolas |
 

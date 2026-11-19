@@ -9,7 +9,7 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
-- Campos con unidades y expresiones en Mecánica y Electrostática: se puede
+- Campos con unidades y expresiones en Mecánica, Electrostática y Gravitación: se puede
   escribir `250 g`, `3 km/h`, `2*a`, `v0 cos 30°`, `30 cm` o `k q/a`; Volta
   convierte a SI y comprueba la dimensión (análisis dimensional) con mensajes
   que dicen qué se esperaba.
@@ -38,8 +38,8 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   Coulomb, potencial, flujo de Gauss y partículas libres con eventos.
 - Motor de gas de Termodinámica (`motores/gas.js`) con 27 pruebas analíticas
   y balance de energía cerrado.
-- Termodinámica y Electrostática: guardar, abrir y autoguardar escenas
-  `.volta`; exportar CSV con BOM e imagen PNG.
+- Termodinámica, Electrostática y Gravitación: guardar, abrir y autoguardar
+  escenas `.volta`; exportar CSV con BOM e imagen PNG.
 - Revisión de tipos con TypeScript sobre el núcleo y los motores
   (`npm run tipos`), también en la integración continua.
 

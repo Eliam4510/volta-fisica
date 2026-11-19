@@ -17,6 +17,9 @@ import {
 } from '../motores/gravitacion.js';
 import { aCSV, muestrear } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
+import { crearEscena, numero, texto } from '../nucleo/escena.js';
+import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { evaluar } from '../nucleo/unidades.js';
 
 (function () {
   'use strict';
@@ -604,6 +607,38 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
     lt.duracion = DUR; lt.simulado = DUR;
     lt.eventos = SIM.eventos.filter(e => e.t > 0).map(e => ({ t: e.t, nombre: nombreEvento(e) }));
     todo(); botonesHistorial();
+    if (autoguardar) autoguardado.guardar('gravitacion', escenaActual());
+  }
+
+  // ---------------------------------------------------------------------
+  // Escena: guardar, abrir y autoguardado (formato .volta). Se guarda lo
+  // mismo que en el historial: la escena de partida, sus variables, α y la
+  // masa. Lo que llega de un archivo se valida y se acota.
+  // ---------------------------------------------------------------------
+  let autoguardar = false;
+  function escenaActual() {
+    return crearEscena({ modulo: 'gravitacion', espacio: 'orbitas', titulo: esc.titulo, datos: JSON.parse(instantanea()) });
+  }
+  function datosSeguros(d = {}) {
+    const base = escenaPorId(typeof d.escena === 'string' ? d.escena : 'canon');
+    const valores = {};
+    for (const k of ['h', 'v0']) {
+      const def = base[k];
+      if (def) valores[k] = numero(d.valores?.[k], def.val, def.min, def.max);
+    }
+    return { escena: base.id, valores, alfa: numero(d.alfa, 0, -89 * GRADO, 89 * GRADO), masa: typeof d.masa === 'number' && d.masa > 0 && d.masa <= 1e30 ? d.masa : 1000 };
+  }
+  function guardar() {
+    guardarEscena(escenaActual()).then(r => { if (r) avisar(area, 'Escena guardada'); }, err => avisar(area, `No se pudo guardar: ${err}`));
+  }
+  function abrir() {
+    abrirEscena({ modulo: 'gravitacion' }).then(e => {
+      guardarHistorial();
+      const d = datosSeguros(e.datos);
+      cargarEscena(d.escena, d);
+      $('#f-m').value = String(masa);
+      avisar(area, `Escena abierta: ${texto(e.titulo, 'sin título', 60)}`);
+    }).catch(err => avisar(area, err.message));
   }
 
   // Carga una escena: variables, escalas de dibujo, inspector y encuadre
@@ -654,13 +689,27 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
   $('#b-rehacer').addEventListener('click', rehacer);
 
   // Campos del inspector
-  $('#f-a').addEventListener('change', () => {
-    const a = parseFloat($('#f-a').value.replace('−', '-'));
-    if (isFinite(a)) { guardarHistorial(); alfa = Math.max(-89, Math.min(89, a)) * GRADO; recalcular(); }
+  // Campos del inspector con unidades y expresiones (nucleo/unidades.js):
+  // «30°», «0.5 rad», «2 t», «1500 kg»
+  function campoConUnidad(id, opciones, aplicar) {
+    const ent = $(id), caja = ent.closest('.campo'), fila = ent.closest('.fila') || caja.parentElement;
+    const mostrarError = msj => {
+      caja.classList.toggle('es-error', !!msj);
+      let p = fila.querySelector('.mensaje-error');
+      if (msj && !p) { p = document.createElement('p'); p.className = 'mensaje-error'; fila.appendChild(p); }
+      if (p) { if (msj) p.textContent = msj; else p.remove(); }
+    };
+    ent.addEventListener('change', () => {
+      try { aplicar(evaluar(ent.value, opciones).valor); mostrarError(null); }
+      catch (e) { mostrarError(e.message); }
+    });
+  }
+  campoConUnidad('#f-a', { esperada: 'adimensional', unidadPorDefecto: '°' }, rad => {
+    guardarHistorial(); alfa = Math.max(-89 * GRADO, Math.min(89 * GRADO, rad)); recalcular();
   });
-  $('#f-m').addEventListener('change', () => {
-    const m = parseFloat($('#f-m').value);
-    if (isFinite(m) && m > 0) { guardarHistorial(); masa = m; kF = kA / masa; recalcular(); } else $('#f-m').value = String(masa);
+  campoConUnidad('#f-m', { esperada: 'masa', unidadPorDefecto: 'kg' }, kg => {
+    if (!(kg > 0)) throw new Error('La masa tiene que ser positiva.');
+    guardarHistorial(); masa = kg; kF = kA / masa; $('#f-m').value = String(masa); recalcular();
   });
 
   // ---------------------------------------------------------------------
@@ -798,6 +847,9 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
     ['i-rotar', 'Sistema de referencia que gira con el planeta', 'G', () => ponerMarco(marco === 'rotante' ? 'inercial' : 'rotante')],
     ['i-energia', 'Mostrar u ocultar las áreas barridas', 'A', () => { ponerCapa('areas', !capas.areas); dibujar(); }],
     ['i-deshacer', 'Deshacer', 'Ctrl Z', deshacer],
+    ['i-rehacer', 'Rehacer', 'Ctrl Y', rehacer],
+    ['i-guardar', 'Guardar escena', 'Ctrl S', guardar],
+    ['i-carpeta', 'Abrir escena', 'Ctrl O', abrir],
     ['i-exportar', 'Exportar datos a CSV', '', exportarCSV],
     ['i-imagen', 'Exportar imagen del lienzo', '', exportarPNG],
     ...ESCENAS.map(e => [e.tipo === 'MEXT' ? 'i-mext' : e.tipo === 'Ejemplo' ? 'i-ejemplo' : 'i-tutorial', `Abrir escena: ${e.titulo}`, chipEscena(e), () => irAEscena(e.id), 'Escenas']),
@@ -834,6 +886,8 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
     if (ev.key === 'Escape') { cerrarEscenas(); return; }
     const ctrl = ev.ctrlKey || ev.metaKey, tecla = ev.key.toLowerCase();
     if (ctrl && tecla === 'k') { ev.preventDefault(); abrirComandos(); return; }
+    if (ctrl && tecla === 's') { ev.preventDefault(); guardar(); return; }
+    if (ctrl && tecla === 'o') { ev.preventDefault(); abrir(); return; }
     if (ev.target.matches('input:not([type="range"]), textarea')) return;
     if (ctrl && tecla === 'z') { ev.preventDefault(); if (ev.shiftKey) rehacer(); else deshacer(); return; }
     if (ctrl && tecla === 'y') { ev.preventDefault(); rehacer(); return; }
@@ -856,7 +910,12 @@ import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../compo
   document.fonts.ready.then(() => {
     const q = new URLSearchParams(location.search);
     tz.ajustar();
-    cargarEscena(q.get('escena') || 'canon');
+    // Escena abierta desde Inicio, o la última sesión (no en capturas ni con parámetros)
+    const limpio = ![...q.keys()].length;
+    const previa = escenaPendiente('gravitacion') || (limpio ? autoguardado.leer('gravitacion', { modulo: 'gravitacion' }) : null);
+    autoguardar = limpio || !!previa;
+    if (previa) { const d = datosSeguros(previa.datos); cargarEscena(d.escena, d); $('#f-m').value = String(masa); }
+    else cargarEscena(q.get('escena') || 'canon');
     if (q.get('areas') === '1') ponerCapa('areas', true);
     if (q.get('areas') === '0') ponerCapa('areas', false);
     if (q.has('mostrar')) q.get('mostrar').split(',').forEach(k => { const c = $('#m-' + k); if (c) c.checked = true; });
