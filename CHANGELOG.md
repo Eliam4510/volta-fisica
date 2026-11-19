@@ -45,6 +45,9 @@ exactos.
 
 ### Cambiado
 
+- Mecánica tiene un presupuesto de cálculo (pasos del integrador y una red
+  de seguridad de 5 s de reloj): una escena patológica devuelve lo simulado
+  con un aviso en lugar de bloquear la pantalla durante decenas de segundos.
 - Mecánica es más rápida: el tope fijo de paso solo se aplica cuando hay
   clavos (la máquina de Atwood se calcula unas cinco veces más rápido) y la
   dinámica se resuelve una sola vez por paso para la derivada y los eventos.

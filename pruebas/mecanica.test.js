@@ -362,3 +362,25 @@ describe('fuerza constante aplicada', () => {
     cerca(estadoMecanica(sim, 2)[0].x, 2 * 4 / 2, 1e-9);
   });
 });
+
+describe('presupuesto de cálculo', () => {
+  const pendulo = o => ({ duracion: 10, particulas: [{ id: 'P', m: 1, p: [Math.sin(1), -Math.cos(1)], v: [0, 0] }], conectores: [{ id: 'C', tipo: 'cuerda', a: 'P', ancla: [0, 0], L: 1 }], ...o });
+  it('con el presupuesto de pasos agotado devuelve lo simulado y lo dice', () => {
+    const sim = simularMecanica(pendulo({ maxPasos: 200 }));
+    expect(sim.incompleta.motivo).toMatch(/límite de cálculo \(200 pasos\)/);
+    expect(sim.tFin).toBeGreaterThan(0);
+    expect(sim.tFin).toBeLessThan(10);
+    // Lo simulado sigue siendo exacto hasta donde llega
+    const s = estadoMecanica(sim, sim.tFin / 2)[0];
+    cerca(Math.hypot(s.x, s.y), 1, 1e-9);
+  });
+  it('con el tiempo de reloj agotado también devuelve lo simulado', () => {
+    const sim = simularMecanica(pendulo({ tiempoMax: 0 }));
+    expect(sim.incompleta.motivo).toMatch(/tardaba demasiado/);
+    expect(sim.tFin).toBeLessThan(10);
+  });
+  it('las escenas normales no se acercan al presupuesto', () => {
+    const sim = simularMecanica(pendulo({}));
+    expect(sim.incompleta).toBeNull();
+  });
+});

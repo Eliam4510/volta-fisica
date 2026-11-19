@@ -55,7 +55,7 @@ const EPS = Number.EPSILON;
  * @property {number[]} h        Largo completo de cada tramo (en el último puede exceder t[n] − t[n−1] si un evento terminal lo cortó)
  * @property {number[][][]} [coef] Dormand–Prince: coeficientes de la salida densa de cada tramo
  * @property {EventoIntegrador[]} eventos
- * @property {'completo'|'evento'|'maxPasos'|'pasoMinimo'} estado
+ * @property {'completo'|'evento'|'maxPasos'|'pasoMinimo'|'detenido'} estado
  * @property {number} pasosAceptados
  * @property {number} pasosRechazados
  * @property {number} evaluaciones Evaluaciones de f
@@ -287,6 +287,8 @@ function pasoInicial(f, t0, y0, f0, rtol, atol, hMax) {
  * @param {number} [o.hMin]        Paso mínimo; por debajo se detiene con estado 'pasoMinimo'
  * @param {number} [o.pasoFijo]    Paso constante, sin control de error
  * @param {number} [o.tolT=1e-12]  Tolerancia en t de la localización de eventos
+ * @param {() => boolean} [o.detener] Se consulta cada 64 intentos de paso; si devuelve
+ *   true, la integración termina con estado 'detenido' (presupuesto de tiempo)
  * @returns {Solucion}
  */
 export function integrar(f, t0, y0, tFin, o = {}) {
@@ -312,6 +314,7 @@ export function integrar(f, t0, y0, tFin, o = {}) {
 
   for (let intento = 0; ; intento++) {
     if (intento >= maxPasos) { sol.estado = 'maxPasos'; break; }
+    if (o.detener && (intento & 63) === 63 && o.detener()) { sol.estado = 'detenido'; break; }
     let ultimo;
     if (fijo) {
       // Nodos t0 + i·H exactos (sin acumular redondeo)

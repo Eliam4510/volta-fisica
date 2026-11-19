@@ -76,6 +76,11 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {number} [umbral=1e-3]    Rapidez normal (m/s) bajo la cual un rebote se convierte en contacto
  * @property {number} [rtol=1e-10]
  * @property {number} [maxEventos=2000] Límite de eventos (regla post-Zeno cerca del límite)
+ * @property {number} [maxPasos=150000] Presupuesto total de pasos del integrador: una escena
+ *   patológica (cientos de contactos que cambian sin parar) devuelve lo simulado en vez de
+ *   bloquear la pantalla
+ * @property {number} [tiempoMax=5000] Red de seguridad en milisegundos de reloj, revisada tras
+ *   cada tramo (solo actúa en escenas patológicas; las normales tardan menos de 100 ms)
  * @property {number} [pasoMax]        Paso máximo del integrador (s)
  */
 
@@ -714,6 +719,10 @@ export function simularMecanica(escena) {
   const hayClavos = S.con.some(c => c.clavos && c.clavos.length);
   /** @type {null | {t: number, motivo: string}} */
   let incompleta = null;
+  const PRESUPUESTO = escena.maxPasos ?? 150000, TIEMPO_MAX = escena.tiempoMax ?? 5000;
+  const reloj = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const inicioReloj = reloj();
+  let pasosUsados = 0;
   // Eventos descartados (un cruce sin choque): se silencian durante una pausa
   // muy breve para que no se repitan en el mismo instante
   let silencio = new Set();
@@ -739,14 +748,24 @@ export function simularMecanica(escena) {
     silencio = new Set();
     const tHasta = silenciados.size ? Math.min(DUR, t + PAUSA) : DUR;
     const sol = integrar(f, t, y, tHasta, {
-      rtol: RTOL, atol: RTOL * 1e-2, maxPasos: 200000, hMaxDe,
+      rtol: RTOL, atol: RTOL * 1e-2, maxPasos: Math.max(1, PRESUPUESTO - pasosUsados), hMaxDe,
+      detener: () => reloj() - inicioReloj > TIEMPO_MAX,
       eventos: eventosDelModo(S, modo, restr, y, din).filter(e => !silenciados.has(e.nombre)),
       hMax: escena.pasoMax ?? (hayClavos ? Math.max(1e-3, DUR / 400) : undefined),
     });
     const tFin = sol.t[sol.t.length - 1];
     tramos.push({ t0: t, t1: tFin, sol, modo: copiarModo(modo) });
     t = tFin; y = sol.y[sol.y.length - 1].slice();
+    pasosUsados += sol.pasosAceptados + sol.pasosRechazados;
+    if (t < DUR - 1e-12 && (sol.estado === 'detenido' || reloj() - inicioReloj > TIEMPO_MAX)) {
+      incompleta = { t, motivo: `La simulación tardaba demasiado (más de ${Math.round(TIEMPO_MAX / 1000)} s de cálculo): la escena tiene demasiados contactos o eventos para simularla entera.` };
+      break;
+    }
     if (sol.estado !== 'evento') {
+      if (sol.estado === 'maxPasos' && pasosUsados >= PRESUPUESTO) {
+        incompleta = { t, motivo: `Se alcanzó el límite de cálculo (${PRESUPUESTO} pasos): la escena tiene demasiados contactos o eventos para simularla entera.` };
+        break;
+      }
       if (sol.estado !== 'completo') { incompleta = { t, motivo: `El integrador se detuvo (${sol.estado}).` }; break; }
       continue;     // llegó al final, o al final de la pausa
     }

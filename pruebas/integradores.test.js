@@ -125,6 +125,14 @@ describe('Dormand–Prince 5(4)', () => {
     cerca(s.eventos[0].t, 9.99 / 30, 1e-12);
   });
 
+  it('detener() corta la integración con estado «detenido»', () => {
+    let llamadas = 0;
+    const s = integrar(osc, 0, [1, 0], 100, { rtol: 1e-12, atol: 1e-12, detener: () => ++llamadas >= 3 });
+    expect(s.estado).toBe('detenido');
+    expect(s.t[s.t.length - 1]).toBeLessThan(100);
+    expect(llamadas).toBe(3);
+  });
+
   it("se detiene sin colgarse ante una explosión (y' = y², y → ∞ en t = 1)", () => {
     const s = integrar((t, y) => [y[0] * y[0]], 0, [1], 2, { rtol: 1e-8, maxPasos: 5000 });
     expect(['pasoMinimo', 'maxPasos']).toContain(s.estado);
