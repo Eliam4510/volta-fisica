@@ -7,6 +7,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.7.0] - 2026-11-19
+
+Contactos de Mecánica como problema de complementariedad, energía disipada
+contabilizada entera, superficies que se mueven y movimiento impuesto, y las
+ocho escenas MEXT de Gravitación.
+
 ### Añadido
 
 - Motor de Mecánica: superficies que van sobre un cuerpo (`sobre`) y se
@@ -333,7 +339,8 @@ interactivos, empaquetados como aplicación de Windows.
 - Los módulos Gravitación, Circuitos, Magnetismo, Ondas, Óptica y Física
   moderna aún no tienen pantalla.
 
-[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.6.0...HEAD
+[Sin publicar]: https://github.com/Eliam4510/volta-fisica/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Eliam4510/volta-fisica/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Eliam4510/volta-fisica/compare/v0.4.0...v0.5.0
