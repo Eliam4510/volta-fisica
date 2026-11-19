@@ -8,6 +8,8 @@ import { aCSV, muestrear } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
 import { crearEscena, numero } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
+import { evaluar, DIM } from '../nucleo/unidades.js';
+import { fmtPaso } from '../nucleo/formato.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
 
 (function () {
@@ -25,7 +27,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     e:  { sim: 'e',  val: 0.5, min: 0,   max: 1,   paso: 0.01, u: '' },
     g:  { sim: 'g',  val: 9.8, min: 9.8, max: 9.8, paso: 0.01, u: 'm/s²', constante: true },
   };
-  const M = 0.5;          // masa (kg)
+  let M = 0.5;            // masa (kg), editable en el inspector
   const DUR = 2.4;        // duración simulada (s)
   let alfa = 0;           // ángulo de lanzamiento (rad)
   const capas = { vectores: true, traza: true, estrobo: true, cotas: true };
@@ -165,9 +167,31 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       pintar(); cont.appendChild(fila);
     }
   }
-  $('#f-a').addEventListener('change', () => {
-    const a = parseFloat($('#f-a').value.replace('−', '-'));
-    if (isFinite(a)) { alfa = Math.max(-80, Math.min(80, a)) * Math.PI / 180; recalcular(); registrar(); }
+  // Campos con unidades y expresiones (nucleo/unidades.js): "500 g", "30°", "2*h"
+  function variablesSI() {
+    const dims = { h: DIM.longitud, th: DIM.adimensional, v0: DIM.velocidad, e: DIM.adimensional, g: DIM.aceleracion };
+    return Object.fromEntries(Object.entries(V).map(([k, d]) => [k, { valor: k === 'th' ? d.val * Math.PI / 180 : d.val, dim: dims[k] }]));
+  }
+  function campoConUnidad(id, opciones, aplicar) {
+    const ent = $(id), caja = ent.closest('.campo'), fila = ent.closest('.fila');
+    const mostrarError = msj => {
+      caja.classList.toggle('es-error', !!msj);
+      let p = fila.querySelector('.mensaje-error');
+      if (msj && !p) { p = document.createElement('p'); p.className = 'mensaje-error'; fila.appendChild(p); }
+      if (p) { if (msj) p.textContent = msj; else p.remove(); }
+    };
+    ent.addEventListener('change', () => {
+      try { aplicar(evaluar(ent.value, { ...opciones, variables: variablesSI() }).valor); mostrarError(null); }
+      catch (e) { mostrarError(e.message); }
+    });
+    ent.addEventListener('keydown', ev => { if (ev.key === 'Escape') { mostrarError(null); ent.blur(); lecturas(); } });
+  }
+  campoConUnidad('#f-a', { esperada: 'adimensional', unidadPorDefecto: '°' }, rad => {
+    alfa = Math.max(-80, Math.min(80, rad * 180 / Math.PI)) * Math.PI / 180; recalcular(); registrar();
+  });
+  campoConUnidad('#f-m', { esperada: 'masa', unidadPorDefecto: 'kg' }, kg => {
+    if (!(kg > 0)) throw new Error('La masa tiene que ser positiva.');
+    M = kg; $('#f-m').value = fmtPaso(M, 0.01); recalcular(); registrar();
   });
 
   const lt = new LineaTiempo($('#tl'), { duracion: DUR, eventos: [], alCambiar: nt => { t = nt; jugando = false; todo(); } });
@@ -236,12 +260,13 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   function escenaActual() {
     return crearEscena({
       modulo: 'mecanica', espacio: 'proyectiles', titulo: 'Salto hacia una pendiente',
-      datos: { variables: Object.fromEntries(Object.entries(V).map(([k, d]) => [k, d.val])), alfaGrados: alfa * 180 / Math.PI },
+      datos: { variables: Object.fromEntries(Object.entries(V).map(([k, d]) => [k, d.val])), alfaGrados: alfa * 180 / Math.PI, masa: M },
     });
   }
   // Aplica variables y ángulo de una escena o de un paso del historial
   function aplicarDatos(d = {}) {
     const vars = d.variables || {};
+    M = numero(d.masa, M, 1e-6, 1e6); $('#f-m').value = fmtPaso(M, 0.01);
     for (const [k, def] of Object.entries(V)) if (!def.constante) def.val = numero(vars[k], def.val, def.min, def.max);
     alfa = numero(d.alfaGrados, 0, -80, 80) * Math.PI / 180;
     t = 0; jugando = false;
@@ -269,6 +294,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
 
   function restablecer() {
     for (const [k, v] of Object.entries(ORIGINAL)) V[k].val = v;
+    M = 0.5; $('#f-m').value = fmtPaso(M, 0.01);
     alfa = 0; t = 0; jugando = false; construirVariables(); recalcular(); registrar();
     avisar(area, 'Escena original restablecida');
   }
@@ -444,6 +470,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       const d = guardada.datos || {}, vars = d.variables || {};
       for (const [k, def] of Object.entries(V)) if (!def.constante) def.val = numero(vars[k], def.val, def.min, def.max);
       alfa = numero(d.alfaGrados, 0, -80, 80) * Math.PI / 180;
+      M = numero(d.masa, M, 1e-6, 1e6); $('#f-m').value = fmtPaso(M, 0.01);
     }
     autoguardar = limpio;
     simular(); construirVariables();

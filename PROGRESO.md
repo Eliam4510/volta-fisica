@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.1.0 (publicada el 2026-11-19)
+- Versión: 0.2.0 (publicada el 2026-11-19)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y prototipos de Inicio, Mecánica,
   Electrostática y Termodinámica: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -23,8 +23,10 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] `sistema/nucleo/formato.js` con pruebas.
 - [ ] Extraer a `sistema/nucleo/`: integradores (DOPRI5, Verlet, Boris) y Brent.
 - [ ] Pruebas de exactitud: caída libre, tiro, rebotes, oscilador armónico.
-- [ ] Guardar y abrir escenas (`.volta`) desde la aplicación.
-- [ ] Exportar datos a CSV de verdad (hoy el botón no hace nada).
+- [x] Guardar, abrir y autoguardar escenas (`.volta`) — Mecánica e Inicio.
+- [x] Exportar CSV y PNG — Mecánica.
+- [x] Deshacer y rehacer — Mecánica.
+- [ ] `nucleo/unidades.js`: campos con unidades y expresiones, análisis dimensional.
 
 ### Mecánica
 - [x] Motor de proyectiles extraído (`sistema/motores/proyectiles.js`) con pruebas
@@ -44,8 +46,9 @@ literatura de sistemas híbridos (detección de eventos, Zeno):
 
 | Prioridad | Hallazgo | Tarea |
 |---|---|---|
-| Bug | Con e ≈ 1 el motor de proyectiles agota 200 eventos y la partícula queda congelada en el aire (Zeno) | Estado final de reposo explícito al agotar eventos, con prueba |
-| Bug | Deshacer, rehacer y la paleta de objetos de Mecánica no hacen nada | Historial de deshacer sobre la escena |
+| Hecho | Con e ≈ 1 el motor agotaba eventos y la partícula quedaba congelada (Zeno) | Regla post-Zeno con prueba (v0.2.0) |
+| Hecho | Deshacer y rehacer de Mecánica no hacían nada | Historial (v0.2.0) |
+| Bug | La paleta de objetos de Mecánica no coloca nada; el campo Masa no afecta la simulación | Masa editable con unidades; paleta cuando exista el motor general |
 | Exactitud | Mecánica solo resuelve una partícula con superficies fijas por fórmulas | Motor general con DOPRI5 + eventos (`nucleo/integradores.js`): resortes, cuerdas, fricción, varias partículas |
 | Exactitud | Falta validar péndulo simple (periodo exacto con integral elíptica), choques 2D elásticos (momento y energía) | Pruebas cuando exista el motor general |
 | Exactitud | Conservación del momento lineal sin pruebas | Pruebas de choques entre cuerpos |
@@ -65,3 +68,16 @@ literatura de sistemas híbridos (detección de eventos, Zeno):
 
 - 2026-11-19 00:45 — Inicio del turno autónomo. Repo git propio creado.
 - 2026-11-19 00:57 — v0.1.0 publicada; CI de pruebas y release en marcha.
+- 2026-11-19 01:12 — v0.2.0 publicada (exportar, escenas, deshacer, Zeno).
+
+## Cómo publicar una versión
+
+1. `python <scratchpad>/version.py X.Y.Z` o editar a mano la versión en
+   package.json, src-tauri/tauri.conf.json, src-tauri/Cargo.toml y
+   src-tauri/Cargo.lock (la prueba `pruebas/version.test.js` exige que
+   coincidan y que el CHANGELOG tenga la entrada).
+2. Mover lo de «Sin publicar» a `## [X.Y.Z] - fecha` en CHANGELOG.md.
+3. `npx vitest run`, commit, `git tag -a vX.Y.Z -m "Volta X.Y.Z"`, push del tag.
+4. `node herramientas/notas-release.mjs X.Y.Z > notas.md` y
+   `gh release create vX.Y.Z --title "Volta X.Y.Z" --notes-file notas.md`.
+5. El flujo `release.yml` compila y adjunta instalador y portátil.
