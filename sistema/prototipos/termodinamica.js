@@ -11,6 +11,8 @@
    Misma estructura que mecanica.js: motor → estado(t) → lienzo → paneles.
    ========================================================================== */
 import { aCSV } from '../nucleo/csv.js';
+import { crearEscena, numero } from '../nucleo/escena.js';
+import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
 import { descargarTexto, avisar as avisarLienzo } from '../componentes/exportar.js';
 import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, residuoGas, residuoEmbolo } from '../motores/gas.js';
 
@@ -526,6 +528,33 @@ import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, 
     simular();
     lt.eventos = SIM.eventos.filter(e => e.t > 0).map(e => ({ t: e.t, nombre: e.nombre }));
     todo();
+    if (autoguardar) autoguardado.guardar('termodinamica', escenaActual());
+  }
+
+  // ---------------------------------------------------------------------
+  // Escena: guardar, abrir y autoguardado (formato .volta)
+  // ---------------------------------------------------------------------
+  let autoguardar = false;
+  const TIPOS_ACCION = { pesa: 'boolean', calentador: 'boolean', paredes: 'string' };
+  function escenaActual() {
+    return crearEscena({ modulo: 'termodinamica', espacio: 'laboratorio-de-gases', titulo: 'Émbolo con pesa en un baño térmico', datos: instantanea() });
+  }
+  // Valida y acota lo que viene de un archivo antes de usarlo
+  function datosSeguros(d = {}) {
+    const vars = Object.fromEntries(Object.entries(VAR).map(([k, def]) => [k, numero(d.vars?.[k], def.val, def.min, def.max)]));
+    const acciones = Array.isArray(d.guion) ? d.guion : GUION_ESCENA;
+    const guionOk = acciones
+      .filter(a => a && TIPOS_ACCION[a.tipo] && typeof a.valor === TIPOS_ACCION[a.tipo] && Number.isFinite(a.t) && a.t >= 0 && a.t <= DUR)
+      .filter(a => a.tipo !== 'paredes' || a.valor === 'adiabaticas' || a.valor === 'conductoras')
+      .map(a => ({ t: a.t, tipo: a.tipo, valor: a.valor }));
+    return { guion: guionOk, vars, motor: d.motor === 'cuasiestatico' ? 'cuasiestatico' : 'dinamico', especie: d.especie === 'di' ? 'di' : 'mono' };
+  }
+  function guardar() {
+    guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada'); }, e => avisar(`No se pudo guardar: ${e}`));
+  }
+  function abrir() {
+    abrirEscena({ modulo: 'termodinamica' }).then(e => { guardarHistorial(); restaurar(datosSeguros(e.datos)); irA(0); avisar(`Escena abierta: ${e.titulo}`); })
+      .catch(err => avisar(err.message));
   }
 
   // Exportar datos a CSV (muestras cada 0.01 s)
@@ -625,6 +654,8 @@ import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, 
     ['i-tema-oscuro', 'Cambiar tema claro u oscuro', '', () => Volta.ponerTema(document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')],
     ['n-termometro', 'Colocar termómetro', '', () => {}],
     ['i-exportar', 'Exportar datos a CSV', '', () => $('#b-exportar').click()],
+    ['i-guardar', 'Guardar escena', 'Ctrl S', () => guardar()],
+    ['i-carpeta', 'Abrir escena', 'Ctrl O', () => abrir()],
   ];
   let selCmd = 0;
   function pintarComandos() {
@@ -652,6 +683,8 @@ import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, 
     }
     const mod = ev.ctrlKey || ev.metaKey, tecla = ev.key.toLowerCase();
     if (mod && tecla === 'k') { ev.preventDefault(); abrirComandos(); return; }
+    if (mod && tecla === 's') { ev.preventDefault(); guardar(); return; }
+    if (mod && tecla === 'o') { ev.preventDefault(); abrir(); return; }
     if (mod && tecla === 'z') { ev.preventDefault(); deshacer(); return; }
     if (mod && tecla === 'y') { ev.preventDefault(); rehacer(); return; }
     if ((ev.target instanceof Element && ev.target.matches('input:not([type=checkbox]), textarea')) || mod) return;
@@ -677,6 +710,11 @@ import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, 
     if (q.get('especie') === 'di') especie = 'di';
     if (OBJETOS[q.get('sel')]) sel = q.get('sel');
     if (q.has('mostrar')) q.get('mostrar').split(',').forEach(k => { const c = $('#m-' + k); if (c) c.checked = true; });
+    // Escena abierta desde Inicio, o la última sesión (no en capturas ni con parámetros)
+    const limpio = ![...q.keys()].length;
+    const previa = escenaPendiente('termodinamica') || (limpio ? autoguardado.leer('termodinamica', { modulo: 'termodinamica' }) : null);
+    if (previa) { const d = datosSeguros(previa.datos); guion = d.guion; for (const k in d.vars) VAR[k].val = d.vars[k]; motor = d.motor; especie = d.especie; }
+    autoguardar = limpio || !!previa;
     simular(); construirVariables(); inspector();
     if (q.has('t')) t = Math.max(0, Math.min(DUR, parseFloat(q.get('t')) || 0));
     const pe = q.get('pestana'); if (pe) { const b = document.querySelector(`[aria-controls="p-${pe}"]`); if (b) b.click(); }
