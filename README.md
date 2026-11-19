@@ -46,10 +46,10 @@ Principios del proyecto:
 
 | Módulo | Estado | Qué simula |
 |---|---|---|
-| Mecánica | Utilizable | Proyectiles y Laboratorio (caja de arena): superficies, cuerdas, poleas, resortes, varillas, clavos, fricción y choques entre discos |
+| Mecánica | Utilizable | Proyectiles y Laboratorio (caja de arena): superficies fijas o llevadas por un cuerpo, cuerdas, poleas, resortes, varillas, clavos, prensa hidráulica, fricción, choques entre discos y movimiento impuesto (ascensor, gráficas v–t); contactos como problema de complementariedad y energía disipada contabilizada; 38 escenas MEXT |
 | Electrostática | Utilizable | Cargas, campo, potencial, cargas en movimiento |
 | Termodinámica | Utilizable | Gas en cilindro con émbolo, calor, trabajo, diagrama P-V |
-| Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria |
+| Gravitación | Utilizable | Órbitas, escape, leyes de Kepler, órbita geoestacionaria; 8 escenas MEXT |
 | Circuitos | Utilizable | Corriente continua, redes de capacitores, transitorios RC, RL y LC |
 | Magnetismo e inducción | Planeado | Fuerza de Lorentz, inducción electromagnética |
 | Ondas y sonido | Utilizable | Cuerdas y tubos (reflexión, uniones, modos, resonancia) y Doppler con audio; la cubeta 2D, en preparación |
