@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/diseno/capturas/mecanica.gif" alt="Mecánica: salto hacia una pendiente con choques de restitución" width="900">
+  <img src="docs/diseno/capturas/laboratorio.gif" alt="Laboratorio de Mecánica: péndulo con clavo (MEXT 2014), con la trayectoria y la velocidad en las gráficas" width="900">
 </p>
 
 ## Qué es
@@ -61,7 +61,7 @@ El plan completo, con dependencias y orden de implementación, está en
 
 ## Capturas
 
-![Laboratorio de Mecánica: péndulo con clavo (MEXT 2014)](docs/diseno/capturas/f8_laboratorio.png)
+![Mecánica: salto hacia una pendiente con choques de restitución](docs/diseno/capturas/mecanica.gif)
 
 | Mecánica | Electrostática |
 |---|---|
