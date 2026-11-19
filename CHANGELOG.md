@@ -24,6 +24,8 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   no quedaba registrado como evento.
 - Las etiquetas de los ejes del lienzo ya no quedan debajo de las barras
   flotantes (capas, zoom).
+- En los campos de ángulo (Mecánica, Gravitación), un número sin unidad se
+  leía en radianes en lugar de en grados.
 
 ## [0.3.0] - 2026-11-19
 

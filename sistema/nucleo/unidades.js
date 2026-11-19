@@ -122,6 +122,14 @@ export function evaluar(texto, o = {}) {
   if (!fuente) throw new Error('El campo está vacío: escribe un número.');
   const toks = lexer(fuente);
   if (o.esperada == null) return analizar(toks, o, true);
+  // Un campo adimensional con unidad por defecto (un ángulo en grados): un
+  // número sin ninguna unidad ni variable se lee en esa unidad («35» → 35°);
+  // con unidad explícita («0.6 rad», «35°») manda la escrita.
+  const esperadaDim = typeof o.esperada === 'string' ? DIM[o.esperada] : o.esperada;
+  if (esAdim(esperadaDim) && o.unidadPorDefecto && U[o.unidadPorDefecto] && toks.every(t => t.tipo !== 'id')) {
+    const r = analizar(toks, o, true);
+    if (esAdim(r.dim)) return { valor: r.valor * U[o.unidadPorDefecto][0], dim: r.dim };
+  }
   // Con dimensión esperada se prueban las dos lecturas de un identificador
   // que sigue a un número ("250 g": gramos o 250·g): gana la que encaja.
   let primero;

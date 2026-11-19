@@ -104,3 +104,21 @@ describe('análisis dimensional y errores', () => {
     expect(() => factor('xx')).toThrow();
   });
 });
+
+describe('ángulos con unidad por defecto', () => {
+  const o = { esperada: 'adimensional', unidadPorDefecto: '°' };
+  const grados = t => evaluar(t, o).valor * 180 / Math.PI;
+  it('un número sin unidad se lee en la unidad del campo', () => {
+    expect(grados('35')).toBeCloseTo(35, 12);
+    expect(grados('-10')).toBeCloseTo(-10, 12);
+    expect(grados('90/2')).toBeCloseTo(45, 12);
+  });
+  it('una unidad escrita manda sobre la del campo', () => {
+    expect(evaluar('0.6 rad', o).valor).toBeCloseTo(0.6, 15);
+    expect(grados('35°')).toBeCloseTo(35, 12);
+    expect(grados('30 deg')).toBeCloseTo(30, 12);
+  });
+  it('una magnitud con dimensión sigue siendo un error', () => {
+    expect(() => evaluar('2 m', o)).toThrow(/longitud/);
+  });
+});
