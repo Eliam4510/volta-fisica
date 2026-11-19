@@ -52,9 +52,25 @@
 
     document.querySelectorAll('input.deslizador').forEach(d => { pintarDeslizador(d); d.addEventListener('input', () => pintarDeslizador(d)); });
 
+    // Paletas cuyo contenido todavía no se puede colocar: dicen por qué en un
+    // aviso sobre el lienzo y no dejan ningún botón pulsado
+    document.querySelectorAll('.paleta[data-pendiente]').forEach(p => p.addEventListener('click', ev => {
+      const b = ev.target.closest('button'); if (!b || !p.contains(b)) return;
+      setTimeout(() => b.setAttribute('aria-pressed', 'false'), 0);
+      avisoPendiente(p.dataset.pendiente);
+    }));
     if (new URLSearchParams(location.search).has('captura')) document.body.classList.add('captura');
     iniciarAyudas();
     iniciarNavegacion();
+  }
+
+  let relojPendiente = null;
+  function avisoPendiente(texto) {
+    const area = document.querySelector('.lienzo-area') || document.body;
+    let el = document.getElementById('aviso-pendiente');
+    if (!el) { el = document.createElement('div'); el.id = 'aviso-pendiente'; el.className = 'aviso-flotante aviso-lienzo'; el.appendChild(document.createElement('span')); area.appendChild(el); }
+    el.firstChild.textContent = texto; el.hidden = false;
+    clearTimeout(relojPendiente); relojPendiente = setTimeout(() => { el.hidden = true; }, 5000);
   }
 
   // Navegación: las migas «Módulo / Espacio de trabajo» abren menús para ir a
