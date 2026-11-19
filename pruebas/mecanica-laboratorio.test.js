@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   cosd, sind, normalizarEscena, escenaVacia, escenaDeEscenario, ESCENARIOS, aMotor, huecoSuperficie, proyectarSobre,
-  describirEvento, lugarDelEvento, fuerzasEn, conArticulo, nuevoId, nuevoNombre, tramoEn, contactosDe, HOLGURA_UNION, deslizarSobre,
+  describirEvento, lugarDelEvento, fuerzasEn, conArticulo, nuevoId, nuevoNombre, tramoEn, contactosDe, HOLGURA_UNION, deslizarSobre, pasosFotopuerta, INSTRUMENTOS,
 } from '../sistema/prototipos/mecanica-laboratorio.js';
 import { simularMecanica, estadoMecanica, energiaMecanica } from '../sistema/motores/mecanica.js';
 
@@ -252,5 +252,37 @@ describe('fuerza aplicada', () => {
     const N = f.find(x => x.tipo === 'normal');
     expect(N.valor).toBeCloseTo(p.m * 9.8 + 10, 6);
     expect(f.find(x => x.tipo === 'aplicada').valor).toBeCloseTo(10, 12);
+  });
+});
+
+describe('instrumentos: regla y fotopuerta', () => {
+  const conInstrumentos = () => normalizarEscena({
+    ...escenaVacia(), duracion: 1.5,
+    objetos: [
+      { id: 'p1', tipo: 'particula', nombre: 'Bola', m: 1, x: 0, y: 1, v: 4, ang: 0, radio: 0 },
+      { id: 'n1', tipo: 'fotopuerta', nombre: 'Fotopuerta', a: [2, -1], b: [2, 2] },
+      { id: 'n2', tipo: 'regla', nombre: 'Regla', a: [0, 0], b: [3, 4] },
+      { id: 'n3', tipo: 'regla', nombre: 'Degenerada', a: [1, 1], b: [1, 1] },
+    ],
+  });
+  it('se guardan y abren sin cambios, pero no llegan al motor', () => {
+    const e = conInstrumentos();
+    expect(e.objetos.map(o => o.id)).toEqual(['p1', 'n1', 'n2']);     // la regla sin largo se descarta
+    expect(normalizarEscena(JSON.parse(JSON.stringify(e)))).toEqual(e);
+    const M = aMotor(e);
+    expect(M.motor.particulas).toHaveLength(1);
+    expect(M.motor.superficies).toEqual([]);
+    expect(M.motor.conectores).toEqual([]);
+    expect(INSTRUMENTOS).toEqual(['regla', 'fotopuerta']);
+  });
+  it('la fotopuerta anota el instante y la rapidez exactos del paso (tiro horizontal)', () => {
+    const e = conInstrumentos(), M = aMotor(e), sim = simularMecanica(M.motor);
+    const pasos = pasosFotopuerta(sim, M, e.objetos[1]);
+    expect(pasos).toHaveLength(1);
+    // x = 4t → cruza x = 2 en t = 0.5; vy = −g·t
+    cerca(pasos[0].t, 0.5, 1e-10);
+    cerca(pasos[0].v[0], 4, 1e-9); cerca(pasos[0].v[1], -g * 0.5, 1e-9);
+    // Fuera del haz (la bola pasa por debajo de un haz corto) no cuenta
+    expect(pasosFotopuerta(sim, M, { a: [2, 1.5], b: [2, 3] })).toEqual([]);
   });
 });

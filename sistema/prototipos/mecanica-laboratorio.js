@@ -57,13 +57,15 @@ export function claseDe(o) { return o.tipo === 'superficie' ? o.forma : o.tipo; 
 export const ICONOS = {
   particula: 'o-particula', disco: 'o-disco', suelo: 'o-suelo', pared: 'o-pared', plano: 'o-plano-inclinado',
   segmento: 'o-trazo-libre', arco: 'o-arco', cuerda: 'o-cuerda', resorte: 'o-resorte', varilla: 'o-varilla',
-  polea: 'o-polea', union: 'o-fijacion', prensa: 'o-prensa-hidraulica', clavo: 'o-clavo', escena: 'o-gravedad',
+  polea: 'o-polea', union: 'o-fijacion', prensa: 'o-prensa-hidraulica', regla: 'n-regla', fotopuerta: 'n-fotopuerta', clavo: 'o-clavo', escena: 'o-gravedad',
 };
 export const NOMBRE_CLASE = {
   particula: 'Partícula', suelo: 'Suelo', pared: 'Pared', plano: 'Plano', segmento: 'Segmento', arco: 'Arco',
-  cuerda: 'Cuerda', resorte: 'Resorte', varilla: 'Varilla', polea: 'Polea', union: 'Unión', prensa: 'Prensa', clavo: 'Clavo',
+  cuerda: 'Cuerda', resorte: 'Resorte', varilla: 'Varilla', polea: 'Polea', union: 'Unión', prensa: 'Prensa', regla: 'Regla', fotopuerta: 'Fotopuerta', clavo: 'Clavo',
 };
 export const CONECTORES = ['cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa'];
+/** Instrumentos: no son física (no van al motor); miden sobre la simulación. */
+export const INSTRUMENTOS = ['regla', 'fotopuerta'];
 
 // ---------------------------------------------------------------------------
 // Geometría de las superficies del laboratorio
@@ -206,6 +208,10 @@ export function normalizarEscena(d) {
       }
     } else if (o.tipo === 'clavo') {
       n = { id: o.id, tipo: 'clavo', nombre, x: numero(o.x, 0, -1e6, 1e6), y: numero(o.y, 0, -1e6, 1e6) };
+    } else if (INSTRUMENTOS.includes(o.tipo)) {
+      const a = num2(o.a, [0, 0]), b = num2(o.b, [1, 0]);
+      if (largo(resta(b, a)) < 1e-6) continue;
+      n = { id: o.id, tipo: o.tipo, nombre, a, b };
     }
     if (n) { ids.add(n.id); e.objetos.push(n); }
   }
@@ -546,6 +552,38 @@ export function fuerzasEn(sim, M, t) {
   }
   const acc = Array.from({ length: n }, (_, i) => [dy[4 * i + 2], dy[4 * i + 3]]);
   return { porParticula: lista, tensiones, acc, modo };
+}
+
+/**
+ * Pasos de las partículas por una fotopuerta (el segmento a–b): instante,
+ * partícula y velocidad. El cruce se busca entre muestras y se afina por
+ * bisección sobre la salida densa del integrador.
+ * @param {any} sim @param {any} M @param {{a: number[], b: number[]}} f
+ * @returns {{t: number, i: number, v: number[]}[]}
+ */
+export function pasosFotopuerta(sim, M, f) {
+  const d = resta(f.b, f.a), L2 = punto(d, d), n = M.motor.particulas.length, T = sim.tFin ?? sim.duracion;
+  if (!(L2 > 0) || !(T > 0)) return [];
+  const lado = (q) => d[0] * (q.y - f.a[1]) - d[1] * (q.x - f.a[0]);
+  const dentro = (q) => { const s = ((q.x - f.a[0]) * d[0] + (q.y - f.a[1]) * d[1]) / L2; return s >= -1e-9 && s <= 1 + 1e-9; };
+  const N = 1200, pasos = [];
+  let prev = estadoMecanica(sim, 0);
+  for (let k = 1; k <= N; k++) {
+    const tk = T * k / N, act = estadoMecanica(sim, tk);
+    for (let i = 0; i < n; i++) {
+      const g0 = lado(prev[i]), g1 = lado(act[i]);
+      if (!(g0 === 0 ? false : g0 * g1 <= 0) || g1 === g0) continue;
+      let lo = T * (k - 1) / N, hi = tk, glo = g0;
+      for (let it = 0; it < 60 && hi - lo > 1e-13 * Math.max(1, hi); it++) {
+        const md = (lo + hi) / 2, gm = lado(estadoMecanica(sim, md)[i]);
+        if (glo * gm <= 0) hi = md; else { lo = md; glo = gm; }
+      }
+      const q = estadoMecanica(sim, hi)[i];
+      if (dentro(q)) pasos.push({ t: hi, i, v: [q.vx, q.vy] });
+    }
+    prev = act;
+  }
+  return pasos.sort((x, y) => x.t - y.t);
 }
 
 // ---------------------------------------------------------------------------
@@ -1215,7 +1253,7 @@ if (typeof document !== 'undefined' && typeof window !== 'undefined') iniciar();
 
 function iniciar() {
   'use strict';
-  const { Trazo, G, fmt, cantidad, grafica, LineaTiempo, pasoAgradable } = window.Volta;
+  const { Trazo, G, fmt, cantidad, grafica, LineaTiempo, pasoAgradable, rombo } = window.Volta;
   const $ = s => document.querySelector(s);
   const ico = id => `<svg class="ico"><use href="#${id}"/></svg>`;
   const simHTML = (a, b, recta = true) => `<span class="sim">${a}${b ? `<sub${recta ? ' class="r"' : ''}>${b}</sub>` : ''}</span>`;
@@ -1351,6 +1389,7 @@ function iniciar() {
     for (const o of esc.objetos) {
       if (o.tipo === 'superficie') puntosSuperficie(o).forEach(sumar);
       else if (o.tipo === 'clavo') sumar([o.x, o.y]);
+      else if (INSTRUMENTOS.includes(o.tipo)) { sumar(o.a); sumar(o.b); }
       else if (o.tipo === 'polea') sumar(o.P);
       else if (o.tipo === 'prensa') {
         // Los cilindros: ancho ∝ √área y fondo 0.7 m por debajo del émbolo más bajo
@@ -1378,6 +1417,15 @@ function iniciar() {
   // -------------------------------------------------------------------------
   // Dibujo del lienzo
   // -------------------------------------------------------------------------
+  // Pasos por cada fotopuerta, calculados una vez por simulación y geometría
+  let cachePasos = { sim: null, claves: {} };
+  function pasosDe(o) {
+    if (cachePasos.sim !== SIM) cachePasos = { sim: SIM, claves: {} };
+    const k = `${o.id}:${o.a}:${o.b}`;
+    if (!cachePasos.claves[k]) cachePasos.claves[k] = pasosFotopuerta(SIM, M, o);
+    return cachePasos.claves[k];
+  }
+  function lugarPaso(o, p) { const q = estadoMecanica(SIM, p.t)[p.i]; return [q.x, q.y]; }
   /** Cuánto se ha trasladado el cuerpo que lleva la superficie o en el estado est. */
   function desplazamientoSuperficie(o, est) {
     const j = o.cuerpo != null ? M.indice[o.cuerpo] : undefined;
@@ -1402,6 +1450,20 @@ function iniciar() {
       const T = q => [q[0] + d[0], q[1] + d[1]];
       if (o.forma === 'arco') tz.mecArco(T(o.c), o.r, o.a0 * DEG, o.a1 * DEG, o.cara, { grueso });
       else { tz.superficie([T(o.a), T(o.b)]); if (grueso) tz.linea([T(o.a), T(o.b)], { color: 'tinta', grosor: G.materia + 0.5 }); }
+    }
+
+    // 4. Instrumentos: la regla como cota con su largo; la fotopuerta como un
+    // haz discontinuo entre dos postes, con un rombo en cada paso ya ocurrido
+    for (const o of esc.objetos) {
+      if (o.tipo === 'regla') {
+        const Lr = largo(resta(o.b, o.a));
+        tz.cota(o.a, o.b, { texto: [{ t: cantidad(Lr, 'm', 4), f: 'num', tam: 11.5 }] });
+      } else if (o.tipo === 'fotopuerta') {
+        const [x1, y1] = v.P(o.a), [x2, y2] = v.P(o.b);
+        tz.lineaPx([[x1, y1], [x2, y2]], { color: hover === o.id ? 'texto' : 'texto-2', grosor: 1, patron: 'auxiliar' });
+        for (const [x, y] of [[x1, y1], [x2, y2]]) tz.lineaPx([[x - 4, y], [x + 4, y]], { grosor: G.materia });
+        if (SIM) for (const p of pasosDe(o)) if (p.t <= t + 1e-12) { const [px, py] = v.P(lugarPaso(o, p)); rombo(tz.ctx, px, py, 3.5, tz.t.tinta); }
+      }
     }
 
     // 5. Construcción: cotas, trayectoria prevista, trazas y estroboscopio
@@ -1631,6 +1693,8 @@ function iniciar() {
         tz.mecSeleccionArco(o.c, o.r, o.a0 * DEG, o.a1 * DEG);
         for (const p of asasArco(o)) tz.asa(...v.P(p.p));
       } else tz.mecSeleccionSegmento(o.a, o.b);
+    } else if (INSTRUMENTOS.includes(o.tipo)) {
+      tz.mecSeleccionSegmento(o.a, o.b);
     } else if (o.tipo === 'clavo') {
       const [x, y] = v.P([o.x, o.y]); tz.seleccionCirculo(x, y, 8.5);
     } else if (o.tipo === 'polea') {
@@ -1732,12 +1796,14 @@ function iniciar() {
       case 'arco': return 'R ' + cantidad(o.r, 'm', 3);
       case 'clavo': case 'union': return '';
       case 'prensa': return `n = ${fmt(o.n, 3)}`;
+      case 'regla': return cantidad(largo(resta(o.b, o.a)), 'm', 3);
+      case 'fotopuerta': { const k = SIM ? pasosDe(o).length : 0; return `${k} ${k === 1 ? 'paso' : 'pasos'}`; }
       default: return o.e < 1 ? 'e ' + limpio(o.e, 2) : o.mu > 0 ? 'μ ' + limpio(o.mu, 2) : '';
     }
   }
   function icono(o) { return o.tipo === 'particula' && o.radio > 0 ? ICONOS.disco : ICONOS[claseDe(o)]; }
   function construirArbol() {
-    const orden = ['particula', 'superficie', ...CONECTORES, 'clavo'];
+    const orden = ['particula', 'superficie', ...CONECTORES, 'clavo', ...INSTRUMENTOS];
     const lista = [...esc.objetos].sort((a, b) => orden.indexOf(a.tipo) - orden.indexOf(b.tipo));
     const filas = lista.map(o => `<div class="nodo" data-sel="${o.id}" aria-selected="${sel === o.id}">${ico(icono(o))}<span class="nombre">${o.nombre}</span><span class="dato">${datoArbol(o)}</span><button class="acciones btn-borrar" data-borrar="${o.id}" data-ayuda="Borrar|Delete|Supr">${ico('i-borrar')}</button></div>`);
     filas.push(`<div class="nodo global" data-sel="escena" aria-selected="${sel === 'escena'}">${ico('o-gravedad')}<span class="nombre">Gravedad y medio</span><span class="dato">${cantidad(esc.g, 'm/s²', 3)}</span></div>`);
@@ -1861,6 +1927,14 @@ function iniciar() {
       h += grupo('Material', fila('Restitución', campo(`${o.id}.e`, o.e, 'adim', 'e', 'Coeficiente de restitución|Restitution')) +
         fila('Fricción', doble(campo(`${o.id}.mu`, o.mu, 'adim', 'μ', 'Fricción cinética|Kinetic friction'), campo(`${o.id}.muS`, o.muS ?? o.mu, 'adim', 'μ<sub>s</sub>', 'Fricción estática|Static friction'))));
       h += grupo('Lecturas', '<div class="lecturas" id="lecturas"></div>', 'lect-titulo');
+    } else if (INSTRUMENTOS.includes(o.tipo)) {
+      const sub = o.tipo === 'regla' ? 'Instrumento · mide la distancia entre dos puntos' : 'Instrumento · anota cada paso de un cuerpo por el haz';
+      h += cab(ICONOS[o.tipo], o.nombre, sub);
+      let g = fila('Extremo a', doble(campo(`${o.id}.ax`, o.a[0], 'longitud', 'x'), campo(`${o.id}.ay`, o.a[1], 'longitud', 'y')));
+      g += fila('Extremo b', doble(campo(`${o.id}.bx`, o.b[0], 'longitud', 'x'), campo(`${o.id}.by`, o.b[1], 'longitud', 'y')));
+      if (o.tipo === 'fotopuerta') g += ayudaFila('No toca nada: solo observa. Cada paso queda marcado con un rombo en el lienzo y en la lista de abajo.');
+      h += grupo('Geometría', g);
+      h += grupo(o.tipo === 'regla' ? 'Medida' : 'Pasos por el haz', '<div class="lecturas" id="lecturas"></div>', 'lect-titulo');
     } else if (CONECTORES.includes(o.tipo)) {
       const extremos = `${nombreDe(o.a)} — ${o.b != null ? nombreDe(o.b) : 'punto fijo'}`;
       const sub = { prensa: 'Prensa hidráulica: dos émbolos unidos por un líquido', cuerda: 'Cuerda ideal: inextensible, solo tira', resorte: 'Resorte lineal', varilla: 'Varilla rígida, sin masa', polea: 'Polea fija ideal', union: 'Unión al chocar' }[o.tipo];
@@ -2013,6 +2087,11 @@ function iniciar() {
       }
     }
     if (o.tipo === 'clavo') { if (prop === 'x') o.x = v; if (prop === 'y') o.y = v; return; }
+    if (INSTRUMENTOS.includes(o.tipo)) {
+      const q = { ax: ['a', 0], ay: ['a', 1], bx: ['b', 0], by: ['b', 1] }[prop];
+      if (q) { const viejo = o[q[0]][q[1]]; o[q[0]][q[1]] = v; if (largo(resta(o.b, o.a)) < 1e-6) { o[q[0]][q[1]] = viejo; return 'Los dos extremos no pueden coincidir.'; } }
+      return;
+    }
   }
 
   /** Distancia entre los extremos de un conector (suma de ramales en una polea). */
@@ -2130,6 +2209,18 @@ function iniciar() {
         h += filaL(o.tipo === 'polea' ? 'ℓ' : 'd', '', D, 'm');
         if (o.tipo === 'resorte') h += filaL('Δ', '', D - o.L0, 'm') + filaL('U', 'e', o.soloTira && D <= o.L0 ? 0 : 0.5 * o.k * (D - o.L0) ** 2, 'J');
       }
+    } else if (o.tipo === 'regla') {
+      const d = resta(o.b, o.a);
+      h += filaL('L', '', largo(d), 'm') + filaL('Δx', '', d[0], 'm') + filaL('Δy', '', d[1], 'm');
+      h += `${simHTML('θ')}<span class="v">${fmt(Math.atan2(d[1], d[0]) / DEG, 4)}</span><span class="u">°</span>`;
+    } else if (o.tipo === 'fotopuerta' && SIM) {
+      const ps = pasosDe(o);
+      if (!ps.length) h = '<span class="lect-vacia">Ningún cuerpo cruza el haz</span>';
+      for (const p of ps.slice(0, 12)) {
+        const nombre = M.particulas[p.i]?.nombre ?? '';
+        h += `<span class="sim">t</span><span class="v${p.t <= t + 1e-12 ? '' : ' futuro'}">${fmt(p.t, 5)}</span><span class="u">s · ${nombre} · ${fmt(Math.hypot(p.v[0], p.v[1]), 4)} m/s</span>`;
+      }
+      if (ps.length >= 2) h += `${simHTML('Δt')}<span class="v">${fmt(ps[1].t - ps[0].t, 5)}</span><span class="u">s entre los dos primeros</span>`;
     } else if (o.tipo === 'superficie' && SIM) {
       const tr = tramoEn(SIM, Math.min(t, tFinal())), js = M.superficies.indexOf(o);
       const apoyadas = contactosDe(tr.modo).filter(k => k.sup === js).map(k => k.i);
@@ -2437,6 +2528,13 @@ function iniciar() {
     anadir({ ...base, ...geo });
     terminarCreacion();
   }
+  function crearInstrumento(herr, p0, p1) {
+    const arrastrada = p1 && largo(resta(p1, p0)) * tz.vista.escala > 6;
+    // Sin arrastre: regla horizontal de 1 m; fotopuerta vertical de 1 m
+    const b = arrastrada ? [...p1] : herr === 'regla' ? [p0[0] + 1, p0[1]] : [p0[0], p0[1] + 1];
+    anadir({ id: nuevoId(esc, 'n'), tipo: herr, nombre: nuevoNombre(esc, herr), a: [...p0], b });
+    terminarCreacion();
+  }
   function crearParticula(p) {
     const o = { id: nuevoId(esc, 'p'), tipo: 'particula', nombre: nuevoNombre(esc, 'particula'), m: 1, x: p[0], y: p[1], v: 0, ang: 0, radio: 0, sobre: null };
     anadir(o); return o;
@@ -2489,6 +2587,7 @@ function iniciar() {
       const q = s0 ? deslizarSobre(s0, posicionParticula(esc, o), 0, c.x, o.radio) : null;
       if (q) { c.x = q[0]; c.y = q[1]; } else { c.y -= d; c.sobre = null; }
     } else if (o.tipo === 'clavo') { c.x += d; c.y -= d; }
+    else if (INSTRUMENTOS.includes(o.tipo)) { c.a = mover(o.a); c.b = mover(o.b); }
     else if (o.tipo === 'superficie') {
       if (o.forma === 'arco') c.c = mover(o.c);
       else { c.a = mover(o.a); c.b = mover(o.b); }
@@ -2508,7 +2607,7 @@ function iniciar() {
     arco: 'Clic para un hemisferio de 1 m, o arrastra desde el centro para el radio.',
     cuerda: 'Clic en una partícula y luego en otra partícula o en un punto fijo.', resorte: 'Clic en una partícula y luego en otra o en un punto fijo.',
     varilla: 'Clic en una partícula y luego en otra o en un punto fijo.', polea: 'Clic donde va la polea y después en las dos partículas.',
-    union: 'Clic en un disco y después en el otro: quedarán pegados al chocar.', prensa: 'Clic en el émbolo pequeño y después en el grande: el líquido los une.', clavo: 'Clic donde va el clavo.',
+    union: 'Clic en un disco y después en el otro: quedarán pegados al chocar.', prensa: 'Clic en el émbolo pequeño y después en el grande: el líquido los une.', regla: 'Arrastra de un punto a otro para medir la distancia.', fotopuerta: 'Arrastra la línea del haz: anota el instante y la rapidez de cada paso.', clavo: 'Clic donde va el clavo.',
   };
   function elegirHerramienta(h) {
     if (herramienta === h || !h) { soltarHerramienta(); return; }
@@ -2567,17 +2666,18 @@ function iniciar() {
     // Asas del objeto seleccionado
     if (o && t === 0) {
       if (o.tipo === 'particula') { const pv = puntaVelocidad(o); if (pv && Math.hypot(x - pv[0], y - pv[1]) < 9) return { id: o.id, parte: 'velocidad' }; }
-      if (o.tipo === 'superficie' && o.forma !== 'arco') for (const k of ['a', 'b']) if (largo(resta(q, P(o[k]))) < 8) return { id: o.id, parte: k };
+      if ((o.tipo === 'superficie' && o.forma !== 'arco') || INSTRUMENTOS.includes(o.tipo)) for (const k of ['a', 'b']) if (largo(resta(q, P(o[k]))) < 8) return { id: o.id, parte: k };
       if (o.forma === 'arco') for (const a of asasArco(o)) if (largo(resta(q, P(a.p))) < 8) return { id: o.id, parte: a.cual };
     }
     for (let i = M.particulas.length - 1; i >= 0; i--) if (largo(resta(q, P(pd[i]))) < radioPx(i) + 4) return { id: M.particulas[i].id, parte: 'cuerpo' };
     for (const n of esc.objetos) if (n.tipo === 'clavo' && largo(resta(q, P([n.x, n.y]))) < 8) return { id: n.id, parte: 'cuerpo' };
+    for (const n of esc.objetos) if (INSTRUMENTOS.includes(n.tipo) && distSegPx(q, P(n.a), P(n.b)) < 6) return { id: n.id, parte: 'cuerpo' };
     for (const c of esc.objetos) {
       if (c.tipo === 'polea' && largo(resta(q, P(c.P))) < Math.max(6, c.r * v.escala) + 4) return { id: c.id, parte: 'eje' };
       if (CONECTORES.includes(c.tipo) && c.ancla && largo(resta(q, P(c.ancla))) < 8) return { id: c.id, parte: 'ancla' };
     }
     for (const c of M.conectores) {
-      if (c.tipo === 'polea' || c.tipo === 'union') continue;
+      if (c.tipo === 'polea' || c.tipo === 'union' || c.tipo === 'prensa') continue;
       const ia = M.indice[c.a], pa = P(pd[ia]), pb = P(c.b != null ? pd[M.indice[c.b]] : c.ancla);
       if (distSegPx(q, pa, pb) < 5) return { id: c.id, parte: 'cuerpo' };
     }
@@ -2713,6 +2813,15 @@ function iniciar() {
       a.guia = { p: tz.vista.P([o.x, o.y]), texto: s ? `Sobre ${conArticulo(s.nombre)}` : `(${limpio(o.x)}, ${limpio(o.y)}) m` };
       ajustarConectores(o.id);
     } else if (o.tipo === 'clavo') { const q = ajustarP(nueva, libre); o.x = q[0]; o.y = q[1]; a.guia = { p: tz.vista.P(q), texto: `(${limpio(q[0])}, ${limpio(q[1])}) m` }; }
+    else if (INSTRUMENTOS.includes(o.tipo)) {
+      if (a.parte === 'a' || a.parte === 'b') { o[a.parte] = ajustarP(w, libre); a.guia = { p: tz.vista.P(o[a.parte]), texto: `L = ${limpio(largo(resta(o.b, o.a)), 4)} m` }; }
+      else {
+        if (!a.inicio) a.inicio = { a: [...o.a], b: [...o.b] };
+        const q = ajustarP(nueva, libre), d = resta(q, a.inicio.a);
+        o.a = [a.inicio.a[0] + d[0], a.inicio.a[1] + d[1]]; o.b = [a.inicio.b[0] + d[0], a.inicio.b[1] + d[1]];
+      }
+      dibujar(); construirInspector(); return;
+    }
     else if (o.tipo === 'polea' && a.parte === 'eje') { o.P = ajustarP(nueva, libre); ajustarConector(o); }
     else if (a.parte === 'ancla') { o.ancla = ajustarP(nueva, libre); ajustarConector(o); a.guia = { p: tz.vista.P(o.ancla), texto: `(${limpio(o.ancla[0])}, ${limpio(o.ancla[1])}) m` }; }
     else if (o.tipo === 'superficie') {
@@ -2753,7 +2862,7 @@ function iniciar() {
     const [x, y] = posLienzo(ev), a = arrastre;
     paneo = null; arrastre = null;
     if (!a) { dibujar(); return; }
-    if (a.tipo === 'crear') { crearSuperficie(a.herr, a.p0, a.p1); return; }
+    if (a.tipo === 'crear') { if (INSTRUMENTOS.includes(a.herr)) crearInstrumento(a.herr, a.p0, a.p1); else crearSuperficie(a.herr, a.p0, a.p1); return; }
     if (a.tipo === 'conectar') {
       const moved = Math.hypot(x - a.x, y - a.y) > 6, b = objetoEn(x, y), pb = b && objeto(esc, b.id)?.tipo === 'particula' ? b.id : null;
       const w = ajustarP([tz.vista.mx(x), tz.vista.my(y)], ev.shiftKey);
@@ -2899,7 +3008,7 @@ function iniciar() {
     ['i-exportar', 'Exportar datos a CSV', '', exportarCSV],
     ['i-evento', 'Exportar eventos a CSV', '', exportarEventos],
     ['i-imagen', 'Exportar imagen del lienzo', '', exportarPNG],
-    ...['particula', 'suelo', 'pared', 'plano', 'segmento', 'arco', 'cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa', 'clavo'].map(h => [ICONOS[h], `Añadir ${(document.querySelector(`#paleta [data-herr="${h}"] span`)?.textContent || h).toLowerCase()}`, h === 'particula' ? 'P' : '', () => elegirHerramienta(h)]),
+    ...['particula', 'suelo', 'pared', 'plano', 'segmento', 'arco', 'cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa', 'clavo', 'regla', 'fotopuerta'].map(h => [ICONOS[h], `Añadir ${(document.querySelector(`#paleta [data-herr="${h}"] span`)?.textContent || h).toLowerCase()}`, h === 'particula' ? 'P' : '', () => elegirHerramienta(h)]),
     ...ESCENARIOS.map(e => [e.tipo === 'mext' ? 'i-mext' : e.tipo === 'tutorial' ? 'i-tutorial' : 'i-ejemplo', `Escenario: ${e.titulo}${e.ref ? ` (MEXT ${e.ref})` : ''}`, '', () => cargarEscenario(e.id)]),
   ];
   let selCmd = 0;

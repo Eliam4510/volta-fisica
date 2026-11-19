@@ -25,6 +25,10 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 - Laboratorio: prensa hidráulica (conector entre dos émbolos con razón de
   áreas n): el líquido conserva el volumen y la presión es la misma en los
   dos émbolos. Escena MEXT 2010 1-A. Mecánica tiene ya 38 escenas MEXT.
+- Laboratorio: instrumentos «Regla» (distancia, Δx, Δy y ángulo entre dos
+  puntos) y «Fotopuerta» (un haz que anota el instante exacto y la rapidez
+  de cada paso de un cuerpo; un rombo marca cada paso en el lienzo). No
+  afectan a la física.
 - Motor de Mecánica: las velocidades iniciales incompatibles con una varilla
   o una prensa se proyectan como un impulso que conserva el momento.
 - Laboratorio: las fuerzas que muestra el inspector incluyen la reacción
