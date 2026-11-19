@@ -14,6 +14,10 @@ física > funciones faltantes > rendimiento > pulido.
 - Óptica integrado (geométrica, interferencia y difracción, películas e
   interferómetros; 51 pruebas, 15 escenas MEXT). Falta: espejo parabólico,
   polarización, polígono y capas en la paleta, Michelson con luz blanca.
+- Electrostática ampliada e integrada (2 espacios, 95 pruebas, 18 MEXT).
+  Falta: solucionador de Poisson (blindaje de un conductor en un campo
+  uniforme), sonda de potencial y voltímetro de dos puntas; el flujo de
+  Gauss es aproximado cuando la superficie corta una distribución.
 - Magnetismo e inducción integrado (3 espacios, 47 pruebas, 13 MEXT).
   Falta: editar vértices de regiones libres, Hall en tiempo físico, vista
   3D de espiras y solenoides, bobina en modo motor.
@@ -21,8 +25,6 @@ física > funciones faltantes > rendimiento > pulido.
   - Termodinámica: motores ciclos.js, cinetica.js, recipientes.js, calor.js,
     pruebas nuevas, termodinamica-comun.js, termodinamica-escenas.js y
     termodinamica-ciclos.html.
-  - Electrostática: electrostatica.js, electrostatica-conductores.js,
-    pruebas de distribuciones y conductores, pantallas electrostatica*.
   - Física moderna: moderna.js, moderna.test.js, moderna*.html|js.
   Para integrar cada uno: suite, tipos y capturas; luego
   `python <scratchpad>/integrar_modulo.py <id> '<Nombre>' <icono> <mini>
