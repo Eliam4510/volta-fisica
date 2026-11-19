@@ -87,6 +87,12 @@ const UMBRAL_LAMBDA = 1e-12;
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
 const norm = a => Math.hypot(a[0], a[1]);
+/** Claves de las restricciones unilaterales activas de un modo. */
+const activas = modo => new Set([
+  ...Object.keys(modo.contactos).map(k => 'contacto:' + k),
+  ...Object.keys(modo.pares).map(k => 'par:' + k),
+  ...Object.entries(modo.cuerdas).filter(([, e]) => e.tensa).map(([id]) => 'cuerda:' + id),
+]);
 /** Radio de la partícula i (0 si es puntual). */
 const radio = (S, i) => S.P[i].radio || 0;
 /** Hueco por debajo del cual dos cuerpos se consideran en contacto tras un evento (m). */
@@ -703,6 +709,9 @@ export function simularMecanica(escena) {
   resolverSimultaneos(false);
   revisarDespegues();
 
+  // Los eventos del clavo no son monótonos (cambian de forma al entrar en el
+  // alcance de la cuerda): con clavos, el paso se acota también por la duración
+  const hayClavos = S.con.some(c => c.clavos && c.clavos.length);
   /** @type {null | {t: number, motivo: string}} */
   let incompleta = null;
   // Eventos descartados (un cruce sin choque): se silencian durante una pausa
@@ -732,7 +741,7 @@ export function simularMecanica(escena) {
     const sol = integrar(f, t, y, tHasta, {
       rtol: RTOL, atol: RTOL * 1e-2, maxPasos: 200000, hMaxDe,
       eventos: eventosDelModo(S, modo, restr, y, din).filter(e => !silenciados.has(e.nombre)),
-      hMax: escena.pasoMax ?? Math.max(1e-3, DUR / 400),
+      hMax: escena.pasoMax ?? (hayClavos ? Math.max(1e-3, DUR / 400) : undefined),
     });
     const tFin = sol.t[sol.t.length - 1];
     tramos.push({ t0: t, t1: tFin, sol, modo: copiarModo(modo) });
@@ -746,6 +755,7 @@ export function simularMecanica(escena) {
     const K0 = energiaCinetica(S, y);
     const zeno = k > LIMITE - 10;
     modo = copiarModo(modo);
+    const activasAntes = activas(modo);
     const partes = nombre.split(':');
     const excluir = new Set();
     let descripcion = '';
@@ -832,6 +842,28 @@ export function simularMecanica(escena) {
     if (resto > 0) {
       const destino = eventos[iEvento] ?? eventos[eventos.length - 1];
       if (destino) destino.perdida += resto;
+    }
+    // Apoyos, pares y cuerdas que se pierden en este instante por otra causa
+    // (un choque simultáneo, una superficie nueva): también son eventos
+    const propia = { despegue: 'contacto', fin: 'contacto', separa: 'par', floja: 'cuerda' }[partes[0]];
+    const activasDespues = activas(modo);
+    for (const a of activasAntes) {
+      if (activasDespues.has(a) || (propia && a === `${propia}:${partes.slice(1).join(':')}`)) continue;
+      const [tipo, ...resto2] = a.split(':');
+      let nombreEv = '', claveEv = '';
+      if (tipo === 'contacto') {
+        const i = Number(resto2[0]), sup = S.sup[Number(resto2[1])];
+        const borde = margenSuperficie(sup, [y[4 * i], y[4 * i + 1]]) <= 1e-6;
+        nombreEv = borde ? `Sale del borde (${S.P[i].id})` : `Se despega (${S.P[i].id})`;
+        claveEv = `${borde ? 'fin' : 'despegue'}:${resto2.join(':')}`;
+      } else if (tipo === 'par') {
+        nombreEv = `Se separan ${S.P[Number(resto2[0])].id} y ${S.P[Number(resto2[1])].id}`;
+        claveEv = `separa:${resto2.join(':')}`;
+      } else {
+        nombreEv = `La cuerda ${resto2.join(':')} se afloja`;
+        claveEv = `floja:${resto2.join(':')}`;
+      }
+      eventos.push({ t, nombre: nombreEv, clave: claveEv, perdida: 0, y: y.slice() });
     }
   }
   if (!incompleta && t < DUR - 1e-9) incompleta = { t, motivo: `Se alcanzó el límite de ${LIMITE} eventos.` };

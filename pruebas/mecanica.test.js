@@ -315,3 +315,27 @@ describe('restricciones redundantes', () => {
     }
   });
 });
+
+describe('apoyos que se pierden en un instante de evento', () => {
+  it('al pasar del plano al suelo se registran la salida del borde y el contacto, con cualquier paso', () => {
+    const th = Math.PI / 6, L = 3, fin = [L * Math.cos(th), 0];
+    const esc = pasoMax => ({
+      duracion: 2, pasoMax,
+      particulas: [{ id: 'P', m: 1, p: [0.3 * Math.cos(th), L * Math.sin(th) - 0.3 * Math.sin(th)], v: [0, 0] }],
+      superficies: [
+        { id: 'plano', tipo: 'segmento', a: [0, L * Math.sin(th)], b: fin },
+        { id: 'suelo', tipo: 'segmento', a: fin, b: [8, 0], e: 0 },
+      ],
+    });
+    for (const pasoMax of [undefined, 0.005, 0.001]) {
+      const sim = simularMecanica(esc(pasoMax));
+      const borde = ev(sim, 'Sale del borde'), suelo = ev(sim, 'contacto con suelo');
+      expect(borde).toBeTruthy();
+      expect(suelo).toBeTruthy();
+      cerca(borde.t, suelo.t, 1e-9);
+      // Después sigue por el suelo con la componente horizontal de la velocidad
+      const v = Math.sqrt(2 * g * (L - 0.3) * Math.sin(th));
+      cerca(estadoMecanica(sim, 2)[0].vx, v * Math.cos(th), 1e-6);
+    }
+  });
+});

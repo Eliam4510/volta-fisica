@@ -83,7 +83,8 @@ regularización):
 | Función | Los discos no giran: no hay rodadura ni fricción entre discos | Rotación con momento de inercia y fricción en el contacto disco-disco |
 | Hecho | Gravitación no guardaba escenas `.volta`; Electrostática y Gravitación no aceptaban unidades en los campos | `archivos.js` y `unidades.js` en ambas pantallas |
 | Hecho | No había pruebas de rendimiento | `npm run banco` (`pruebas/rendimiento/`). Referencia 2026-11-19, Ryzen de escritorio: proyectil 0.9 µs; péndulo con clavo 2 s 7.4 ms; Atwood 1 s 4.5 ms; 12 discos 5 s 24 ms; 24 discos con gravedad 5 s 104 ms; gas 5 s 2.3 ms; cargas 6.5 s 1.0 ms; satélite 2 órbitas 3.6 ms |
-| Rendimiento | Mecánica da muchos pasos (péndulo 2 s: 6.6 ms) por el tope de paso duración/400, que protege los eventos no monótonos del clavo. La caché de `dinamica` compartida por f y los eventos ya ahorra un 10–15 % | Eventos del clavo continuos (como el impacto) para poder quitar el tope fijo |
+| Hecho | Mecánica daba muchos pasos por el tope fijo duración/400 | El tope solo se aplica con clavos (Atwood 1 s: de 4.5 ms a 0.8 ms); caché de `dinamica` compartida por f y los eventos. Pendiente: eventos del clavo continuos para quitarlo también ahí |
+| Hecho | Un apoyo que se perdía en un instante por otra causa (unión plano-suelo, impulso que separa) no quedaba registrado | Diferencia de restricciones activas antes y después de cada instante; prueba de la unión plano-suelo con tres pasos distintos |
 | Pulido | La etiqueta del eje vertical queda bajo la barra de capas (`trazo.ejes`); los subíndices de v_c y v_e se confunden a 10 px; falta favicon | Corregir en las piezas compartidas cuando no haya agentes usándolas |
 
 ## Problemas conocidos

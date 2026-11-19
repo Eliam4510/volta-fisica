@@ -7,6 +7,24 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Favicon con el icono de Volta en todas las pantallas.
+
+### Cambiado
+
+- Mecánica es más rápida: el tope fijo de paso solo se aplica cuando hay
+  clavos (la máquina de Atwood se calcula unas cinco veces más rápido) y la
+  dinámica se resuelve una sola vez por paso para la derivada y los eventos.
+
+### Corregido
+
+- Un apoyo que se perdía en el mismo instante que otro evento (una
+  partícula que pasa del plano al suelo, un impulso que separa dos cuerpos)
+  no quedaba registrado como evento.
+- Las etiquetas de los ejes del lienzo ya no quedan debajo de las barras
+  flotantes (capas, zoom).
+
 ## [0.3.0] - 2026-11-19
 
 Dos módulos nuevos (Gravitación y Circuitos), Electrostática y
