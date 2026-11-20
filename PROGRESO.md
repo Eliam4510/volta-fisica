@@ -22,14 +22,15 @@ física > funciones faltantes > rendimiento > pulido.
   Falta: editar vértices de regiones libres, Hall en tiempo físico, vista
   3D de espiras y solenoides, bobina en modo motor.
 - Termodinámica ampliada e integrada (4 espacios, 154 pruebas, 29 de 30
-  MEXT; 2025 T7 solo tiene el tema). Falta: paletas de objetos (siguen
-  `data-pendiente`), arrastrar estados en Ciclos, gas molecular en 3D.
+  MEXT; 2025 T7 solo tiene el tema). Paletas y arrastrar estados en Ciclos
+  hechos. Falta: gas molecular en 3D, resorte del montaje (falla), unidades
+  en los campos (ver docs/05_auditoria_producto.md).
 - Física moderna integrada (2 espacios, 44 pruebas, 4 MEXT). Falta la zona
   gris (Bohr, rayos X), carga espacial y energía de los neutrones de fisión.
 - Los nueve módulos están disponibles: 155 escenas MEXT en total. Circuitos 10 de 10; Ondas 21 de 21 (cubeta 2D integrada).
 - Los conteos de las tarjetas de Inicio son a mano: actualizarlos al añadir
   espacios o escenas MEXT.
-- Ondas y sonido integrado (Medio 1D y Doppler y acústica). Falta la cubeta 2D, el pistón móvil y la escena MEXT 2012 del ventilador.
+- Ondas y sonido integrado (Medio 1D, Doppler y acústica, cubeta 2D; el ventilador de 2012 ya existe). Falta el pistón móvil y la fuente que se mueve en la cubeta.
 - Escenas MEXT del Laboratorio integradas: 24 escenas MEXT con prueba cada
   una. Sin representar: 2016 P3 (fricción entre dos cuerpos móviles),
   2006 1-(1) (fuerza que depende de la posición), 2025 T2 (sin enunciado),
@@ -37,6 +38,10 @@ física > funciones faltantes > rendimiento > pulido.
   (M11) y cinemática pura (M1, gráficas v-t prescritas).
 
 ## Pendiente (ordenado)
+
+**La lista de trabajo vigente es `docs/05_auditoria_producto.md`** (auditoría
+del 2026-11-19): producto e interfaz (A1 bloqueantes primero), simulador por
+módulo (B) y requisitos de producto (C). Lo de abajo es el historial.
 
 ### Fase 0 (hecha)
 - [x] Fuentes locales (OFL) en lugar de Google Fonts.
@@ -264,3 +269,4 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Fricción entre discos; arreglo del sentido de la fricción de los vértices y caso de Painlevé; 1028 pruebas.
 - 2026-11-19 — Óptica: espejo parabólico (motor, pantalla y ejemplo); 1031 pruebas; v0.15.0.
 - 2026-11-19 — Actualizaciones desde GitHub (plugin updater, latest.json firmado en cada release, aviso en Inicio); clave privada fuera del proyecto y como secreto del repositorio; 1042 pruebas.
+- 2026-11-19 — Auditoría con cuatro agentes (producto, simulador, referencias, nombre): docs/05_auditoria_producto.md. Pendiente de decidir el nombre definitivo (Volta era nombre en clave).
