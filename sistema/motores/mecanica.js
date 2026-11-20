@@ -37,6 +37,11 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {[number, number]} p      Posición (m)
  * @property {[number, number]} v      Velocidad (m/s)
  * @property {number} [radio=0]        Radio del disco (m): cuenta en los choques entre partículas y contra las superficies
+ * @property {number} [inercia]        Con radio: el disco gira, con momento de inercia I = inercia·m·r² (½ disco
+ *                                     o cilindro macizo, 2/5 esfera maciza, 2/3 esfera hueca, 1 aro). La fricción
+ *                                     actúa en el punto de contacto: rueda sin deslizar o desliza girando
+ * @property {number} [w=0]            Velocidad angular inicial (rad/s, positiva antihoraria)
+ * @property {number} [theta=0]        Ángulo inicial (rad)
  * @property {[number, number]} [F]    Fuerza constante aplicada (N)
  * @property {boolean} [cinematica]    Conductor de masa infinita que se mueve con velocidad constante v
  *   (una mano que sube despacio, una cinta): no siente fuerzas; su trabajo sale en energiaMecanica().W
@@ -172,9 +177,53 @@ function preparar(e) {
   const perfiles = P.map(p => (p.cinematica && Array.isArray(p.perfil) && p.perfil.length
     ? p.perfil.filter(f => Array.isArray(f) && f.length >= 3 && f.every(Number.isFinite)).map(f => [f[0], f[1], f[2]]).sort((a, b) => a[0] - b[0])
     : null));
-  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0 };
+  // Giro: un disco con inercia (I = k·m·r²) suma dos componentes al final del
+  // estado, su ángulo θ y su velocidad angular ω. En las filas de las
+  // restricciones su giro es un grado de libertad más, con índice n + k y
+  // masa inversa 1/I: una entrada [n + k, coef, 0] del gradiente es el
+  // coeficiente de ω (solo se usa la primera componente)
+  const rot = P.map(() => -1), I = [];
+  P.forEach((p, i) => { if (!p.cinematica && p.inercia > 0 && p.radio > 0) { rot[i] = I.length; I.push(p.inercia * p.m * p.radio ** 2); } });
+  for (const Ik of I) im.push(1 / Ik);
+  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2 };
   actualizarImpuestas(S, 0);
   return S;
+}
+
+/**
+ * Suma (dx, dy) a la velocidad del grado de libertad i: una partícula, o el
+ * giro de un disco si i ≥ n (entonces solo cuenta dx, que va a ω).
+ * @param {any} S @param {number[]} y @param {number} i @param {number} dx @param {number} dy
+ */
+function sumarVelocidad(S, y, i, dx, dy) {
+  if (i < S.n) { y[4 * i + 2] += dx; y[4 * i + 3] += dy; } else y[S.base + 2 * (i - S.n) + 1] += dx;
+}
+/** Igual que `sumarVelocidad`, para las posiciones (θ en un giro). @param {any} S @param {number[]} y @param {number} i @param {number} dx @param {number} dy */
+function sumarPosicion(S, y, i, dx, dy) {
+  if (i < S.n) { y[4 * i] += dx; y[4 * i + 1] += dy; } else y[S.base + 2 * (i - S.n)] += dx;
+}
+
+/**
+ * Deslizamiento de la partícula i sobre una superficie: velocidad tangencial
+ * del punto de contacto respecto de la superficie. En un disco que gira, el
+ * punto de contacto está en −r·n̂ desde el centro y se mueve con v + ω ẑ×(−r n̂):
+ * su componente tangencial es t̂·v + cr·ω, con cr = −r·t̂·(ẑ×n̂) (en un suelo
+ * horizontal recorrido hacia +x, cr = r: rueda sin deslizar con ω = −v/r).
+ * @param {any} S @param {any} sup @param {number[]} y @param {number} i
+ * @returns {{t: number[], vt: number, cr: number, grad: number[][]}} grad: gradiente de vt respecto de las velocidades
+ */
+function deslizamiento(S, sup, y, i) {
+  const p = puntoRel(sup, y, i), t = tangente(sup, p), vr = velocidadRel(sup, y, i), k = S.rot[i];
+  let vt = t[0] * vr[0] + t[1] * vr[1], cr = 0;
+  const grad = [[i, t[0], t[1]]];
+  if (k >= 0) {
+    const n = normalLibre(sup, p);
+    cr = -radio(S, i) * (t[1] * n[0] - t[0] * n[1]);
+    vt += cr * y[S.base + 2 * k + 1];
+    grad.push([S.n + k, cr, 0]);
+  }
+  if (sup.j >= 0) grad.push([sup.j, -t[0], -t[1]]);
+  return { t, vt, cr, grad };
 }
 
 /**
@@ -208,14 +257,16 @@ function ajenos(S, i, sup) {
   return sup.j === i || (S.im[i] === 0 && (sup.j < 0 || S.im[sup.j] === 0));
 }
 
-/** Estado inicial empaquetado [x, y, vx, vy] por partícula. */
-function estadoInicial(P) {
+/** Estado inicial empaquetado [x, y, vx, vy] por partícula. @param {any} S */
+function estadoInicial(S) {
   const y = [];
-  for (const p of P) y.push(p.p[0], p.p[1], p.v[0], p.v[1]);
+  for (const p of S.P) y.push(p.p[0], p.p[1], p.v[0], p.v[1]);
   // Dos componentes más: la energía disipada de forma continua (fricción,
   // arrastre, amortiguadores y la estabilización de las restricciones) y el
   // trabajo hecho por los cuerpos cinemáticos (la mano, la cinta)
   y.push(0, 0);
+  // Y el ángulo y la velocidad angular de cada disco que gira
+  S.P.forEach((p, i) => { if (S.rot[i] >= 0) y.push(p.theta || 0, p.w || 0); });
   return y;
 }
 
@@ -497,7 +548,7 @@ export function resolverLCP(A, q, libres = [], activoInicial) {
 
 /** Fuerzas aplicadas (gravedad, arrastre, resortes, fuerzas constantes, fricción). */
 function fuerzas(S, modo, y, lambdasPrevias) {
-  const n = S.n, F = new Array(2 * n).fill(0);
+  const n = S.n, F = new Array(2 * (n + S.nr)).fill(0);
   for (let i = 0; i < n; i++) {
     const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3];
     if (p.cinematica) continue;
@@ -517,19 +568,22 @@ function fuerzas(S, modo, y, lambdasPrevias) {
     F[2 * ia] += f * u[0]; F[2 * ia + 1] += f * u[1];
     if (ib >= 0) { F[2 * ib] -= f * u[0]; F[2 * ib + 1] -= f * u[1]; }
   }
-  // Fricción cinética en contactos que deslizan: −μ·N·t̂·signo(v_t)
+  // Fricción cinética en contactos que deslizan: −μ·N·signo(v_t) a lo largo
+  // del gradiente del deslizamiento (fuerza en el centro, par en el giro y
+  // reacción en el cuerpo que lleva la superficie)
   if (lambdasPrevias) {
     for (const [clave, s] of Object.entries(modo.contactos)) {
       const sup = S.sup[s.sup], iP = s.i;
       if (!(sup.mu > 0) || s.pegado) continue;
       const N = Math.max(0, lambdasPrevias[`contacto:${clave}`] || 0);
-      const t = tangente(sup, puntoRel(sup, y, iP)), vr = velocidadRel(sup, y, iP);
-      const vt = t[0] * vr[0] + t[1] * vr[1];
-      if (Math.abs(vt) < 1e-15) continue;
-      const f = -sup.mu * N * Math.sign(vt);
-      F[2 * iP] += f * t[0]; F[2 * iP + 1] += f * t[1];
-      // La fricción empuja al cuerpo que lleva la superficie al revés
-      if (sup.j >= 0) { F[2 * sup.j] -= f * t[0]; F[2 * sup.j + 1] -= f * t[1]; }
+      const { vt, grad } = deslizamiento(S, sup, y, iP);
+      // Sentido fijado al empezar el tramo (ver `simularMecanica`): así el
+      // campo es suave dentro del tramo y el integrador no ve el salto de la
+      // fricción en las etapas que pasan del cero; el cero es el evento vt0
+      const sentido = s.sentido || Math.sign(vt);
+      if (!sentido || (!s.sentido && Math.abs(vt) < 1e-15)) continue;
+      const f = -sup.mu * N * sentido;
+      for (const [i, gx, gy] of grad) { F[2 * i] += f * gx; F[2 * i + 1] += f * gy; }
     }
   }
   return F;
@@ -562,19 +616,20 @@ function dinamica(S, modo, y, restr) {
     const pegadas = [];
     for (const [clave, s] of Object.entries(modo.contactos)) {
       if (!s.pegado) continue;
-      const sup = S.sup[s.sup], iP = s.i, t = tangente(sup, puntoRel(sup, y, iP)), vr = velocidadRel(sup, y, iP);
-      const vt = t[0] * vr[0] + t[1] * vr[1], grad = [[iP, t[0], t[1]]];
-      if (sup.j >= 0) grad.push([sup.j, -t[0], -t[1]]);
+      // Sin deslizar en el punto de contacto: en un disco que gira es la
+      // rodadura (el centro avanza y el disco gira a la vez)
+      const { vt, grad } = deslizamiento(S, S.sup[s.sup], y, s.i);
       pegadas.push({ clave: `pegado:${clave}`, evaluar: () => ({ C: 0, Cp: vt, grad, jdv: 0 }) });
       ev.push(pegadas[pegadas.length - 1].evaluar());
     }
     const k = ev.length;
-    const a0 = new Array(2 * n);
+    const a0 = new Array(2 * (n + S.nr));
     for (let i = 0; i < n; i++) {
       // Un cinemático lleva la aceleración de su perfil (cero si no tiene)
       if (S.P[i].cinematica) { a0[2 * i] = S.aImp[i][0]; a0[2 * i + 1] = S.aImp[i][1]; continue; }
       a0[2 * i] = F[2 * i] * im[i]; a0[2 * i + 1] = F[2 * i + 1] * im[i];
     }
+    for (let q = n; q < n + S.nr; q++) { a0[2 * q] = F[2 * q] * im[q]; a0[2 * q + 1] = 0; }
     let lam = [];
     if (k) {
       // (J M⁻¹ Jᵀ) λ = −J a0 − J̇v − 2α Ċ − β² C
@@ -658,7 +713,7 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
       } else {
         ev.push({
           nombre: `vt0:${clave}`, direccion: 0, terminal: true,
-          g: (t, y) => { const tg = tangente(sup, puntoRel(sup, y, iP)), vr = velocidadRel(sup, y, iP); return tg[0] * vr[0] + tg[1] * vr[1]; },
+          g: (t, y) => deslizamiento(S, sup, y, iP).vt,
         });
       }
     }
@@ -776,6 +831,7 @@ function energiaEstado(S, y) {
     E += 0.5 * p.m * (vx * vx + vy * vy) - p.m * (S.g[0] * x + S.g[1] * yy);
     if (p.F) E -= p.F[0] * x + p.F[1] * yy;
   }
+  E += energiaGiro(S, y);
   for (const c of S.con) {
     if (c.tipo !== 'resorte') continue;
     const D = largoResorte(c, y);
@@ -801,6 +857,8 @@ function potenciaDisipada(S, y, acc) {
     if (p.cinematica) continue;
     dE += vx * (p.m * acc[2 * i] - p.m * S.g[0] - (p.F ? p.F[0] : 0)) + vy * (p.m * acc[2 * i + 1] - p.m * S.g[1] - (p.F ? p.F[1] : 0));
   }
+  // Giro: d(½Iω²)/dt = ω·I·α (ninguna fuerza conservativa hace par)
+  for (let q = 0; q < S.nr; q++) dE += y[S.base + 2 * q + 1] * S.I[q] * acc[2 * (S.n + q)];
   for (const c of S.con) {
     if (c.tipo !== 'resorte') continue;
     const ia = c.ia, ib = c.ib;
@@ -827,6 +885,12 @@ function potenciaConductores(S, y, fuerzaTotal) {
 function energiaCinetica(S, y) {
   let K = 0;
   for (let i = 0; i < S.n; i++) if (!S.P[i].cinematica) K += 0.5 * S.P[i].m * (y[4 * i + 2] ** 2 + y[4 * i + 3] ** 2);
+  return K + energiaGiro(S, y);
+}
+/** Energía cinética de rotación ½Iω² de los discos que giran. @param {any} S @param {number[]} y */
+function energiaGiro(S, y) {
+  let K = 0;
+  for (let q = 0; q < S.nr; q++) K += 0.5 * S.I[q] * y[S.base + 2 * q + 1] ** 2;
   return K;
 }
 
@@ -850,8 +914,8 @@ export function simularMecanica(escena) {
   const S = preparar(escena);
   const hayCinematicos = S.P.some(p => p.cinematica);
   const DUR = escena.duracion ?? 5, UMBRAL = escena.umbral ?? 1e-3, RTOL = escena.rtol ?? 1e-10;
-  let y = estadoInicial(S.P), t = 0;
-  /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean}>, pares: Record<string, boolean>, cuerdas: Record<string, any>}} */
+  let y = estadoInicial(S), t = 0;
+  /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean, sentido?: number}>, pares: Record<string, boolean>, cuerdas: Record<string, any>}} */
   let modo = { contactos: {}, pares: {}, cuerdas: {} };
   for (const c of S.con) {
     if (c.tipo === 'cuerda' || c.tipo === 'polea') {
@@ -922,7 +986,7 @@ export function simularMecanica(escena) {
     const filas = restriccionesDelModo(S, modo).filter(r => !r.unilateral).map(r => r.evaluar(y)).filter(e => Math.abs(e.Cp) > 1e-12);
     if (filas.length) {
       const P = resolverRegularizado(matrizJMJ(filas, S.im), filas.map(e => -e.Cp));
-      filas.forEach((e, r) => { for (const [i, gx, gy] of e.grad) { y[4 * i + 2] += P[r] * gx * S.im[i]; y[4 * i + 3] += P[r] * gy * S.im[i]; } });
+      filas.forEach((e, r) => { for (const [i, gx, gy] of e.grad) sumarVelocidad(S, y, i, P[r] * gx * S.im[i], P[r] * gy * S.im[i]); });
     }
   }
   revisarDespegues();
@@ -930,8 +994,7 @@ export function simularMecanica(escena) {
   for (const [clave, s] of Object.entries(modo.contactos)) {
     const sup = S.sup[s.sup];
     if (!(sup.mu > 0)) continue;
-    const iP = s.i, tg = tangente(sup, puntoRel(sup, y, iP)), vr = velocidadRel(sup, y, iP);
-    if (Math.abs(tg[0] * vr[0] + tg[1] * vr[1]) > 1e-12) continue;
+    if (Math.abs(deslizamiento(S, sup, y, s.i).vt) > 1e-12) continue;
     s.pegado = true;
     const L = dinamica(S, modo, y, restriccionesDelModo(S, modo)).lambdas;
     if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
@@ -955,7 +1018,7 @@ export function simularMecanica(escena) {
   const impulsoFila = (grad, P) => {
     for (const [i, gx, gy] of grad) {
       if (S.im[i] === 0) trabajoImpulsivo -= P * (gx * y[4 * i + 2] + gy * y[4 * i + 3]);
-      else { y[4 * i + 2] += P * gx * S.im[i]; y[4 * i + 3] += P * gy * S.im[i]; }
+      else sumarVelocidad(S, y, i, P * gx * S.im[i], P * gy * S.im[i]);
     }
   };
   /** Impacto de la partícula i con la superficie js; devuelve la descripción o '' si no hay choque. */
@@ -1116,7 +1179,7 @@ export function simularMecanica(escena) {
       if (!filas.length) return;
       const k = filas.length, A = regularizada(matrizJMJ(filas, masas)), b = filas.map(e => -e.C);
       const mu = resolver(A, b) ?? [];
-      for (let r = 0; r < k; r++) for (const [i, gx, gy] of filas[r].grad) { y[4 * i] += mu[r] * gx * S.im[i]; y[4 * i + 1] += mu[r] * gy * S.im[i]; }
+      for (let r = 0; r < k; r++) for (const [i, gx, gy] of filas[r].grad) sumarPosicion(S, y, i, mu[r] * gx * S.im[i], mu[r] * gy * S.im[i]);
     }
   };
   resolverSimultaneos(false);
@@ -1167,6 +1230,16 @@ export function simularMecanica(escena) {
   let silenciadosActuales = new Set();
   while (t < DUR - 1e-12 && k < LIMITE) {
     k++;
+    // Sentido de la fricción cinética de cada apoyo que desliza, fijo en el
+    // tramo: con signo(v_t) evaluado en cada etapa, el paso que contiene el
+    // cero mezclaba los dos sentidos y el instante en que una bola empieza a
+    // rodar salía 10⁻⁸ s tarde. Si el deslizamiento empieza en cero (justo al
+    // soltarse), se usa el signo instantáneo como antes.
+    for (const s of Object.values(modo.contactos)) {
+      if (s.pegado || !(S.sup[s.sup].mu > 0)) { s.sentido = 0; continue; }
+      const vt = deslizamiento(S, S.sup[s.sup], y, s.i).vt;
+      s.sentido = Math.abs(vt) > 1e-13 ? Math.sign(vt) : 0;
+    }
     const restr = restriccionesDelModo(S, modo);
     const m = modo;
     // Caché de la última evaluación: f(tR, yR) y los eventos en tR comparten arreglo
@@ -1179,6 +1252,7 @@ export function simularMecanica(escena) {
       const { acc, fuerzaTotal } = din(yy);
       const d = new Array(yy.length);
       for (let i = 0; i < S.n; i++) { d[4 * i] = yy[4 * i + 2]; d[4 * i + 1] = yy[4 * i + 3]; d[4 * i + 2] = acc[2 * i]; d[4 * i + 3] = acc[2 * i + 1]; }
+      for (let q = 0; q < S.nr; q++) { d[S.base + 2 * q] = yy[S.base + 2 * q + 1]; d[S.base + 2 * q + 1] = acc[2 * (S.n + q)]; }
       // E + Qc + Qi = E0 + W: lo que entra por los conductores menos lo que sube E
       const W = hayCinematicos ? potenciaConductores(S, yy, fuerzaTotal) : 0;
       d[4 * S.n] = potenciaDisipada(S, yy, acc) + W;
@@ -1262,12 +1336,14 @@ export function simularMecanica(escena) {
       const L = dinamica(S, modo, y, restr2).lambdas, sup = S.sup[s.sup];
       // ¿La fricción estática alcanza para mantenerlo quieto?
       if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
-      descripcion = s.pegado ? `Se detiene (${S.P[i].id})` : `Invierte el deslizamiento (${S.P[i].id})`;
+      descripcion = s.pegado ? (S.rot[i] >= 0 ? `Rueda sin deslizar (${S.P[i].id})` : `Se detiene (${S.P[i].id})`) : `Invierte el deslizamiento (${S.P[i].id})`;
       if (!s.pegado) {
         // Empuja un poco para que el evento no se repita en el mismo instante
-        const tg = tangente(sup, puntoRel(sup, y, i)), a = dinamica(S, modo, y, restr2).acc;
-        const aj = sup.j >= 0 ? [a[2 * sup.j], a[2 * sup.j + 1]] : [0, 0];
-        const sgn = Math.sign(tg[0] * (a[2 * i] - aj[0]) + tg[1] * (a[2 * i + 1] - aj[1])) || 1;
+        // (con el sentido de la aceleración del deslizamiento, giro incluido)
+        const { t: tg, grad } = deslizamiento(S, sup, y, i), a = dinamica(S, modo, y, restr2).acc;
+        let at = 0;
+        for (const [q, gx, gy] of grad) at += gx * a[2 * q] + gy * a[2 * q + 1];
+        const sgn = Math.sign(at) || 1;
         y[4 * i + 2] += sgn * 1e-12 * tg[0]; y[4 * i + 3] += sgn * 1e-12 * tg[1];
       }
     } else if (partes[0] === 'desliza') {
@@ -1345,7 +1421,7 @@ export function simularMecanica(escena) {
     anotarPerdidas(activasAntes, propia ? `${propia}:${partes.slice(1).join(':')}` : '');
   }
   if (!incompleta && t < DUR - 1e-9) incompleta = { t, motivo: `Se alcanzó el límite de ${LIMITE} eventos.` };
-  return { tramos, eventos, escena, S: { n: S.n, ids: S.P.map(p => p.id), m: S.P.map(p => p.m) }, duracion: DUR, tFin: t, incompleta };
+  return { tramos, eventos, escena, S: { n: S.n, ids: S.P.map(p => p.id), m: S.P.map(p => p.m), rot: S.rot, I: S.I, base: S.base }, duracion: DUR, tFin: t, incompleta };
 }
 
 /** Tirón de una cuerda que se tensa: se anula la velocidad de alejamiento (inelástico). */
@@ -1357,17 +1433,22 @@ function aplicarTiron(S, c, modo, y) {
   let den = 0;
   for (const [i, gx, gy] of grad) den += (gx * gx + gy * gy) * S.im[i];
   const L = -Cp / den;
-  for (const [i, gx, gy] of grad) { y[4 * i + 2] += L * gx * S.im[i]; y[4 * i + 3] += L * gy * S.im[i]; }
+  for (const [i, gx, gy] of grad) sumarVelocidad(S, y, i, L * gx * S.im[i], L * gy * S.im[i]);
 }
 
 /**
- * Estado de todas las partículas en el instante t.
+ * Estado de todas las partículas en el instante t. th y w son el ángulo (rad)
+ * y la velocidad angular (rad/s, positiva antihoraria) de los discos que
+ * giran; 0 en los demás.
  * @param {ReturnType<typeof simularMecanica>} sim @param {number} t
- * @returns {Array<{id: string, x: number, y: number, vx: number, vy: number}>}
+ * @returns {Array<{id: string, x: number, y: number, vx: number, vy: number, th: number, w: number}>}
  */
 export function estadoMecanica(sim, t) {
-  const y = vectorEn(sim, t);
-  return sim.S.ids.map((id, i) => ({ id, x: y[4 * i], y: y[4 * i + 1], vx: y[4 * i + 2], vy: y[4 * i + 3] }));
+  const y = vectorEn(sim, t), { rot, base } = sim.S;
+  return sim.S.ids.map((id, i) => {
+    const q = rot[i];
+    return { id, x: y[4 * i], y: y[4 * i + 1], vx: y[4 * i + 2], vy: y[4 * i + 3], th: q >= 0 ? y[base + 2 * q] : 0, w: q >= 0 ? y[base + 2 * q + 1] : 0 };
+  });
 }
 
 /** Vector de estado completo en t (con la disipada continua al final). */
@@ -1388,12 +1469,13 @@ function vectorEn(sim, t) {
  */
 export function energiaMecanica(sim, t) {
   const e = sim.escena, g = e.g ?? [0, -9.8], est = estadoMecanica(sim, t);
-  let K = 0, Ug = 0, Ue = 0, UF = 0;
+  let K = 0, Kr = 0, Ug = 0, Ue = 0, UF = 0;
   est.forEach((s, i) => {
     // Un cuerpo cinemático es un agente externo: su energía no cuenta (lo que
     // entrega va en W)
     if (e.particulas[i].cinematica) return;
     const m = sim.S.m[i], F = e.particulas[i].F;
+    if (sim.S.rot[i] >= 0) Kr += 0.5 * sim.S.I[sim.S.rot[i]] * s.w * s.w;
     K += 0.5 * m * (s.vx * s.vx + s.vy * s.vy);
     Ug -= m * (g[0] * s.x + g[1] * s.y);
     if (F) UF -= F[0] * s.x + F[1] * s.y;
@@ -1410,5 +1492,7 @@ export function energiaMecanica(sim, t) {
   const vec = vectorEn(sim, t), Qc = vec[4 * sim.S.n] ?? 0, W = vec[4 * sim.S.n + 1] ?? 0;
   let Qi = 0;
   for (const ev of sim.eventos) if (ev.t <= t + 1e-12) Qi += ev.perdida;
-  return { K, Ug, Ue, UF, E: K + Ug + Ue + UF, Qc, Qi, W };
+  // K incluye la energía de rotación Kr (½Iω²)
+  K += Kr;
+  return { K, Kr, Ug, Ue, UF, E: K + Ug + Ue + UF, Qc, Qi, W };
 }

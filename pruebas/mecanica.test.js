@@ -767,3 +767,117 @@ describe('prensa hidráulica (Pascal)', () => {
     cerca(energiaMecanica(sim, 1.5).E, E0, 1e-9);
   });
 });
+
+describe('discos que giran: rodadura y fricción en el punto de contacto', () => {
+  const rad = Math.PI / 180;
+  /** Plano que baja hacia la derecha con ángulo φ y un disco apoyado en él a s0 del extremo superior. */
+  const plano = ({ phi = 30 * rad, mu = 0.8, k = 0.5, r = 0.1, m = 2, s0 = 0.2, L = 6, dur = 1 } = {}) => {
+    const t = [Math.cos(phi), -Math.sin(phi)], n = [Math.sin(phi), Math.cos(phi)];
+    return {
+      duracion: dur,
+      superficies: [{ id: 'S', tipo: 'segmento', a: [0, 0], b: [L * t[0], L * t[1]], e: 0, mu }],
+      particulas: [{ id: 'D', m, radio: r, inercia: k, p: [s0 * t[0] + r * n[0], s0 * t[1] + r * n[1]], v: [0, 0] }],
+    };
+  };
+  const recorrido = (s, phi) => s.x * Math.cos(phi) - s.y * Math.sin(phi);
+
+  it('rueda sin deslizar por un plano: a = g·senφ/(1 + k), ω = −v/r y la energía se conserva', () => {
+    const phi = 30 * rad, k = 0.5, r = 0.1, sim = simularMecanica(plano({ phi, k, r }));
+    const a = g * Math.sin(phi) / (1 + k), d0 = recorrido(estadoMecanica(sim, 0)[0], phi);
+    for (const t of [0.3, 0.6, 1]) {
+      const s = estadoMecanica(sim, t)[0];
+      cerca(recorrido(s, phi) - d0, a * t * t / 2, 1e-8);
+      cerca(s.w, -a * t / r, 1e-7);
+      cerca(s.th, -a * t * t / (2 * r), 1e-7);
+    }
+    const E0 = energiaMecanica(sim, 0).E, e = energiaMecanica(sim, 1);
+    cerca(e.E, E0, 1e-8);
+    expect(e.Qc).toBeLessThan(1e-8);
+    // La energía de rotación es k/(1 + k) de la cinética
+    cerca(e.Kr / e.K, k / (1 + k), 1e-7);
+    expect(sim.eventos.some(x => x.nombre.includes('desliza'))).toBe(false);
+  });
+
+  it('con μs < tanφ·k/(1 + k) desliza girando: a = g(senφ − μ cosφ), α = μ·g·cosφ/(k·r), y Qc = μN·deslizamiento', () => {
+    const phi = 30 * rad, k = 0.5, r = 0.1, m = 2, mu = 0.1;   // umbral: tan30°/3 ≈ 0.19
+    const sim = simularMecanica(plano({ phi, k, r, m, mu }));
+    const a = g * (Math.sin(phi) - mu * Math.cos(phi)), al = mu * g * Math.cos(phi) / (k * r);
+    const d0 = recorrido(estadoMecanica(sim, 0)[0], phi);
+    for (const t of [0.4, 1]) {
+      const s = estadoMecanica(sim, t)[0];
+      cerca(recorrido(s, phi) - d0, a * t * t / 2, 1e-8);
+      cerca(s.w, -al * t, 1e-7);
+    }
+    // Deslizamiento acumulado: ∫(v + rω) dt = ½(a − r·α)t²
+    const e = energiaMecanica(sim, 1), N = m * g * Math.cos(phi);
+    cerca(e.Qc, mu * N * 0.5 * (a - r * al), 1e-7);
+    cerca(e.E + e.Qc + e.Qi, energiaMecanica(sim, 0).E, 1e-9);
+  });
+
+  it('bola de bolos: desliza y acaba rodando a 5/7 de v0 en t = 2v0/(7μg), perdiendo 2/7 de la energía', () => {
+    const m = 6, r = 0.11, v0 = 5, mu = 0.2, k = 2 / 5;
+    const sim = simularMecanica({
+      duracion: 3,
+      superficies: [{ id: 'pista', tipo: 'segmento', a: [-1, 0], b: [30, 0], e: 0, mu }],
+      particulas: [{ id: 'B', m, radio: r, inercia: k, p: [0, r], v: [v0, 0] }],
+    });
+    const tr = 2 * v0 / (7 * mu * g), rueda = ev(sim, 'Rueda sin deslizar');
+    expect(rueda).toBeTruthy();
+    cerca(rueda.t, tr, 1e-8);
+    const s = estadoMecanica(sim, 3)[0];
+    cerca(s.vx, 5 / 7 * v0, 1e-8);
+    cerca(s.w, -5 / 7 * v0 / r, 1e-7);
+    const e = energiaMecanica(sim, 3);
+    cerca(e.Qc, 0.5 * m * v0 * v0 * 2 / 7, 1e-7);
+    cerca(e.E + e.Qc + e.Qi, energiaMecanica(sim, 0).E, 1e-9);
+  });
+
+  it('con efecto hacia atrás vuelve: v_f = (v0 − k·r·ω0)/(1 + k), y el momento angular respecto del suelo se conserva', () => {
+    const m = 0.2, r = 0.1, v0 = 2, w0 = 100, mu = 0.3, k = 2 / 5;
+    const sim = simularMecanica({
+      duracion: 2,
+      superficies: [{ id: 'suelo', tipo: 'segmento', a: [-20, 0], b: [20, 0], e: 0, mu }],
+      particulas: [{ id: 'B', m, radio: r, inercia: k, p: [0, r], v: [v0, 0], w: w0 }],
+    });
+    const s = estadoMecanica(sim, 2)[0], vf = (v0 - k * r * w0) / (1 + k);
+    cerca(s.vx, vf, 1e-8);
+    expect(s.vx).toBeLessThan(0);
+    // L respecto de un punto del suelo: −m·v·r + I·ω (la fricción pasa por él)
+    const L = q => -m * q.vx * r + k * m * r * r * q.w;
+    cerca(L(s), L(estadoMecanica(sim, 0)[0]), 1e-9);
+  });
+
+  it('rueda dentro de un cuenco: péndulo de largo (R − r)(1 + k), periodo exacto 4·√(L/g)·K(sen(φ0/2))', () => {
+    const R = 1, r = 0.1, k = 0.5, f0 = 0.5, Lef = (R - r) * (1 + k);
+    const T = 4 * Math.sqrt(Lef / g) * elipticaK(Math.sin(f0 / 2));
+    const sim = simularMecanica({
+      duracion: T,
+      superficies: [{ id: 'cuenco', tipo: 'arco', c: [0, R], r: R, cara: 'interior', e: 0, mu: 0.9 }],
+      particulas: [{ id: 'D', m: 1, radio: r, inercia: k, p: [(R - r) * Math.sin(f0), R - (R - r) * Math.cos(f0)], v: [0, 0] }],
+    });
+    expect(sim.incompleta).toBeNull();
+    const x0 = (R - r) * Math.sin(f0);
+    cerca(estadoMecanica(sim, T / 2)[0].x, -x0, 1e-6);
+    cerca(estadoMecanica(sim, T)[0].x, x0, 1e-6);
+    const E0 = energiaMecanica(sim, 0).E;
+    for (const t of [T / 4, T / 2, T]) cerca(energiaMecanica(sim, t).E, E0, 1e-8);
+  });
+
+  it('sin fricción no gira; en el aire gira con ω constante', () => {
+    const phi = 30 * rad, sim = simularMecanica(plano({ phi, mu: 0 }));
+    const s = estadoMecanica(sim, 1)[0];
+    expect(s.w).toBe(0);
+    const d0 = recorrido(estadoMecanica(sim, 0)[0], phi);
+    cerca(recorrido(s, phi) - d0, g * Math.sin(phi) / 2, 1e-8);
+    const aire = simularMecanica({ duracion: 1, particulas: [{ id: 'D', m: 1, radio: 0.1, inercia: 0.5, p: [0, 10], v: [1, 0], w: 3, theta: 0.2 }] });
+    const q = estadoMecanica(aire, 1)[0];
+    cerca(q.w, 3, 1e-12); cerca(q.th, 3.2, 1e-10);
+  });
+
+  it('una partícula sin inercia o sin radio no gira (como antes)', () => {
+    const sim = simularMecanica({ duracion: 0.5, particulas: [{ id: 'P', m: 1, inercia: 0.5, p: [0, 1], v: [1, 0] }] });
+    expect(sim.S.rot[0]).toBe(-1);
+    const s = estadoMecanica(sim, 0.5)[0];
+    expect(s.w).toBe(0); expect(s.th).toBe(0);
+  });
+});
