@@ -635,6 +635,7 @@ const electrostatica = {
 // Circuitos: símbolos IEC.
 const circuitos = {
   'o-bateria': camino('M3 10h5.5M11.5 10H17M8.5 4.5v11M11.5 7.5v5') + signoMas(5, 5.5, 1.25),
+  'o-fuente-ca': circulo(10, 10, 5.25) + camino('M3 10h1.75M15.25 10H17M6.6 10c.85-2.3 2.55-2.3 3.4 0s2.55 2.3 3.4 0'),
   'o-fuente-corriente':
     circulo(10, 10, 5.25) + camino('M3 10h1.75M15.25 10H17') + vector(6.75, 10, 13.5, 10, { largo: 2.5, ancho: 2.5 }),
   'o-resistencia': camino('M3 10h3M14 10h3') + rect(6, 7.5, 8, 5),

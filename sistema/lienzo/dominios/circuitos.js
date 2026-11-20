@@ -34,7 +34,8 @@
     banda: 8,                     // px: ancho de la banda de potencial
     resistencia: [0.56, 0.2],     // u: medio largo y medio alto del rectángulo
     placa: 0.45, hueco: 0.13,     // u: capacitor: media placa y media separación
-    bateria: [0.5, 0.25, 0.13],   // u: media placa larga, media corta, media separación
+    bateria: [0.5, 0.25, 0.13],
+    fuenteCA: 0.42,   // u: media placa larga, media corta, media separación
     espira: 0.14,                 // u: radio de cada espira del inductor (4 espiras)
     bombilla: 0.3, medidor: 0.3,  // u: radios
     contacto: 3.25,               // px: radio de los contactos de un interruptor
@@ -173,6 +174,20 @@
           c.lineTo(x2 - L * Math.cos(ang) + A * Math.sin(ang), y2 - L * Math.sin(ang) - A * Math.cos(ang));
           c.lineTo(x2 - L * Math.cos(ang) - A * Math.sin(ang), y2 - L * Math.sin(ang) + A * Math.cos(ang)); c.closePath(); c.fill();
         }
+        break;
+      }
+      case 'fuente-ca': {
+        // Círculo con una onda senoidal dentro (fuente de voltaje alterna)
+        const rr = GC.fuenteCA;
+        linea([-1, 0], [-rr, 0]); linea([rr, 0], [1, 0]);
+        const [cx, cy] = S(0, 0), [ex] = S(rr, 0), R = Math.abs(ex - cx) || 1;
+        c.beginPath(); c.arc(cx, cy, R, 0, 2 * Math.PI); c.stroke();
+        const pts = [];
+        for (let k = 0; k <= 24; k++) { const u = -0.6 + 1.2 * k / 24; pts.push(S(u * rr, 0.32 * rr * Math.sin(Math.PI * u / 0.6))); }
+        trazar(c, pts); c.stroke();
+        // + en el borne a, como en la batería
+        const [px, py] = S(-rr - 0.2, rr * 0.75);
+        c.lineWidth = 1.5; this._circSigno(px, py, 1);
         break;
       }
       case 'bateria': {

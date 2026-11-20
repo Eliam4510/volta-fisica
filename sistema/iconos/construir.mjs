@@ -71,7 +71,7 @@ const INVENTARIO = {
     ),
     circuitos: lista(
       'o',
-      `bateria, fuente-corriente, resistencia, reostato, bombilla,
+      `bateria, fuente-ca, fuente-corriente, resistencia, reostato, bombilla,
       capacitor, inductor, interruptor, interruptor-3, cable, nodo`,
     ),
     magnetismo: lista(

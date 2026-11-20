@@ -7,6 +7,24 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.21.0] - 2026-11-20
+
+Corriente alterna en Circuitos.
+
+### Añadido
+
+- Fuente alterna V₀·sen(2πft + φ) con resistencia interna, en la paleta y
+  en los escenarios: el transitorio se simula como siempre y el balance
+  de energía sigue cerrando.
+- Análisis en frecuencia con fasores (admitancias G, jωC y 1/jωL): al
+  seleccionar un componente, el inspector da la amplitud de su voltaje y
+  su corriente, el desfase, la impedancia |Z| y la potencia media.
+- Diagramas de Bode (amplitud y fase contra la frecuencia en escala
+  logarítmica) como gráficas de la escena.
+- Ejemplos «Resonancia en un RLC serie» y «Filtro RC pasabajas», con la
+  frecuencia en un deslizador.
+- Las gráficas aceptan un formato propio para el eje horizontal.
+
 ## [0.20.0] - 2026-11-20
 
 Volta completo en inglés.

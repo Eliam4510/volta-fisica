@@ -132,7 +132,7 @@
       const xx = Math.round(X(v)) + 0.5;
       c.strokeStyle = t['cuadricula-menor'];
       c.beginPath(); c.moveTo(xx, m.t); c.lineTo(xx, H - m.b); c.stroke();
-      c.fillText(fmtMarca(v, mx.paso), xx, H - m.b + 5);
+      c.fillText(o.x.formato ? o.x.formato(v) : fmtMarca(v, mx.paso), xx, H - m.b + 5);
     }
 
     // Series. s.auxiliar: curva de referencia (1 px punteada); s.etiqueta: nombre junto a su extremo
@@ -185,7 +185,7 @@
       const px = e.hover[0], xv = o.x.min + (px - m.l) / (W - m.l - m.r) * (o.x.max - o.x.min);
       c.save(); c.strokeStyle = t['texto-2']; c.lineWidth = 1;
       c.beginPath(); c.moveTo(Math.round(px) + 0.5, m.t); c.lineTo(Math.round(px) + 0.5, H - m.b); c.stroke(); c.restore();
-      const lineas = [{ txt: `x = ${fmt(xv, 4)}`, color: t['texto-2'] }];
+      const lineas = [{ txt: o.x.lectura ? o.x.lectura(xv) : `x = ${fmt(xv, 4)}`, color: t['texto-2'] }];
       for (const s of o.series) {
         if (s.auxiliar) continue;
         const yv = valorEn(s, xv);

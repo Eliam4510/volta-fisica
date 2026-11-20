@@ -17,7 +17,7 @@
    La unidad de tiempo se elige con la duración (s, ms o µs) y las escenas
    de menos de un segundo se reproducen a cámara lenta.
    ========================================================================== */
-import { simularCircuito, puntoOperacion, estadoEn, balance, curvaBombilla, capacidadEn } from '../motores/circuitos.js';
+import { simularCircuito, puntoOperacion, estadoEn, balance, curvaBombilla, capacidadEn, respuestaFrecuencia, barridoFrecuencia, polar } from '../motores/circuitos.js';
 import { aCSV } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar as avisarLienzo } from '../componentes/exportar.js';
 import { crearEscena, numero, texto } from '../nucleo/escena.js';
@@ -37,6 +37,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   // params: [clave, etiqueta, unidad base, dimensión, valor por omisión]
   const CAT = {
     bateria: { nombre: 'Batería', en: 'Battery', ico: 'o-bateria', pref: 'E', params: [['E', 'Fem', 'V', 'potencial', 6], ['r', 'Resistencia interna', 'Ω', 'resistencia', 0]] },
+    'fuente-ca': { nombre: 'Fuente alterna', en: 'AC source', ico: 'o-fuente-ca', pref: 'V', params: [['V0', 'Amplitud', 'V', 'potencial', 10], ['f', 'Frecuencia', 'Hz', 'frecuencia', 50], ['fase', 'Fase', '°', 'angulo', 0], ['r', 'Resistencia interna', 'Ω', 'resistencia', 0]] },
     'fuente-corriente': { nombre: 'Fuente de corriente', en: 'Current source', ico: 'o-fuente-corriente', pref: 'J', params: [['I', 'Corriente', 'A', 'corriente', 0.01]] },
     resistencia: { nombre: 'Resistencia', en: 'Resistor', ico: 'o-resistencia', pref: 'R', params: [['R', 'Resistencia', 'Ω', 'resistencia', 100]] },
     reostato: { nombre: 'Reóstato', en: 'Rheostat', ico: 'o-reostato', pref: 'Rv', params: [['R', 'Resistencia total', 'Ω', 'resistencia', 100], ['x', 'Cursor', '', 'adimensional', 0.5]] },
@@ -99,6 +100,44 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   // componentes (el), índices (k), estados (en, despues) y acciones.
   // ---------------------------------------------------------------------
   const ESCENARIOS = [
+    {
+      clave: 'rlc-ca', titulo: 'Resonancia en un RLC serie', tipo: 'Ejemplo', duracion: 0.25, dt: 0.00015,
+      nota: 'Una fuente alterna de 10 V alimenta R, L y C en serie. La corriente es máxima en f₀ = 1/(2π√(LC)) ≈ 159 Hz, donde los voltajes de L y C se cancelan y la corriente vale V₀/R. Mueve f y mira la curva de resonancia; selecciona cada componente para leer sus fasores.',
+      elementos: [
+        { id: 'V', tipo: 'fuente-ca', p: [0, 4], rot: 270, V0: 10, f: 159, fase: 0, r: 0, etq: 'izq' },
+        { id: 'R', tipo: 'resistencia', p: [3, 8], rot: 0, R: 10, etq: 'arr' },
+        { id: 'L', tipo: 'inductor', p: [7, 8], rot: 0, L: 0.1, i0: 0, etq: 'arr' },
+        { id: 'C', tipo: 'capacitor', p: [10, 4], rot: 270, C: 10e-6, q0: 0, etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [5, 0], rot: 0 },
+      ],
+      cables: [[[0, 5], [0, 8], [2, 8]], [[4, 8], [6, 8]], [[8, 8], [10, 8], [10, 5]], [[10, 3], [10, 0], [0, 0], [0, 3]]],
+      nodos: {},
+      acciones: [],
+      variables: {
+        f: { sim: 'f', val: 159, min: 20, max: 600, paso: 1, u: 'Hz', factor: 1, liga: [['V', 'f']] },
+        R: { sim: 'R', val: 10, min: 2, max: 100, paso: 1, u: 'Ω', factor: 1, liga: [['R', 'R']] },
+      },
+      graficas: [{ m: 'V', series: [{ id: 'V' }, { id: 'C' }] }, { m: 'I', series: [{ id: 'R' }] }, { m: 'bode', id: 'R', mag: 'i', parte: 'amp' }],
+      sel: 'R',
+    },
+    {
+      clave: 'filtro-rc', titulo: 'Filtro RC pasabajas', tipo: 'Ejemplo', duracion: 0.05, dt: 0.00005,
+      nota: 'La salida es el voltaje del capacitor. Por debajo de la frecuencia de corte f_c = 1/(2πRC) ≈ 159 Hz pasa casi entera; por encima cae a la mitad por cada octava (−20 dB por década) y se retrasa hasta 90°. Mueve f y compara la amplitud y el desfase con las curvas de Bode.',
+      elementos: [
+        { id: 'V', tipo: 'fuente-ca', p: [0, 4], rot: 270, V0: 5, f: 159, fase: 0, r: 0, etq: 'izq' },
+        { id: 'R', tipo: 'resistencia', p: [4, 8], rot: 0, R: 1000, etq: 'arr' },
+        { id: 'C', tipo: 'capacitor', p: [8, 4], rot: 270, C: 1e-6, q0: 0, etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [4, 0], rot: 0 },
+      ],
+      cables: [[[0, 5], [0, 8], [3, 8]], [[5, 8], [8, 8], [8, 5]], [[8, 3], [8, 0], [0, 0], [0, 3]]],
+      nodos: {},
+      acciones: [],
+      variables: {
+        f: { sim: 'f', val: 159, min: 10, max: 2000, paso: 1, u: 'Hz', factor: 1, liga: [['V', 'f']] },
+      },
+      graficas: [{ m: 'V', series: [{ id: 'V' }, { id: 'C' }] }, { m: 'bode', id: 'C', mag: 'v', parte: 'amp' }, { m: 'bode', id: 'C', mag: 'v', parte: 'fase' }],
+      sel: 'C',
+    },
     {
       clave: 'rc', titulo: 'Carga y descarga de un capacitor', tipo: 'Tutorial', duracion: 12, dt: 0.01,
       elementos: [
@@ -804,6 +843,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     let valor = null;
     switch (el.tipo) {
       case 'bateria': valor = valorCon(el.E, 'V'); break;
+      case 'fuente-ca': valor = `${valorCon(el.V0, 'V')} · ${valorCon(el.f, 'Hz')}`; break;
       case 'fuente-corriente': valor = valorCon(el.I, 'A'); break;
       case 'resistencia': case 'reostato': valor = valorCon(el.R, 'Ω'); break;
       case 'capacitor': valor = k >= 0 ? `q = ${valorCon(s.q[k], 'C')}` : valorCon(el.C, 'F'); break;
@@ -1024,6 +1064,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   function datoArbol(el) {
     switch (el.tipo) {
       case 'bateria': return valorCon(el.E, 'V', 3);
+      case 'fuente-ca': return `${valorCon(el.V0, 'V', 3)} ~`;
       case 'resistencia': case 'reostato': return valorCon(el.R, 'Ω', 3);
       case 'capacitor': return valorCon(el.C, 'F', 3);
       case 'inductor': return valorCon(el.L, 'H', 3);
@@ -1054,6 +1095,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       const k = iDe(el.id), I = limpio(s.I[k], X.Imax), vv = limpio(s.v[k], X.Vmax), P = vv * I;
       switch (el.tipo) {
         case 'bateria': filas = [L('V', 'bornes', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('W', '', s.W[k], 'J')]; if (el.r > 0) filas.push(L('Q', 'r', s.Q[k], 'J')); break;
+        case 'fuente-ca': filas = [L('V', 'bornes', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('W', '', s.W[k], 'J')]; if (el.r > 0) filas.push(L('Q', 'r', s.Q[k], 'J')); break;
         case 'fuente-corriente': filas = [L('I', '', I, 'A'), L('V', '', -vv, 'V'), L('W', '', s.W[k], 'J')]; break;
         case 'resistencia': case 'reostato': filas = [L('V', '', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('Q', '', s.Q[k], 'J')]; break;
         case 'capacitor':
@@ -1072,6 +1114,21 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       const b = balance(SIM, s);
       filas = [L('W', '', b.W, 'J'), L('U', '', b.U, 'J'), L('Q', '', b.Q, 'J'), L('E', 'perdida', s.perdidas, 'J')];
       for (const [nombre, p] of Object.entries(ESC.nodos)) filas.push(L('V', nombre, s.V[X.nodo(clave(p))], 'V'));
+    }
+    // Régimen sinusoidal (fasores) a la frecuencia de la primera fuente alterna
+    if (el && el.tipo !== 'tierra') {
+      const fz = fasoresDe(el.id);
+      if (fz) {
+        const [Va, phV] = polar(fz.v), Ia = fz.i ? polar(fz.i) : null;
+        filas.push(['régimen', '', `${fmt(fz.f, 4)}`, 'Hz'], L('V', 'amp', Va, 'V'));
+        if (Ia) {
+          filas.push(L('I', 'amp', Ia[0], 'A'));
+          const dif = ((phV - Ia[1]) % 360 + 540) % 360 - 180;
+          filas.push(['φ', 'V−I', fmt(dif, 4), '°']);
+          if (Ia[0] > 1e-15 && el.tipo !== 'fuente-ca') filas.push(L('|Z|', '', Va / Ia[0], 'Ω'), L('P', 'media', 0.5 * Va * Ia[0] * Math.cos(dif * Math.PI / 180), 'W'));
+          if (el.tipo === 'fuente-ca') filas.push(L('P', 'media', -0.5 * Va * Ia[0] * Math.cos(dif * Math.PI / 180), 'W'));
+        }
+      }
     }
     $('#lecturas').innerHTML = filas.map(lectura).join('') || '<span class="u">—</span>';
     examen();
@@ -1246,10 +1303,58 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     $(`#l${n}`).textContent = cantidad((esV ? s.v[k] : s.I[k]) / B.f, B.uu);
   }
 
+  /** Frecuencia de la primera fuente alterna de la escena (o null). */
+  const fCA = () => { const e = ESC.elementos.find(x => x.tipo === 'fuente-ca'); return e ? e.f : null; };
+  /** Fasores de un componente a la frecuencia de la primera fuente alterna (en caché por corrida). */
+  function fasoresDe(id) {
+    const f = fCA();
+    if (!f || !RED || !X) return null;
+    if (!X.fasores) { try { X.fasores = respuestaFrecuencia(RED.circuito, f); } catch { X.fasores = { comp: new Map() }; } }
+    const z = X.fasores.comp.get(id);
+    return z ? { ...z, f } : null;
+  }
+  // Diagrama de Bode: amplitud o fase de un voltaje o una corriente contra la
+  // frecuencia en escala logarítmica (dos décadas a cada lado de la fuente)
+  function graficaBode(n, g) {
+    const cv = $(`#g${n}`), f0 = fCA(), el = elemento(g.id);
+    if (!f0 || !el || !RED || !X) { grafica(cv, { x: { min: 0, max: 1 }, y: { min: -1, max: 1 }, series: [] }); $(`#t${n}`).textContent = 'Sin fuente alterna'; $(`#l${n}`).textContent = ''; return; }
+    const clave = `${g.id}:${g.mag}`;
+    if (!X.bode) X.bode = {};
+    if (!X.bode[clave]) {
+      try { X.bode[clave] = barridoFrecuencia(RED.circuito, { id: g.id, magnitud: g.mag, fmin: f0 / 100, fmax: f0 * 100, n: 241 }); } catch { X.bode[clave] = null; }
+    }
+    const B = X.bode[clave];
+    if (!B) { grafica(cv, { x: { min: 0, max: 1 }, y: { min: -1, max: 1 }, series: [] }); return; }
+    const lx = B.f.map(Math.log10), U = g.mag === 'i' ? 'A' : 'V';
+    const fmtF = v => { const f = 10 ** v; return f >= 1000 ? `${fmt(f / 1000, 3)} k` : fmt(f, 3); };
+    const ahora = fasoresDe(g.id), x0 = Math.log10(f0);
+    if (g.parte === 'fase') {
+      grafica(cv, {
+        x: { min: lx[0], max: lx[lx.length - 1], formato: fmtF, lectura: v => `f = ${fmtF(v)}Hz` },
+        y: { min: -180, max: 180 },
+        series: [{ tramos: [lx.map((x, k) => [x, B.fase[k]])], familia: g.mag === 'i' ? 'corriente' : 'electrico', etiqueta: 'φ' }],
+        puntoCursor: ahora ? [x0, polar(g.mag === 'i' ? ahora.i : ahora.v)[1]] : undefined,
+      });
+      $(`#t${n}`).innerHTML = `Fase de <span class="sim">${g.mag === 'i' ? 'I' : 'V'}</span><sub>${nombreHTML(g.id)}</sub> (°) contra <span class="sim">f</span> (Hz)`;
+      $(`#l${n}`).textContent = ahora ? `${fmt(polar(g.mag === 'i' ? ahora.i : ahora.v)[1], 4)} °` : '';
+    } else {
+      const m = Math.max(1e-15, ...B.amp), [, uu] = enUnidad(m, U), fac = FAC[uu.slice(0, uu.length - U.length)] || 1;
+      grafica(cv, {
+        x: { min: lx[0], max: lx[lx.length - 1], formato: fmtF, lectura: v => `f = ${fmtF(v)}Hz` },
+        y: { min: 0, max: m / fac * 1.1 },
+        series: [{ tramos: [lx.map((x, k) => [x, B.amp[k] / fac])], familia: g.mag === 'i' ? 'corriente' : 'electrico', etiqueta: g.mag === 'i' ? 'I' : 'V' }],
+        puntoCursor: ahora && (g.mag === 'v' || ahora.i) ? [x0, polar(g.mag === 'i' ? ahora.i : ahora.v)[0] / fac] : undefined,
+      });
+      $(`#t${n}`).innerHTML = `Amplitud de <span class="sim">${g.mag === 'i' ? 'I' : 'V'}</span><sub>${nombreHTML(g.id)}</sub> (${uu}) contra <span class="sim">f</span> (Hz)`;
+      $(`#l${n}`).textContent = ahora && (g.mag === 'v' || ahora.i) ? cantidad(polar(g.mag === 'i' ? ahora.i : ahora.v)[0] / fac, uu) : '';
+    }
+  }
+
   function graficas() {
     if (!$('#p-graficas').hidden) {
       ESC.graficas.forEach((g, j) => {
-        if (g.m === 'iv') graficaIV(j + 1, g);
+        if (g.m === 'bode') graficaBode(j + 1, g);
+        else if (g.m === 'iv') graficaIV(j + 1, g);
         else if (g.m === 'barrido') graficaBarrido(j + 1, g);
         else graficaTiempo(j + 1, g);
       });
@@ -1267,7 +1372,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     let Qcables = 0;
     for (const el of ESC.elementos) {
       const k = iDe(el.id), n = nombreHTML(el.id);
-      if (el.tipo === 'bateria' || el.tipo === 'fuente-corriente') {
+      if (el.tipo === 'bateria' || el.tipo === 'fuente-ca' || el.tipo === 'fuente-corriente') {
         filas.push([`Trabajo de ${n}`, 'trabajo', s.W[k], 'Energía que entrega la fuente|Work done by the source']);
         if (el.r > 0) filas.push([`Calor en ${n} (interna)`, 'termico', s.Q[k], 'Calor en la resistencia interna|Internal Joule heat']);
       } else if (el.tipo === 'capacitor') {
@@ -1528,7 +1633,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       vistos.add(id);
       const el = { id, tipo: e.tipo, p: punto(e.p), rot: [0, 90, 180, 270].includes(e.rot) ? e.rot : 0, etq: ['arr', 'aba', 'izq', 'der'].includes(e.etq) ? e.etq : 'arr' };
       for (const [k, , , , def] of CAT[e.tipo].params) el[k] = numero(e[k], def, k === 'x' ? 0 : k === 'frio' ? 1 : -1e9, k === 'x' ? 1 : 1e12);
-      for (const k of ['R', 'C', 'L', 'Vn', 'Pn']) if (k in el && !(el[k] > 0)) el[k] = CAT[e.tipo].params.find(p => p[0] === k)[4];
+      for (const k of ['R', 'C', 'L', 'Vn', 'Pn', 'f']) if (k in el && !(el[k] > 0)) el[k] = CAT[e.tipo].params.find(p => p[0] === k)[4];
       if (el.tipo === 'interruptor') el.cerrado = !!e.cerrado;
       if (el.tipo === 'interruptor-3') el.posicion = ['a', 'b', 'c'].includes(e.posicion) ? e.posicion : null;
       if (el.tipo === 'capacitor') { const pl = placaSegura(e.placa); if (pl) el.placa = pl; }
@@ -1561,6 +1666,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       if (!g || typeof g !== 'object') return null;
       if (['V', 'I', 'q', 'U'].includes(g.m)) return { m: g.m, series: (Array.isArray(g.series) ? g.series : []).map(serie).filter(Boolean).slice(0, 3) };
       if (g.m === 'iv' && ['id', 'fuente', 'serie'].every(k => ids.has(idDe(g[k])))) return { m: 'iv', id: idDe(g.id), fuente: idDe(g.fuente), serie: idDe(g.serie) };
+      if (g.m === 'bode' && ids.has(idDe(g.id))) return { m: 'bode', id: idDe(g.id), mag: g.mag === 'i' ? 'i' : 'v', parte: g.parte === 'fase' ? 'fase' : 'amp' };
       if (g.m === 'barrido' && ids.has(idDe(g.id)) && (g.interruptor == null || ids.has(idDe(g.interruptor))) && Object.prototype.hasOwnProperty.call(variables, g.variable)) {
         return { m: 'barrido', id: idDe(g.id), variable: g.variable, ...(g.interruptor != null ? { interruptor: idDe(g.interruptor) } : {}) };
       }
@@ -1623,7 +1729,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       cols.push(`I_${e.id} (A)`, `v_${e.id} (V)`);
       if (e.tipo === 'capacitor') cols.push(`q_${e.id} (C)`, `U_${e.id} (J)`);
       if (e.tipo === 'inductor') cols.push(`U_${e.id} (J)`);
-      if (e.tipo === 'bateria' || e.tipo === 'fuente-corriente') cols.push(`W_${e.id} (J)`);
+      if (e.tipo === 'bateria' || e.tipo === 'fuente-ca' || e.tipo === 'fuente-corriente') cols.push(`W_${e.id} (J)`);
       if (['resistencia', 'reostato', 'bombilla'].includes(e.tipo)) cols.push(`Q_${e.id} (J)`);
     }
     cols.push('W total (J)', 'U total (J)', 'Q total (J)', 'perdidas (J)', 'residuo (J)');
@@ -1633,7 +1739,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         const k = iDe(e.id); f.push(m.I[k], m.v[k]);
         if (e.tipo === 'capacitor') f.push(m.q[k], m.U[k]);
         if (e.tipo === 'inductor') f.push(m.U[k]);
-        if (e.tipo === 'bateria' || e.tipo === 'fuente-corriente') f.push(m.W[k]);
+        if (e.tipo === 'bateria' || e.tipo === 'fuente-ca' || e.tipo === 'fuente-corriente') f.push(m.W[k]);
         if (['resistencia', 'reostato', 'bombilla'].includes(e.tipo)) f.push(m.Q[k]);
       }
       const b = balance(SIM, m); f.push(b.W, b.U, b.Q, m.perdidas, b.residuo);

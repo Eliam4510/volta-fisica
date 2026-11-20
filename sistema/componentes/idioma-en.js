@@ -3849,3 +3849,26 @@
     'Energía disipada (J)': 'Dissipated energy (J)',
   });
 })(typeof window !== 'undefined' ? window : globalThis);
+
+// ============================================================================
+// Circuitos: corriente alterna
+// ============================================================================
+(function (global) {
+  'use strict';
+  global.VOLTA_EN = Object.assign(global.VOLTA_EN || {}, {
+    'Fuente alterna': 'AC source',
+    'Resonancia en un RLC serie': 'Resonance in a series RLC circuit',
+    'Filtro RC pasabajas': 'RC low-pass filter',
+    'Una fuente alterna de 10 V alimenta R, L y C en serie. La corriente es máxima en f₀ = 1/(2π√(LC)) ≈ 159 Hz, donde los voltajes de L y C se cancelan y la corriente vale V₀/R. Mueve f y mira la curva de resonancia; selecciona cada componente para leer sus fasores.': 'A 10 V AC source drives R, L and C in series. The current peaks at f₀ = 1/(2π√(LC)) ≈ 159 Hz, where the voltages across L and C cancel and the current equals V₀/R. Move f and watch the resonance curve; select each component to read its phasors.',
+    'La salida es el voltaje del capacitor. Por debajo de la frecuencia de corte f_c = 1/(2πRC) ≈ 159 Hz pasa casi entera; por encima cae a la mitad por cada octava (−20 dB por década) y se retrasa hasta 90°. Mueve f y compara la amplitud y el desfase con las curvas de Bode.': 'The output is the capacitor voltage. Below the cutoff frequency f_c = 1/(2πRC) ≈ 159 Hz it passes almost entirely; above it, it halves every octave (−20 dB per decade) and lags by up to 90°. Move f and compare the amplitude and phase shift with the Bode curves.',
+    'Fuente alterna V₀·sen(2πft + φ): clic en la cuadrícula para colocarla; R la gira': 'AC source V₀·sin(2πft + φ): click on the grid to place it; R rotates it',
+    'Sin fuente alterna': 'No AC source',
+    'Amplitud de': 'Amplitude of',
+    'Fase de': 'Phase of',
+    'régimen': 'steady state',
+    'amp': 'amp',
+    'media': 'average',
+    '({0}) contra': '({0}) versus',
+    '{0} contra': '{0} versus',
+  });
+})(typeof window !== 'undefined' ? window : globalThis);
