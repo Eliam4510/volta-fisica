@@ -7,6 +7,33 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.12.0] - 2026-11-19
+
+Los discos de Mecánica giran: ruedan sin deslizar, deslizan girando y la
+fricción hace par en el punto de contacto.
+
+### Añadido
+
+- Motor de Mecánica: un disco con inercia (I = k·m·r²; ½ disco, ⅖ esfera,
+  1 aro) tiene ángulo y velocidad angular. La adherencia en el apoyo es la
+  rodadura sin deslizar y la fricción cinética frena y hace girar a la vez;
+  el balance de energía incluye ½Iω². Validado contra la rodadura por un
+  plano (a = g·sen θ/(1 + k)), el umbral μs = tan θ·k/(1 + k), la bola de
+  bolos (rueda a 5/7 de v₀ en t = 2v₀/(7μg)), el efecto hacia atrás (se
+  conserva el momento angular respecto del suelo) y la rodadura dentro de un
+  cuenco (periodo exacto con largo (R − r)(1 + k)). 11 pruebas nuevas.
+- Laboratorio: giro en el inspector (No, Disco, Esfera, Aro) y velocidad
+  angular inicial; el disco dibuja un radio que gira; lecturas de ω y de la
+  energía de rotación; ω elegible en las gráficas; los vectores de fricción
+  y normal de un disco que rueda salen de I·α. Ejemplos nuevos: carrera de
+  aro, disco y esfera con fotopuertas, y bola que desliza y acaba rodando.
+
+### Corregido
+
+- El sentido de la fricción cinética queda fijo en cada tramo: el instante
+  en que un cuerpo deja de deslizar se localizaba hasta 10⁻⁸ s tarde porque
+  el paso que contenía el cero mezclaba los dos sentidos.
+
 ## [0.11.0] - 2026-11-19
 
 Gravitación con sus tres espacios (Sistema solar y Maniobras, sobre un
