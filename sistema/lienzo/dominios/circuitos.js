@@ -214,6 +214,21 @@
         for (const sx of [-1, 1]) { const [px, py] = S(sx * (xb + 0.24), hb - 0.05); c.fillStyle = t.tinta; c.beginPath(); c.arc(px, py, 2.25, 0, 2 * Math.PI); c.fill(); }
         break;
       }
+      case 'transistor': {
+        // Círculo, barra de la base y colector y emisor en diagonal; la flecha del
+        // emisor sale (NPN) o entra (PNP)
+        const [cx, cy] = S(-0.08, 0), [ex] = S(0.47, 0), rr = Math.abs(ex - cx) || 1;
+        c.beginPath(); c.arc(cx, cy, rr, 0, 2 * Math.PI); c.stroke();
+        linea([0, 1], [0, 0.55]); linea([0, -1], [0, -0.55]); linea([-1, 0], [-0.35, 0]);
+        c.save(); c.lineWidth = 2.5; linea([-0.35, -0.38], [-0.35, 0.38]); c.restore();
+        linea([-0.35, 0.18], [0, 0.55]); linea([-0.35, -0.18], [0, -0.55]);
+        const pnp = o.polaridad === 'pnp', [ax, ay] = pnp ? S(-0.3, -0.23) : S(-0.03, -0.52), [bx, by] = pnp ? S(-0.1, -0.44) : S(-0.2, -0.34);
+        const ang = Math.atan2(ay - by, ax - bx), L = 7, A = 3.2;
+        c.fillStyle = t.tinta; c.beginPath(); c.moveTo(ax, ay);
+        c.lineTo(ax - L * Math.cos(ang) + A * Math.sin(ang), ay - L * Math.sin(ang) - A * Math.cos(ang));
+        c.lineTo(ax - L * Math.cos(ang) - A * Math.sin(ang), ay - L * Math.sin(ang) + A * Math.cos(ang)); c.closePath(); c.fill();
+        break;
+      }
       case 'opamp': {
         // Triángulo con las entradas − (arriba) y + (abajo) y la salida en la punta
         linea([-1, 1], [-0.4, 1]); linea([-1, -1], [-0.4, -1]); linea([1.6, 0], [2, 0]);

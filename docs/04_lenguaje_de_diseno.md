@@ -267,7 +267,7 @@ mext, escena.
 - Electrostática: carga-positiva, carga-negativa, esfera-cargada,
   hilo-infinito, segmento-cargado, anillo, lamina, capacitor-placas,
   conductor, dielectrico, campo-uniforme, tierra.
-- Circuitos: bateria, fuente-ca, fuente-corriente, resistencia, reostato, bombilla, diodo, led, zener, opamp,
+- Circuitos: bateria, fuente-ca, fuente-corriente, resistencia, reostato, bombilla, diodo, led, zener, opamp, transistor,
   capacitor, inductor, transformador, interruptor, interruptor-3, cable, nodo.
 - Magnetismo: hilo-corriente, segmento-corriente, espira, solenoide, iman,
   region-b, region-e, particula-cargada, fuente-iones, placas-aceleradoras,

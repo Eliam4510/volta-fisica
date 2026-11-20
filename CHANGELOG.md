@@ -7,6 +7,25 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.25.0] - 2026-11-20
+
+Transistor bipolar en Circuitos.
+
+### Añadido
+
+- Transistor bipolar NPN y PNP (modelo de Ebers–Moll) con ganancia β y
+  V_BE ajustables. El inspector lee I_C, I_B, I_E, V_CE, V_BE, la β
+  medida y la zona de trabajo (corte, activa o saturación); las gráficas
+  pueden mostrar la corriente de base («Q·b»).
+- Ejemplos «Transistor como interruptor» (una corriente de base pequeña
+  enciende un LED) y «Curva característica del transistor» (barrido de
+  I_C contra V_CC con la meseta en β·I_B).
+
+### Corregido
+
+- Newton usa la tolerancia de SPICE (1 µV) en diodos y transistores: con
+  una base casi al aire el redondeo no dejaba converger.
+
 ## [0.24.0] - 2026-11-20
 
 Diodo Zener y amplificador operacional en Circuitos.

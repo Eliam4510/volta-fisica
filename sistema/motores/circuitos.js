@@ -780,7 +780,8 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
           return vn;
         };
         const nbe = lim(jbe, guia[k]), nbc = lim(jbc, guiaBC[k]);
-        if (Math.abs(nbe - guia[k]) > 1e-9 * VT + 1e-12 * Math.abs(nbe) || Math.abs(nbc - guiaBC[k]) > 1e-9 * VT + 1e-12 * Math.abs(nbc)) listo = false;
+        // Tolerancia de SPICE: 1 µV más una parte en 10⁹ (una base casi flotante tiene ruido de redondeo de ese orden)
+        if (Math.abs(nbe - guia[k]) > 1e-6 + 1e-9 * Math.abs(nbe) || Math.abs(nbc - guiaBC[k]) > 1e-6 + 1e-9 * Math.abs(nbc)) listo = false;
         guia[k] = nbe; guiaBC[k] = nbc;
         return;
       }
@@ -802,7 +803,8 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
       // Diodo: limitación de SPICE; bombilla: paso acotado por su voltaje nominal
       if (r.curva.limitar) d = r.curva.limitar(v, guia[k]) - guia[k];
       else { const lim = 2 * r.curva.Vn; if (Math.abs(d) > lim) d = Math.sign(d) * lim; }
-      if (Math.abs(d) > 1e-13 * r.curva.Vn + 1e-12 * Math.abs(v)) listo = false;
+      // Diodos: tolerancia de SPICE (1 µV); bombillas: mucho más fina (están bien condicionadas)
+      if (Math.abs(d) > (r.curva.diodo ? 1e-6 + 1e-9 * Math.abs(v) : 1e-13 * r.curva.Vn + 1e-12 * Math.abs(v))) listo = false;
       guia[k] += d;
     });
     if (listo) return extraer(T, x, st, h, metodo, iL);

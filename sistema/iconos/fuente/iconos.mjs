@@ -641,6 +641,7 @@ const circuitos = {
   'o-transformador': camino('M3 5h3.5M3 15h3.5M13.5 5H17M13.5 15H17M9.25 4v12M10.75 4v12') + camino('M6.5 5a1.25 1.25 0 0 1 0 2.5a1.25 1.25 0 0 1 0 2.5a1.25 1.25 0 0 1 0 2.5a1.25 1.25 0 0 1 0 2.5') + camino('M13.5 5a1.25 1.25 0 0 0 0 2.5a1.25 1.25 0 0 0 0 2.5a1.25 1.25 0 0 0 0 2.5a1.25 1.25 0 0 0 0 2.5'),
   'o-zener': camino('M3 10h4M13 10h4M11.5 5.5L13 6v8l1.5.5') + camino('M7 6l6 4-6 4Z'),
   'o-opamp': camino('M5 3.5v13L16.5 10Z') + camino('M2.5 7H5M2.5 13H5M16.5 10H18M6.5 7h2M6.5 13h2M7.5 12v2'),
+  'o-transistor': circulo(10, 10, 6) + camino('M3 10h4.5M7.5 6.5v7M7.5 8.5L12 5.5V3M7.5 11.5L12 14.5V17') + camino('M12 14.5l-2.6-.3 1.2-1.8Z'),
   'o-fuente-corriente':
     circulo(10, 10, 5.25) + camino('M3 10h1.75M15.25 10H17') + vector(6.75, 10, 13.5, 10, { largo: 2.5, ancho: 2.5 }),
   'o-resistencia': camino('M3 10h3M14 10h3') + rect(6, 7.5, 8, 5),

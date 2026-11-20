@@ -56,6 +56,19 @@ describe('transistor PNP', () => {
 });
 
 describe('transistor en el tiempo', () => {
+  it('con la base al aire y un LED en el colector también converge (interruptor abierto)', () => {
+    const c = { componentes: [
+      { id: 'E', tipo: 'bateria', nodos: ['v', '0'], E: 9 },
+      { id: 'S', tipo: 'interruptor', nodos: ['v', 'x'], cerrado: false },
+      { id: 'Rb', tipo: 'resistencia', nodos: ['x', 'b'], R: 10000 },
+      { id: 'D', tipo: 'led', nodos: ['v', 'k'] }, { id: 'Rc', tipo: 'resistencia', nodos: ['k', 'c'], R: 330 },
+      { id: 'Q', tipo: 'transistor', nodos: ['c', 'b', '0'] },
+      { id: 'T', tipo: 'tierra', nodos: ['0'] },
+    ], acciones: [{ t: 0.2, id: 'S', estado: true }] };
+    const sim = simularCircuito(c, { duracion: 0.5, dt: 0.001 }), k = indiceDe(sim, 'Q');
+    expect(Math.abs(sim.muestras[100].I[k])).toBeLessThan(1e-6);
+    expect(sim.muestras[sim.muestras.length - 1].I[k]).toBeGreaterThan(0.015);
+  });
   it('como interruptor: al cerrar la base se enciende, y el balance de energía cierra', () => {
     const c = { componentes: [
       { id: 'Vcc', tipo: 'bateria', nodos: ['v', '0'], E: 9 },
