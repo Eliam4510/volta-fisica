@@ -7,6 +7,15 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Actualizaciones desde GitHub: Volta instalado busca versiones nuevas al
+  abrir Inicio (cada 6 horas como mucho) y con «Buscar actualizaciones»; el
+  aviso muestra las novedades y «Instalar y reiniciar» descarga el
+  instalador firmado, comprueba la firma, lo instala y reinicia. «Ahora no»
+  no vuelve a anunciar esa versión. La portátil abre la página de descarga.
+  Cada release adjunta `latest.json` y el instalador firmado.
+
 ## [0.15.0] - 2026-11-19
 
 Fricción entre discos que giran y espejo parabólico en Óptica.

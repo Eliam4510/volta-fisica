@@ -126,3 +126,21 @@ vieja.
     contrario a la adherencia que no alcanzó. La fricción entre discos solo
     existe si alguno gira: entre partículas que no giran, el radio sigue
     sirviendo solo para chocar y las escenas anteriores no cambian.
+21. **Actualizaciones con el plugin oficial y releases de GitHub
+    (2026-11-19).** Se usa tauri-plugin-updater con un manifiesto
+    `latest.json` adjunto a cada release y la dirección fija
+    `releases/latest/download/latest.json`: no hace falta servidor propio.
+    El instalador va firmado (minisign); la clave pública está en
+    `tauri.conf.json` y la privada vive fuera del proyecto
+    (`~/.tauri/volta-actualizaciones.key` en el perfil del autor, que guarda
+    una copia de seguridad) y como secreto `TAURI_SIGNING_PRIVATE_KEY` del
+    repositorio. Los artefactos firmados se piden solo en CI (`--config`
+    con `createUpdaterArtifacts`), para que una compilación local sin clave
+    no falle; sin el secreto, la release sale igual pero sin `latest.json`.
+    En Windows la actualización ejecuta el instalador NSIS en modo pasivo,
+    así que solo la versión instalada se actualiza sola; la portátil se
+    reconoce porque no tiene `uninstall.exe` al lado y se le ofrece la
+    página de descarga (plugin opener, limitado a la dirección del
+    repositorio). Si la clave privada se pierde, las versiones instaladas
+    ya no podrán actualizarse solas: habría que publicar una con clave
+    nueva y que cada usuario la instale a mano.

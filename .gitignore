@@ -14,6 +14,9 @@ escenarios/figuras/
 *.log
 .env
 .env.*
+# Claves de firma de las actualizaciones (la privada vive fuera del proyecto
+# y como secreto de GitHub; nunca en el repositorio)
+*.key
 
 # Sistema
 Thumbs.db

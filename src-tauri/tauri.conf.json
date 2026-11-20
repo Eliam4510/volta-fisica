@@ -25,7 +25,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "Eliam Mojardin Ibarra",
     "category": "Education",
     "shortDescription": "Simulador de física",
@@ -39,9 +41,23 @@
     ],
     "windows": {
       "nsis": {
-        "languages": ["Spanish", "English"],
+        "languages": [
+          "Spanish",
+          "English"
+        ],
         "displayLanguageSelector": false,
         "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBBREFDNzQzNjlDMDgwNEYKUldSUGdNQnBROGZhQ3B3bFk3d1Ztb2ZaK3V6TWdiRW1ucW5tWU1UVnZXTUgxWjFhcXNpWDk0c3QK",
+      "endpoints": [
+        "https://github.com/Eliam4510/volta-fisica/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

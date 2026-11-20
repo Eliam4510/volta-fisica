@@ -92,6 +92,7 @@
     </section>
     <footer class="pie">
       <span>Volta <span class="num" id="version">0.1.0</span></span>
+      <button class="btn btn-compacto" id="b-actualizar" data-ayuda="Buscar una versión nueva en GitHub|Check for updates">Buscar actualizaciones</button>
       <span>·</span><span>Licencia MIT</span>
       <span>·</span><a href="https://github.com/Eliam4510/volta-fisica" target="_blank" rel="noopener">github.com/Eliam4510/volta-fisica</a>
       <span class="sp"></span><span>Las cantidades se escriben según ISO 80000</span>
@@ -105,6 +106,7 @@
 import { abrirEscena, recientes } from '../componentes/archivos.js';
 import { texto } from '../nucleo/escena.js';
 import { avisar } from '../componentes/exportar.js';
+import { anunciarActualizacion } from '../componentes/actualizacion.js';
 (function () {
   'use strict';
   // [id, nombre, descripción, espacios de trabajo, escenas MEXT que existen, pantalla].
@@ -291,6 +293,15 @@ import { avisar } from '../componentes/exportar.js';
   // ---------- Versión desde la aplicación nativa (si existe) ----------
   const tauri = window.__TAURI__;
   if (tauri?.core?.invoke) tauri.core.invoke('version').then(v => { document.getElementById('version').textContent = v; }).catch(() => {});
+
+  // ---------- Actualizaciones desde GitHub (solo en la aplicación) ----------
+  // Al abrir Inicio se busca sola cada 6 h; el botón del pie busca siempre
+  const mainEl = document.querySelector('main');
+  if (!tauri) document.getElementById('b-actualizar').hidden = true;
+  anunciarActualizacion(mainEl).catch(() => {});
+  document.getElementById('b-actualizar').addEventListener('click', () => {
+    anunciarActualizacion(mainEl, { manual: true, avisar: t => avisar(document.body, t) }).catch(() => {});
+  });
   Volta.alCambiarTema(dibujarMinis);
   window.addEventListener('resize', dibujarMinis);
 })();

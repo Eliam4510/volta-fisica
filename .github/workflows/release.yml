@@ -2,6 +2,9 @@ name: Release
 
 # Al publicar una release (gh release create vX.Y.Z), compila Volta para
 # Windows y adjunta el instalador y el ejecutable portátil a esa release.
+# Con el secreto TAURI_SIGNING_PRIVATE_KEY, además firma el instalador y
+# adjunta latest.json: es lo que consulta la aplicación instalada para
+# actualizarse sola (releases/latest/download/latest.json).
 on:
   release:
     types: [published]
@@ -34,7 +37,21 @@ jobs:
           workspaces: src-tauri -> target
       - run: npm ci
       - run: npm test
-      - run: npx tauri build
+      - name: Compilar (firmado si hay clave)
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: |
+          if ($env:TAURI_SIGNING_PRIVATE_KEY) {
+            # La configuración extra va en un archivo: npx es un .cmd y el JSON
+            # en la línea de órdenes perdería las comillas
+            '{"bundle":{"createUpdaterArtifacts":true}}' | Set-Content actualizador.json
+            npx tauri build --config actualizador.json
+          } else {
+            Write-Warning 'Sin TAURI_SIGNING_PRIVATE_KEY: release sin actualización automática.'
+            npx tauri build
+          }
       - name: Adjuntar a la release
         shell: pwsh
         env:
@@ -44,4 +61,24 @@ jobs:
           $instalador = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
           $portatil = "Volta_${version}_x64_portable.exe"
           Copy-Item src-tauri/target/release/volta.exe $portatil
-          gh release upload $env:ETIQUETA $instalador.FullName $portatil --clobber
+          $archivos = @($instalador.FullName, $portatil)
+          $firma = "$($instalador.FullName).sig"
+          if (Test-Path $firma) {
+            # Manifiesto del actualizador: versión, notas de la release, firma y
+            # dirección del instalador de esta release
+            $notas = gh release view $env:ETIQUETA --json body -q .body
+            $manifiesto = [ordered]@{
+              version   = $version
+              notes     = ($notas -join "`n")
+              pub_date  = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+              platforms = [ordered]@{
+                'windows-x86_64' = [ordered]@{
+                  signature = (Get-Content $firma -Raw).Trim()
+                  url       = "https://github.com/${{ github.repository }}/releases/download/$($env:ETIQUETA)/$($instalador.Name)"
+                }
+              }
+            }
+            $manifiesto | ConvertTo-Json -Depth 5 | Set-Content latest.json
+            $archivos += 'latest.json'
+          }
+          gh release upload $env:ETIQUETA @archivos --clobber

@@ -479,3 +479,18 @@ a.menu-item { color: inherit; text-decoration: none; }
 .tarjeta-escena .cuerpo { padding: var(--e-2) var(--e-3) var(--e-3); display: flex; flex-direction: column; gap: 6px; }
 .tarjeta-escena .titulo { font-weight: var(--peso-medio); color: var(--texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tarjeta-escena .meta { display: flex; align-items: center; gap: var(--e-2); font-size: var(--t-pequeno); color: var(--texto-3); }
+
+/* Aviso de versión nueva (Inicio): una franja con borde, sin color propio */
+.aviso-actualizacion {
+  display: flex; align-items: flex-start; gap: var(--e-4);
+  padding: var(--e-3) var(--e-4); border: 1px solid var(--linea); border-radius: var(--r-tarjeta);
+  background: var(--fondo, transparent);
+}
+.aviso-actualizacion .texto-act { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.aviso-actualizacion strong { font-weight: var(--peso-fuerte); }
+.aviso-actualizacion .nota { color: var(--texto-2); font-size: var(--t-pequeno); }
+.aviso-actualizacion .notas-act {
+  margin: var(--e-2) 0 0; white-space: pre-wrap; font-family: var(--fuente-interfaz); font-size: var(--t-pequeno);
+  color: var(--texto-2); max-height: 180px; overflow: auto;
+}
+.aviso-actualizacion .acciones-act { display: flex; gap: var(--e-2); flex-shrink: 0; }

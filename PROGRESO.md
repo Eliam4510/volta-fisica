@@ -221,7 +221,10 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 3. `npx vitest run`, commit, `git tag -a vX.Y.Z -m "Volta X.Y.Z"`, push del tag.
 4. `node herramientas/notas-release.mjs X.Y.Z > notas.md` y
    `gh release create vX.Y.Z --title "Volta X.Y.Z" --notes-file notas.md`.
-5. El flujo `release.yml` compila y adjunta instalador y portátil.
+5. El flujo `release.yml` compila y adjunta instalador y portátil, y con el
+   secreto `TAURI_SIGNING_PRIVATE_KEY` firma el instalador y adjunta
+   `latest.json` (actualización automática; DECISIONES 21). Comprobar que
+   `latest.json` está entre los archivos de la release.
 6. Comprobar que terminó: `gh run watch <id> --exit-status` y
    `gh release view vX.Y.Z --json assets`. Si falla, no se puede mover la
    etiqueta (sería un push forzado): se corrige y se publica X.Y.(Z+1), y se
@@ -260,3 +263,4 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Caras y esquinas de los bloques (apilar, discos contra bloques); ejemplo de cajas apiladas; 1024 pruebas; v0.14.0.
 - 2026-11-19 — Fricción entre discos; arreglo del sentido de la fricción de los vértices y caso de Painlevé; 1028 pruebas.
 - 2026-11-19 — Óptica: espejo parabólico (motor, pantalla y ejemplo); 1031 pruebas; v0.15.0.
+- 2026-11-19 — Actualizaciones desde GitHub (plugin updater, latest.json firmado en cada release, aviso en Inicio); clave privada fuera del proyecto y como secreto del repositorio; 1042 pruebas.

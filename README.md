@@ -104,6 +104,15 @@ El plan completo, con dependencias y orden de implementación, está en
    - `Volta_x.y.z_x64_portable.exe`: ejecutable portátil, sin instalación.
 2. Requiere Windows 10 o 11 con WebView2 (incluido en Windows 11).
 
+### Actualizaciones
+
+Desde la versión 0.16.0, Volta instalado con el instalador busca versiones
+nuevas en las releases de GitHub al abrir Inicio (como mucho cada 6 horas) y
+con el botón «Buscar actualizaciones» del pie. Si hay una, la anuncia con sus
+novedades; «Instalar y reiniciar» la descarga, comprueba su firma, la instala
+y reinicia Volta. Las escenas guardadas no se tocan. La versión portátil no
+puede reemplazarse a sí misma: el aviso abre la página de descarga.
+
 ## Compilación
 
 Requisitos: [Node.js](https://nodejs.org/) 22 o superior,
