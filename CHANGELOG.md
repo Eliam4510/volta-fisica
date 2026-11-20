@@ -7,8 +7,22 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.16.0] - 2026-11-19
+
+Primera versión que se comporta como una aplicación de Windows: archivos de
+verdad con aviso de cambios sin guardar, escenas .volta que se abren desde
+el Explorador, Inicio con buscador, Nueva escena y Ajustes, y
+actualizaciones automáticas desde GitHub. Las versiones anteriores no se
+actualizan solas: esta hay que instalarla a mano una vez.
+
 ### Añadido
 
+- Actualizaciones desde GitHub: Volta instalado busca versiones nuevas al
+  abrir Inicio (cada 6 horas como mucho) y con «Buscar actualizaciones»; el
+  aviso muestra las novedades y «Instalar y reiniciar» descarga el
+  instalador firmado, comprueba la firma, lo instala y reinicia. «Ahora no»
+  no vuelve a anunciar esa versión. La portátil abre la página de descarga.
+  Cada release adjunta `latest.json` y el instalador firmado.
 - Documentos de verdad en las 23 pantallas: Guardar escribe en el archivo
   de la escena (la primera vez pregunta dónde) y Guardar como (Ctrl Mayús
   S) elige otro; el título de la ventana dice el archivo y marca los
@@ -52,13 +66,6 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   sobrescribía el autoguardado, y una pantalla abierta desde la Biblioteca
   no autoguardaba en toda la sesión. «Nueva escena» de Inicio borraba el
   trabajo de Mecánica.
-
-- Actualizaciones desde GitHub: Volta instalado busca versiones nuevas al
-  abrir Inicio (cada 6 horas como mucho) y con «Buscar actualizaciones»; el
-  aviso muestra las novedades y «Instalar y reiniciar» descarga el
-  instalador firmado, comprueba la firma, lo instala y reinicia. «Ahora no»
-  no vuelve a anunciar esa versión. La portátil abre la página de descarga.
-  Cada release adjunta `latest.json` y el instalador firmado.
 
 ## [0.15.0] - 2026-11-19
 
