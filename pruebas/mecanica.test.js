@@ -973,3 +973,46 @@ describe('bloques rígidos: rectángulos que giran y se apoyan por sus vértices
     }
   });
 });
+
+describe('fuerza aplicada en un punto del cuerpo: volcar o deslizar', () => {
+  // Bloque de 0.4 × 0.6 en el suelo con μ = 0.8, empujado a la derecha por el
+  // borde de arriba a la izquierda (b = (−a/2, h/2)). Vuelca si F·h ≥ m·g·a/2
+  // (F ≥ 3.27 N) y desliza si F > μ·m·g (7.84 N)
+  const empuje = (F, mu = 0.8, dur = 0.6) => simularMecanica({
+    duracion: dur, superficies: [{ id: 'suelo', tipo: 'segmento', a: [-3, 0], b: [3, 0], e: 0, mu }],
+    particulas: [{ id: 'B', m: 1, forma: 'bloque', ancho: 0.4, alto: 0.6, p: [0, 0.3], v: [0, 0], F: [F, 0], Fpunto: [-0.2, 0.3] }],
+  });
+  it('por debajo del umbral, quieto sobre sus dos vértices', () => {
+    const sim = empuje(3);
+    expect(sim.eventos).toEqual([]);
+    const s = estadoMecanica(sim, 0.6)[0];
+    cerca(s.x, 0, 1e-10); cerca(s.th, 0, 1e-10);
+  });
+  it('por encima del umbral de vuelco y del de deslizamiento no: gira sobre la arista de delante y la energía se conserva', () => {
+    // Hasta t ≈ 0.39 s: después la arista ya no aguanta (la fricción necesaria crece al volcar) y desliza
+    const sim = empuje(5);
+    expect(ev(sim, 'Empieza a deslizar').t).toBeGreaterThan(0.38);
+    const s = estadoMecanica(sim, 0.3)[0];
+    expect(s.th).toBeLessThan(-0.05);
+    // La arista de delante (vértice 1) no se mueve
+    const vx = s.x + Math.cos(s.th) * 0.2 - Math.sin(s.th) * -0.3, vy = s.y + Math.sin(s.th) * 0.2 + Math.cos(s.th) * -0.3;
+    cerca(vx, 0.2, 1e-8); cerca(vy, 0, 1e-8);
+    const E0 = energiaMecanica(sim, 0).E;
+    for (const t of [0.1, 0.2, 0.3]) { const e = energiaMecanica(sim, t); cerca(e.E + e.Qc + e.Qi, E0, 1e-8); expect(e.Qc).toBeLessThan(1e-8); }
+  });
+  it('justo en el umbral de vuelco el par de F equilibra al del peso respecto de la arista', () => {
+    // F·h = m·g·a/2 → F = m·g·a/(2h); un poco menos: quieto; un poco más: gira
+    const Fc = 9.8 * 0.4 / (2 * 0.6);
+    expect(Math.abs(estadoMecanica(empuje(Fc * 0.99), 0.6)[0].th)).toBeLessThan(1e-9);
+    expect(estadoMecanica(empuje(Fc * 1.02, 0.8, 0.6), 0.6)[0].th).toBeLessThan(-1e-3);
+  });
+  it('con poca fricción desliza sin volcar si el empuje va a la altura del centro', () => {
+    const sim = simularMecanica({
+      duracion: 0.5, superficies: [{ id: 'suelo', tipo: 'segmento', a: [-3, 0], b: [3, 0], e: 0, mu: 0.2 }],
+      particulas: [{ id: 'B', m: 1, forma: 'bloque', ancho: 0.4, alto: 0.6, p: [0, 0.3], v: [0, 0], F: [5, 0], Fpunto: [-0.2, 0] }],
+    });
+    const s = estadoMecanica(sim, 0.5)[0];
+    cerca(s.x, (5 - 0.2 * 9.8) / 2 * 0.25, 1e-8);
+    cerca(s.th, 0, 1e-9);
+  });
+});

@@ -65,7 +65,7 @@ export const NOMBRE_CLASE = {
 };
 export const CONECTORES = ['cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa'];
 /** Propiedades que una variable puede fijar y unidades que puede tener. */
-const PROPIEDADES_VARIABLE = ['m', 'x', 'y', 'v', 'ang', 'radio', 'F', 'angF', 'e', 'mu', 'muS', 'k', 'L0', 'L', 'amort', 'n', 'th'];
+const PROPIEDADES_VARIABLE = ['m', 'x', 'y', 'v', 'ang', 'radio', 'F', 'angF', 'e', 'mu', 'muS', 'k', 'L0', 'L', 'amort', 'n', 'th', 'ancho', 'alto', 'orient', 'Fbx', 'Fby'];
 const UNIDADES_VARIABLE = ['longitud', 'masa', 'velocidad', 'aceleracion', 'tiempo', 'angulo', 'rigidez', 'adim', 'fuerza'];
 /** Instrumentos: no son física (no van al motor); miden sobre la simulación. */
 export const INSTRUMENTOS = ['regla', 'fotopuerta'];
@@ -188,6 +188,8 @@ export function normalizarEscena(d) {
         F: numero(o.F, 0, 0, 1e9), angF: numero(o.angF, 0, -360, 360), cinematica: o.cinematica === true,
         // Giro de un disco: I = inercia·m·r² (0, no gira) y ω inicial (rad/s)
         inercia: numero(o.inercia, 0, 0, 1), w: numero(o.w, 0, -1e4, 1e4),
+        // Punto de aplicación de F en el marco del cuerpo (solo si gira)
+        ...(o.Fbx || o.Fby ? { Fbx: numero(o.Fbx, 0, -100, 100), Fby: numero(o.Fby, 0, -100, 100) } : {}),
         // Bloque rígido: rectángulo de ancho × alto con orientación inicial (°)
         ...(o.forma === 'bloque' ? { forma: 'bloque', ancho: numero(o.ancho, 0.4, 1e-3, 100), alto: numero(o.alto, 0.3, 1e-3, 100), orient: numero(o.orient, 0, -360, 360) } : {}),
         // Aceleración impuesta por tramos [hasta t, ax, ay], hasta 12 tramos
@@ -363,7 +365,7 @@ export function aMotor(esc) {
     g: [esc.g * cosd(esc.gAng), esc.g * sind(esc.gAng)], b: esc.b, cAire: esc.cAire, eParticulas: esc.eParticulas, duracion: esc.duracion,
     particulas: particulas.map((p, i) => ({
       id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0,
-      ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)] } : {}),
+      ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)], ...(gira(p) && (p.Fbx || p.Fby) ? { Fpunto: [p.Fbx || 0, p.Fby || 0] } : {}) } : {}),
       ...(p.cinematica ? { cinematica: true, ...(p.perfil && p.perfil.length ? { perfil: p.perfil.map(f => [...f]) } : {}) } : {}),
       ...(esBloque(p) ? { forma: 'bloque', ancho: p.ancho, alto: p.alto, theta: orientacionBloque(esc, p) * DEG, w: p.w || 0, radio: 0 } : gira(p) ? { inercia: p.inercia, w: p.w || 0 } : {}),
     })),
@@ -493,6 +495,8 @@ export function fuerzasEn(sim, M, t) {
   const omega = i => (rot[i] >= 0 ? y[base + 2 * rot[i] + 1] : 0);
   const lista = Array.from({ length: n }, () => []), tensiones = {};
   const g = mot.g;
+  /** Par de la fuerza aplicada sobre cada giro (N·m) */
+  const parAplicado = new Array(nr).fill(0);
   // Fuerzas aplicadas
   const F = new Array(2 * n).fill(0);
   for (let i = 0; i < n; i++) {
@@ -501,7 +505,14 @@ export function fuerzasEn(sim, M, t) {
     F[2 * i] += peso[0]; F[2 * i + 1] += peso[1];
     if (largo(peso) > 0) lista[i].push({ tipo: 'peso', F: peso, valor: largo(peso) });
     const Fa = mot.particulas[i].F;
-    if (Fa) { F[2 * i] += Fa[0]; F[2 * i + 1] += Fa[1]; lista[i].push({ tipo: 'aplicada', F: [...Fa], valor: largo(Fa) }); }
+    if (Fa) {
+      F[2 * i] += Fa[0]; F[2 * i + 1] += Fa[1];
+      // Aplicada fuera del centro (cuerpo que gira): par (R·b) × F y el vector sale de ese punto
+      const b0 = mot.particulas[i].Fpunto, th = rot[i] >= 0 ? y[base + 2 * rot[i]] : 0;
+      const b = b0 && rot[i] >= 0 ? [Math.cos(th) * b0[0] - Math.sin(th) * b0[1], Math.sin(th) * b0[0] + Math.cos(th) * b0[1]] : null;
+      if (b) parAplicado[rot[i]] = b[0] * Fa[1] - b[1] * Fa[0];
+      lista[i].push({ tipo: 'aplicada', F: [...Fa], valor: largo(Fa), ...(b ? { rel: b } : {}) });
+    }
     const arr = [-(mot.b || 0) * v[0] - (mot.cAire || 0) * sp * v[0], -(mot.b || 0) * v[1] - (mot.cAire || 0) * sp * v[1]];
     F[2 * i] += arr[0]; F[2 * i + 1] += arr[1];
     if (largo(arr) > 1e-12) lista[i].push({ tipo: 'arrastre', F: arr, valor: largo(arr) });
@@ -546,10 +557,10 @@ export function fuerzasEn(sim, M, t) {
     // la fricción hace par sobre el disco que gira (entrada n + q del giro)
     const conJ = (gx, gy, gr = 0) => [[i, gx, gy], ...(gr && rot[i] >= 0 ? [[n + rot[i], gr, 0]] : []), ...(j >= 0 ? [[j, -gx, -gy]] : [])];
     cols.push({ grad: conJ(dir[0], dir[1], gn + (desliza ? -sup.mu * sgn * cr : 0)), usar: L => {
-      lista[i].push({ tipo: 'normal', F: [L * nrm[0], L * nrm[1]], valor: L, id: sup.id });
-      if (desliza) lista[i].push({ tipo: 'friccion', F: [-sup.mu * sgn * L * tg[0], -sup.mu * sgn * L * tg[1]], valor: Math.abs(sup.mu * L), id: sup.id });
+      lista[i].push({ tipo: 'normal', F: [L * nrm[0], L * nrm[1]], valor: L, id: sup.id, ...(b ? { rel: b } : {}) });
+      if (desliza) lista[i].push({ tipo: 'friccion', F: [-sup.mu * sgn * L * tg[0], -sup.mu * sgn * L * tg[1]], valor: Math.abs(sup.mu * L), id: sup.id, ...(b ? { rel: b } : {}) });
     } });
-    if (k.pegado && sup.mu > 0) cols.push({ grad: conJ(tg[0], tg[1], cr), usar: L => lista[i].push({ tipo: 'friccion', F: [L * tg[0], L * tg[1]], valor: Math.abs(L), id: sup.id }) });
+    if (k.pegado && sup.mu > 0) cols.push({ grad: conJ(tg[0], tg[1], cr), usar: L => lista[i].push({ tipo: 'friccion', F: [L * tg[0], L * tg[1]], valor: Math.abs(L), id: sup.id, ...(b ? { rel: b } : {}) }) });
   }
   for (const par of Object.keys(modo.pares || {})) {
     const [i, j] = par.split(':').map(Number), u = unitario(resta(pos(i), pos(j)));
@@ -600,7 +611,7 @@ export function fuerzasEn(sim, M, t) {
     const r = new Array(2 * (n + nr)).fill(0);
     for (let i = 0; i < n; i++) { const m = mot.particulas[i].m; r[2 * i] = m * dy[4 * i + 2] - F[2 * i]; r[2 * i + 1] = m * dy[4 * i + 3] - F[2 * i + 1]; }
     // I·α de cada giro (ninguna fuerza aplicada hace par: pasan por el centro)
-    for (let q = 0; q < nr; q++) r[2 * (n + q)] = sim.S.I[q] * dy[base + 2 * q + 1];
+    for (let q = 0; q < nr; q++) r[2 * (n + q)] = sim.S.I[q] * dy[base + 2 * q + 1] - parAplicado[q];
     const k = cols.length, A = Array.from({ length: k }, () => new Array(k).fill(0)), bb = new Array(k).fill(0);
     // Un cuerpo cinemático (masa infinita) no da ecuación: su m·a − F no dice nada
     const w = i => (i < n && mot.particulas[i].cinematica ? 0 : 1);
@@ -819,6 +830,18 @@ export const ESCENARIOS = [
         ],
       };
     },
+  },
+  {
+    id: 'empuje', tipo: 'ejemplo', titulo: 'Empujar un bloque: ¿vuelca o desliza?',
+    nota: ['Un bloque de 0.4 × 0.8 m y 2 kg recibe un empuje horizontal de 8 N en su cara izquierda. No desliza: μ·m·g = 11.8 N.', 'Vuelca si el par del empuje respecto de la arista de delante supera al del peso: F·h > m·g·a/2, con h la altura del empuje sobre el suelo (h > 0.49 m).', 'Mueve y′ (altura del empuje desde el centro) en Variables: por debajo de 0.09 m se queda; por encima, vuelca.'],
+    crear: () => ({
+      duracion: 1.5,
+      variables: [{ sim: 'y′', tipo: 'longitud', min: -0.4, max: 0.4, paso: 0.01, val: 0.3, liga: [['p1', 'Fby']] }],
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [-2, 0], [3, 0], { e: 0, mu: 0.6 }),
+        { ...PF('p1', 'Bloque', 2, 0, 0.4, 8, 0, { sobre: 's1' }), forma: 'bloque', ancho: 0.4, alto: 0.8, orient: 0, inercia: 0, w: 0, Fbx: -0.2, Fby: 0.3 },
+      ],
+    }),
   },
   {
     id: 'bolos', tipo: 'ejemplo', titulo: 'Bola que desliza y acaba rodando',
@@ -1773,7 +1796,9 @@ function iniciar() {
         for (const x of f.porParticula[i]) {
           if (!mostrar[CASILLA_F[x.tipo]] || largo(x.F) * ESC_F * v.escala < 3) continue;
           const [simb, sub] = SIMBOLO_F[x.tipo];
-          tz.vector(pd[i], x.F, { familia: 'interaccion', escalaPx: ESC_F * v.escala, simbolo: simb, sub, subRecto: true, valor: elegida ? Math.abs(x.valor) : null, unidad: 'N', desdeRadio: r });
+          // Con punto de aplicación propio (vértice de un bloque, fuerza fuera del centro), sale de él
+          const desde = x.rel ? [pd[i][0] + x.rel[0], pd[i][1] + x.rel[1]] : pd[i];
+          tz.vector(desde, x.F, { familia: 'interaccion', escalaPx: ESC_F * v.escala, simbolo: simb, sub, subRecto: true, valor: elegida ? Math.abs(x.valor) : null, unidad: 'N', desdeRadio: x.rel ? 0 : r });
         }
         if (mostrar.aceleracion && f.acc[i] && largo(f.acc[i]) > 1e-9) tz.vector(pd[i], f.acc[i], { familia: 'cambio', escalaPx: ESC_F * o.m * v.escala, simbolo: 'a', valor: elegida ? largo(f.acc[i]) : null, unidad: 'm/s²', desdeRadio: r });
       }
@@ -2027,7 +2052,9 @@ function iniciar() {
           c += ayudaFila(`Gira con I = ${({ 0.5: '½', 0.4: '⅖', 1: '1' })[o.inercia] ?? fmt(o.inercia, 3)}·m·r². Con fricción en el apoyo rueda sin deslizar si la fricción estática alcanza; si no, desliza girando.`);
         }
       }
+      const filaPunto = gira(o) && o.F > 0 ? fila('Aplicada en', doble(campo(`${o.id}.Fbx`, o.Fbx || 0, 'longitud', 'x′', 'Desde el centro, en el marco del cuerpo (gira con él)|Point of application'), campo(`${o.id}.Fby`, o.Fby || 0, 'longitud', 'y′'))) : '';
       c += fila('Fuerza aplicada', doble(campo(`${o.id}.F`, o.F || 0, 'fuerza', 'F', 'Fuerza constante sobre la partícula durante toda la simulación; 0 la quita|Applied force'), campo(`${o.id}.angF`, o.angF || 0, 'angulo', 'β', 'Dirección de la fuerza desde el eje x|Direction')));
+      c += filaPunto;
       c += fila('Movimiento', segmentado(`${o.id}.cinematica`, [['no', 'Libre'], ['si', 'Impuesto']], o.cinematica ? 'si' : 'no'));
       if (o.cinematica && !(o.perfil && o.perfil.length)) c += ayudaFila('Se mueve con su velocidad inicial pase lo que pase, como una mano, una cinta o un ascensor. Su masa no cuenta; el trabajo que hace aparece en la energía.');
       if (o.cinematica) {
@@ -2180,6 +2207,7 @@ function iniciar() {
         return;
       }
       if (prop === 'orient') { o.orient = ((v + 180) % 360 + 360) % 360 - 180; return; }
+      if (prop === 'Fbx' || prop === 'Fby') { if (!(Math.abs(v) <= 100)) return 'El punto de aplicación va de −100 a 100 m del centro.'; o[prop] = v; return; }
       if (prop === 'v') { if (!(v >= 0)) return 'Escribe la rapidez (positiva) y la dirección en α.'; o.v = v; return; }
       if (prop === 'ang') { o.ang = ((v + 180) % 360 + 360) % 360 - 180; return; }
       if (prop === 'F') { if (!(v >= 0)) return 'Escribe el módulo de la fuerza (positivo) y su dirección en β.'; o.F = v; return; }

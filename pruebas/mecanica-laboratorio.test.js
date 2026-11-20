@@ -402,3 +402,24 @@ describe('bloques rígidos en el laboratorio', () => {
     expect(describirEvento({ clave: 'vt0:1.1:0', nombre: 'Deja de deslizar (p2)' }, M)).toBe('Alto deja de deslizar');
   });
 });
+
+describe('fuerza aplicada en un punto del bloque', () => {
+  it('llega al motor solo en un cuerpo que gira, y fuerzasEn la dibuja desde su punto con su par', () => {
+    const e = escenaDeEscenario('empuje'), M = aMotor(e), P = M.motor.particulas[0];
+    expect(P.Fpunto).toEqual([-0.2, 0.3]);
+    const sim = simularMecanica(M.motor), f = fuerzasEn(sim, M, 0.3).porParticula[0];
+    const ap = f.find(x => x.tipo === 'aplicada');
+    expect(ap.rel).toBeTruthy();
+    // Volcando sobre la arista de delante: la normal está toda en ese vértice
+    const normales = f.filter(x => x.tipo === 'normal');
+    expect(normales).toHaveLength(1);
+    // Un disco sin giro ignora el punto
+    const d = aMotor(normalizarEscena({ ...escenaVacia(), objetos: [{ id: 'p1', tipo: 'particula', nombre: 'A', m: 1, x: 0, y: 0, radio: 0.1, F: 2, Fbx: 0.1 }] }));
+    expect(d.motor.particulas[0].Fpunto).toBeUndefined();
+  });
+  it('la variable y′ decide: por debajo de 0.09 m se queda, por encima vuelca', () => {
+    const conAltura = h => { const e = escenaDeEscenario('empuje'); e.objetos.find(o => o.id === 'p1').Fby = h; const M = aMotor(e); return estadoMecanica(simularMecanica(M.motor), 1)[0].th; };
+    expect(Math.abs(conAltura(0.05))).toBeLessThan(1e-9);
+    expect(conAltura(0.15)).toBeLessThan(-0.05);
+  });
+});

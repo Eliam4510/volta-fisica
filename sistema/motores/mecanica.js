@@ -42,6 +42,8 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  *                                     actúa en el punto de contacto: rueda sin deslizar o desliza girando
  * @property {number} [w=0]            Velocidad angular inicial (rad/s, positiva antihoraria)
  * @property {number} [theta=0]        Ángulo inicial (rad)
+ * @property {[number, number]} [Fpunto] Punto de aplicación de F en el marco del cuerpo que gira (desde su
+ *                                     centro, gira con él): F hace par. Sin giro, F actúa en el centro
  * @property {'bloque'} [forma]        Bloque rígido: rectángulo de ancho × alto que gira (I = m(a² + h²)/12) y
  *                                     se apoya en las superficies por sus cuatro vértices (puede volcar)
  * @property {number} [ancho]          Bloque: ancho (m)
@@ -228,6 +230,13 @@ const claveApoyo = (/** @type {number} */ i, /** @type {number} */ k, /** @type 
 function apoyoDe(txt) { const [a, b] = String(txt).split('.'); return [Number(a), b == null ? -1 : Number(b)]; }
 /** ¿Pueden chocar las partículas i y j como discos? (los bloques no chocan entre sí ni con discos) */
 const parPosible = (/** @type {any} */ S, /** @type {number} */ i, /** @type {number} */ j) => !S.vert[i] && !S.vert[j] && radio(S, i) + radio(S, j) > 0;
+/** Punto de aplicación de la fuerza de i girado con θ (R·b), o null si F actúa en el centro. @param {any} S @param {number[]} y @param {number} i */
+function brazoFuerza(S, y, i) {
+  const b = S.P[i].Fpunto;
+  if (!b || !S.P[i].F || S.rot[i] < 0 || (!b[0] && !b[1])) return null;
+  const th = y[S.base + 2 * S.rot[i]], c = Math.cos(th), s = Math.sin(th);
+  return [c * b[0] - s * b[1], s * b[0] + c * b[1]];
+}
 /** Vector del centro del bloque i a su vértice k, girado con θ: R(θ)·v_k. */
 function brazo(S, y, i, k) {
   const th = y[S.base + 2 * S.rot[i]], c = Math.cos(th), s = Math.sin(th), [vx, vy] = S.vert[i][k];
@@ -638,6 +647,9 @@ function fuerzas(S, modo, y, lambdasPrevias) {
   for (let i = 0; i < n; i++) {
     const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3];
     if (p.cinematica) continue;
+    // Fuerza aplicada fuera del centro: par (R·b) × F sobre el giro
+    const bF = brazoFuerza(S, y, i);
+    if (bF) F[2 * (n + S.rot[i])] += bF[0] * p.F[1] - bF[1] * p.F[0];
     F[2 * i] += p.m * S.g[0] + (p.F ? p.F[0] : 0);
     F[2 * i + 1] += p.m * S.g[1] + (p.F ? p.F[1] : 0);
     if (S.b) { F[2 * i] -= S.b * vx; F[2 * i + 1] -= S.b * vy; }
@@ -920,6 +932,9 @@ function energiaEstado(S, y) {
     if (p.cinematica) continue;
     E += 0.5 * p.m * (vx * vx + vy * vy) - p.m * (S.g[0] * x + S.g[1] * yy);
     if (p.F) E -= p.F[0] * x + p.F[1] * yy;
+    // F fija en el mundo aplicada en un punto que gira: U_F = −F·(r + R·b)
+    const bF = brazoFuerza(S, y, i);
+    if (bF) E -= p.F[0] * bF[0] + p.F[1] * bF[1];
   }
   E += energiaGiro(S, y);
   for (const c of S.con) {
@@ -949,6 +964,11 @@ function potenciaDisipada(S, y, acc) {
   }
   // Giro: d(½Iω²)/dt = ω·I·α (ninguna fuerza conservativa hace par)
   for (let q = 0; q < S.nr; q++) dE += y[S.base + 2 * q + 1] * S.I[q] * acc[2 * (S.n + q)];
+  // y dU_F/dt de una fuerza aplicada fuera del centro: −ω·τ_F
+  for (let i = 0; i < S.n; i++) {
+    const bF = brazoFuerza(S, y, i);
+    if (bF) dE -= y[S.base + 2 * S.rot[i] + 1] * (bF[0] * S.P[i].F[1] - bF[1] * S.P[i].F[0]);
+  }
   for (const c of S.con) {
     if (c.tipo !== 'resorte') continue;
     const ia = c.ia, ib = c.ib;
@@ -1619,6 +1639,8 @@ export function energiaMecanica(sim, t) {
     K += 0.5 * m * (s.vx * s.vx + s.vy * s.vy);
     Ug -= m * (g[0] * s.x + g[1] * s.y);
     if (F) UF -= F[0] * s.x + F[1] * s.y;
+    const b = e.particulas[i].Fpunto;
+    if (F && b && sim.S.rot[i] >= 0) UF -= F[0] * (Math.cos(s.th) * b[0] - Math.sin(s.th) * b[1]) + F[1] * (Math.sin(s.th) * b[0] + Math.cos(s.th) * b[1]);
   });
   const pos = Object.fromEntries(est.map(s => [s.id, [s.x, s.y]]));
   for (const c of e.conectores || []) {
