@@ -997,6 +997,35 @@ export const ESCENARIOS = [
     }),
   },
   {
+    id: 'acoplados', tipo: 'ejemplo', titulo: 'Osciladores acoplados', graficas: ['x', 'v'],
+    nota: ['Dos bloques de 0.5 kg entre dos paredes con resortes de 20 N/m, unidos por un resorte débil de 2 N/m. Solo el de la izquierda empieza desplazado.', 'La energía pasa de un bloque al otro y vuelve: pulsaciones con periodo 2π/(ω₂ − ω₁) ≈ 10.4 s, con ω₁ = √(k/m) y ω₂ = √((k + 2k_c)/m).', 'Selecciona cada bloque y compara x(t). Con el mismo desplazamiento en los dos, oscilan juntos en el modo lento y no hay intercambio.'],
+    crear: () => ({
+      duracion: 12,
+      variables: [{ sim: 'kc', tipo: 'rigidez', min: 0.5, max: 20, paso: 0.5, val: 2, liga: [['c2', 'k']] }],
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [0, 0], [3, 0]), SEG('s2', 'pared', 'Pared izquierda', [0, 0.8], [0, 0]), SEG('s3', 'pared', 'Pared derecha', [3, 0], [3, 0.8]),
+        P_('p1', 'Bloque 1', 0.5, 1.2, 0.1, { radio: 0.1, sobre: 's1' }), P_('p2', 'Bloque 2', 0.5, 2, 0.1, { radio: 0.1, sobre: 's1' }),
+        RESORTE('c1', 'Resorte izquierdo', 'p1', [0, 0.1], 20, 1),
+        { id: 'c2', tipo: 'resorte', nombre: 'Acoplamiento', a: 'p1', b: 'p2', k: 2, L0: 1, amort: 0 },
+        RESORTE('c3', 'Resorte derecho', 'p2', [3, 0.1], 20, 1),
+      ],
+    }),
+  },
+  {
+    id: 'escalera', tipo: 'ejemplo', titulo: 'Escalera que resbala',
+    nota: ['Una escalera de 2 m y 10 kg apoyada a 60° en una pared y un suelo sin fricción: resbala desde el reposo.', 'Deja la pared cuando su centro ha bajado a 2/3 de su altura inicial (barra delgada; aquí, con 4 cm de grueso, un poco antes). Búscalo en Eventos.', 'Activa Fuerzas: la normal de la pared se anula justo al despegarse. Pon fricción en el suelo y mira cómo cambia.'],
+    crear: () => {
+      const L = 2, an = 0.04, phi = 30 * DEG, cx = an / 2 * Math.cos(phi) + L / 2 * Math.sin(phi), cy = an / 2 * Math.sin(phi) + L / 2 * Math.cos(phi);
+      return {
+        duracion: 1,
+        objetos: [
+          SEG('s1', 'suelo', 'Suelo', [0, 0], [5, 0], { e: 0 }), SEG('s2', 'pared', 'Pared', [0, 2.5], [0, 0], { e: 0 }),
+          { ...P_('p1', 'Escalera', 10, cx, cy), forma: 'bloque', ancho: an, alto: L, orient: 30, inercia: 0, w: 0 },
+        ],
+      };
+    },
+  },
+  {
     id: 'mext-2007-1-1', tipo: 'mext', anio: 2007, ref: '2007 · 1-(1)', titulo: 'Bola incrustada en un bloque con resorte',
     nota: ['Vista desde arriba: la mesa sin fricción es el plano del dibujo (g = 0).', 'Bola de 0.1 kg a 20 m/s; bloque de 1.9 kg; k = 20 N/m (el examen es simbólico).'],
     // Pegados salen con V = mν/(M + m): compresión máxima mν/√(k(M + m)). La escena

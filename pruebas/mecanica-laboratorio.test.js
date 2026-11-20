@@ -494,3 +494,27 @@ describe('fuerza aplicada que cambia con el tiempo', () => {
     cerca(energiaMecanica(sim, 2).W, 1, 1e-9);
   });
 });
+
+describe('ejemplos clásicos', () => {
+  const amp = (sim, i, t0, t1, x0) => { let a = 0; for (let t = t0; t <= t1; t += 0.005) a = Math.max(a, Math.abs(estadoMecanica(sim, t)[i].x - x0)); return a; };
+  it('osciladores acoplados: la energía pasa al segundo bloque a media pulsación', () => {
+    const { sim } = simular(escenaDeEscenario('acoplados'));
+    const T = 2 * Math.PI / (Math.sqrt(48) - Math.sqrt(40));
+    expect(amp(sim, 0, 0, 1, 1)).toBeGreaterThan(0.19);
+    expect(amp(sim, 1, 0, 0.3, 2)).toBeLessThan(0.03);
+    expect(amp(sim, 0, T / 2 - 0.25, T / 2 + 0.25, 1)).toBeLessThan(0.03);
+    expect(amp(sim, 1, T / 2 - 0.5, T / 2 + 0.5, 2)).toBeGreaterThan(0.19);
+  });
+  it('escalera sin fricción: deja la pared cuando su centro baja a 2/3 de su altura (barra delgada)', () => {
+    const e = escenaDeEscenario('escalera');
+    const { M, sim } = simular(e);
+    const ev0 = sim.eventos[0];
+    expect(describirEvento(ev0, M)).toContain('despega de la pared');
+    const y0 = estadoMecanica(sim, 0)[0].y, ys = estadoMecanica(sim, ev0.t)[0].y;
+    cerca(ys / y0, 2 / 3, 0.025);
+    // Más delgada, más cerca de la teoría de la barra
+    const f = Math.PI / 6, an = 0.004, fina = { ...e, objetos: e.objetos.map(o => (o.id === 'p1' ? { ...o, ancho: an, x: an / 2 * Math.cos(f) + Math.sin(f), y: an / 2 * Math.sin(f) + Math.cos(f) } : o)) };
+    const r = simular(fina), yf = estadoMecanica(r.sim, r.sim.eventos[0].t)[0].y / estadoMecanica(r.sim, 0)[0].y;
+    cerca(yf, 2 / 3, 0.003);
+  });
+});
