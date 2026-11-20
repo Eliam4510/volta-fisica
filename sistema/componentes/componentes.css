@@ -87,6 +87,9 @@ kbd {
 .marca b { font-weight: var(--peso-fuerte); font-size: var(--t-enfasis); letter-spacing: -0.01em; }
 .separador-v { width: 1px; height: 20px; background: var(--linea-suave); flex: none; }
 .migas { display: flex; align-items: center; gap: var(--e-1); min-width: 0; flex-shrink: 0; }
+/* Botón de la escena junto a las migas: si falta sitio se recorta por la derecha (el nombre con puntos suspensivos) */
+.btn.escena-btn { justify-content: flex-start; overflow: hidden; min-width: 0; }
+.btn.escena-btn .chip { flex-shrink: 0; }
 .migas .sep { color: var(--texto-4); }
 .escena-titulo { color: var(--texto-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .escena-titulo b { color: var(--texto-2); font-weight: var(--peso-medio); }

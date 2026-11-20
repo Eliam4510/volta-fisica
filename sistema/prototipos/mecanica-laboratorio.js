@@ -419,6 +419,7 @@ export function contactosDe(modo) {
  * @param {ReturnType<typeof aMotor>} M
  */
 export function describirEvento(ev, M) {
+  if (/** @type {any} */ (globalThis).Volta?.idioma?.() === 'en') return describirEventoEn(ev, M);
   const partes = String(ev.clave || '').split(':');
   // «i» o «i.k» (vértice k de un bloque)
   const P = i => conArticulo(M.particulas[parseInt(String(i), 10)]?.nombre ?? '?');
@@ -453,6 +454,51 @@ export function describirEvento(ev, M) {
     default: d = ev.nombre || 'Evento';
   }
   return mayuscula(d.replace(/\bde el\b/g, 'del').replace(/\ba el\b/g, 'al'));
+}
+
+/**
+ * El mismo evento en inglés: el orden y los artículos cambian, así que la
+ * frase se arma entera. Un nombre del diccionario («Bola») se vuelve «the
+ * ball»; uno escrito por el usuario se deja tal cual.
+ */
+function describirEventoEn(ev, M) {
+  const V = /** @type {any} */ (globalThis).Volta, partes = String(ev.clave || '').split(':');
+  const nom = (/** @type {string} */ n) => {
+    const tr = V.traducirTexto(n);
+    return tr !== n ? `the ${tr.charAt(0).toLowerCase()}${tr.slice(1)}` : n;
+  };
+  const P = i => nom(M.particulas[parseInt(String(i), 10)]?.nombre ?? '?');
+  const S = js => {
+    const k = Number(js), cara = M.caras?.[k - M.superficies.length];
+    return nom(M.superficies[k]?.nombre ?? (cara ? M.particulas[cara[0]]?.nombre : null) ?? 'Superficie');
+  };
+  const con = M.conectores.find(c => c.id === partes[1]);
+  const C = () => nom(con?.nombre ?? partes[1]);
+  const contacto = /contacto/.test(ev.nombre || ''), n = ev.nombre || '';
+  let d;
+  switch (partes[0]) {
+    case 'impacto': d = `${P(partes[1])} hits ${S(partes[2])}${contacto ? ' and stays in contact' : ''}`; break;
+    case 'despegue': d = partes[2] != null ? `${P(partes[1])} leaves ${S(partes[2])}` : `${P(partes[1])} lifts off`; break;
+    case 'fin': d = partes[2] != null ? `${P(partes[1])} goes off the edge of ${S(partes[2])}` : `${P(partes[1])} goes off the edge`; break;
+    case 'vt0': d = /detiene/.test(n) ? `${P(partes[1])} stops` : /Rueda/.test(n) ? `${P(partes[1])} rolls without slipping` : /Deja de deslizar/.test(n) ? `${P(partes[1])} stops slipping` : `${P(partes[1])} reverses its slip`; break;
+    case 'desliza': d = `${P(partes[1])} starts to slide`; break;
+    case 'tensa':
+      if (con?.tipo === 'union') d = `${P(M.indice[con.a])} and ${P(M.indice[con.b])} join`;
+      else d = con?.tipo === 'polea' ? `The rope over ${C()} goes taut` : `${C()} goes taut`;
+      break;
+    case 'floja':
+      if (con?.tipo === 'union') d = `${P(M.indice[con.a])} and ${P(M.indice[con.b])} separate`;
+      else d = con?.tipo === 'polea' ? `The rope over ${C()} goes slack` : `${C()} goes slack`;
+      break;
+    case 'engancha': d = `${C()} touches ${nom(M.clavos[Number(partes[2])]?.nombre ?? 'Clavo')}`; break;
+    case 'desengancha': d = `${C()} comes off the peg`; break;
+    case 'choque': d = `${contacto ? 'Collision and contact' : 'Collision'} between ${P(partes[1])} and ${P(partes[2])}`; break;
+    case 'separa': d = `${P(partes[1])} and ${P(partes[2])} separate`; break;
+    case 'rueda': d = /Invierten/.test(n) ? `${P(partes[1])} and ${P(partes[2])} reverse their slip` : `${P(partes[1])} and ${P(partes[2])} roll without slipping`; break;
+    case 'resbala': d = `${P(partes[1])} and ${P(partes[2])} start to slide`; break;
+    default: d = V.t(n || 'Evento');
+  }
+  return mayuscula(d);
 }
 
 /** Índices de las partículas que protagonizan un evento. */

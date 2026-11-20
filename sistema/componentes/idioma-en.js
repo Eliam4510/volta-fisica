@@ -306,7 +306,7 @@
     'Isocórico': 'Isochoric',
     'Isotérmico': 'Isothermal',
     'Adiabático': 'Adiabatic',
-    'Adiabáticas': 'Adiabats',
+    'Adiabáticas': 'Adiabatic',
     'Isoterma y adiabática': 'Isotherm and adiabat',
     'Cuasiestático': 'Quasi-static',
     'Dinámico': 'Dynamic',
@@ -3817,5 +3817,35 @@
     'Los instrumentos llegan en una próxima versión. Mientras, el inspector y la tabla dan posición, tiempo y velocidad en cada instante.': 'The instruments arrive in an upcoming version. Meanwhile, the inspector and the table give position, time and velocity at each instant.',
     'Entendido': 'Got it',
     'Para añadir objetos a una escena propia, usa el Laboratorio.': 'To add objects to your own scene, use the Laboratory.',
+  });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+// ============================================================================
+// Fragmentos que las pantallas escriben en piezas
+// ============================================================================
+(function (global) {
+  'use strict';
+  global.VOLTA_EN = Object.assign(global.VOLTA_EN || {}, {
+    '(no está a escala)': '(not to scale)',
+    '(neutrones)': '(neutrons)',
+    '(protones)': '(protons)',
+    'Muestra de': 'Sample of',
+    'Placa de sodio': 'Sodium plate',
+    'cada electrón dibujado representa {0}': 'each drawn electron represents {0}',
+    'con ½ del cambio de fase': 'with ½ from the phase change',
+    'de {0} sin decaer': 'of {0} not decayed',
+    'doble rendija': 'double slit',
+    'rendija simple': 'single slit',
+    'fuente': 'source',
+    'isoterma': 'isotherm',
+    'medido:': 'measured:',
+    'radón-222': 'radon-222',
+    'se dibujan {0} de {1}': '{0} of {1} drawn',
+    '{0} eventos calculados': '{0} events computed',
+    '· batería conectada': '· battery connected',
+    '· batería desconectada': '· battery disconnected',
+    '· luz blanca': '· white light',
+    '· se disipan': '· dissipated',
+    'Energía disipada (J)': 'Dissipated energy (J)',
   });
 })(typeof window !== 'undefined' ? window : globalThis);

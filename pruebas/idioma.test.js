@@ -101,3 +101,17 @@ describe('las pantallas en inglés', () => {
     expect([...faltan]).toEqual([]);
   });
 });
+
+describe('eventos del Laboratorio en inglés', () => {
+  it('la frase se arma en inglés con los nombres traducidos', async () => {
+    const { describirEvento, aMotor, escenaDeEscenario } = await import('../sistema/prototipos/mecanica-laboratorio.js');
+    const { simularMecanica } = await import('../sistema/motores/mecanica.js');
+    const M = aMotor(escenaDeEscenario('caida')), sim = simularMecanica(M.motor), ev = sim.eventos[0];
+    const antes = globalThis.Volta;
+    expect(describirEvento(ev, M)).toBe('La bola choca con el suelo');
+    try {
+      globalThis.Volta = V;
+      expect(describirEvento(ev, M)).toBe('The ball hits the floor');
+    } finally { globalThis.Volta = antes; }
+  });
+});
