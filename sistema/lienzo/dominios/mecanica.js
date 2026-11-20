@@ -157,6 +157,27 @@
     return [x, y, R];
   };
 
+  /**
+   * Bloque rígido de ancho × alto (m) con centro p y orientación th (rad,
+   * antihoraria): rectángulo girado con su centro de masa y su rótulo.
+   */
+  P.mecBloque = function (p, ancho, alto, th, o = {}) {
+    const v = this.vista, ctx = this.ctx, co = Math.cos(th), si = Math.sin(th);
+    const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => { const x = sx * ancho / 2, y = sy * alto / 2; return v.P([p[0] + co * x - si * y, p[1] + si * x + co * y]); });
+    ctx.save(); ctx.setLineDash([]);
+    ctx.fillStyle = this.t.campo; ctx.strokeStyle = this.t.tinta; ctx.lineWidth = G.materia + (o.grueso ? 0.5 : 0); ctx.lineJoin = 'round';
+    ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    const [x, y] = v.P(p), R = Math.min(ancho, alto) / 2 * v.escala;
+    if (R >= 8) this.centroMasa(p);
+    else { ctx.save(); ctx.fillStyle = this.t.tinta; ctx.beginPath(); ctx.arc(x, y, 1.75, 0, 2 * Math.PI); ctx.fill(); ctx.restore(); }
+    if (o.etiqueta) {
+      const [dx, dy] = o.lado || [-1, -1], d = Math.hypot(ancho, alto) / 2 * v.escala * Math.SQRT1_2 + 5;
+      this.texto(o.etiqueta, x + Math.sign(dx) * d, y + Math.sign(dy) * d + (dy > 0 ? 9 : -1), { fuente: 'ui', tam: 12, peso: 500, color: 'texto', alinear: dx < 0 ? 'right' : 'left', halo: true });
+    }
+    return [x, y, R];
+  };
+
   // ---------------------------------------------------------------------
   // Conectores
   // ---------------------------------------------------------------------

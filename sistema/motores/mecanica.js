@@ -190,7 +190,7 @@ function preparar(e) {
   // Un bloque (rectángulo) siempre gira: I = m(a² + h²)/12 respecto de su
   // centro; sus vértices, en su propio marco, son los puntos de apoyo
   /** @type {(number[][] | null)[]} */
-  const vert = P.map(p => (p.forma === 'bloque' && p.ancho > 0 && p.alto > 0
+  const vert = P.map(p => (p.forma === 'bloque' && !p.cinematica && p.ancho > 0 && p.alto > 0
     ? [[-p.ancho / 2, -p.alto / 2], [p.ancho / 2, -p.alto / 2], [p.ancho / 2, p.alto / 2], [-p.ancho / 2, p.alto / 2]] : null));
   P.forEach((p, i) => {
     if (p.cinematica) return;
@@ -1082,15 +1082,26 @@ export function simularMecanica(escena) {
     }
   }
   revisarDespegues();
-  // Fricción estática al arrancar: un apoyo en reposo queda pegado si μs alcanza
-  for (const [clave, s] of Object.entries(modo.contactos)) {
-    const sup = S.sup[s.sup];
-    if (!(sup.mu > 0)) continue;
-    if (Math.abs(deslizamiento(S, sup, y, s.i, s.k ?? -1).vt) > 1e-12) continue;
-    s.pegado = true;
-    const L = dinamica(S, modo, y, restriccionesDelModo(S, modo)).lambdas;
-    if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
-  }
+  // Fricción estática al arrancar: los apoyos en reposo se pegan todos a la
+  // vez y se suelta, de uno en uno, el que más se pasa de μs·N. Uno a uno, el
+  // primer vértice de un bloque cargaba con toda la fricción (el otro aún no
+  // estaba pegado), no le alcanzaba y el bloque arrancaba deslizando.
+  /** Pega a la vez los apoyos dados y suelta, de uno en uno, el que más se pasa de μs·N. @param {[string, any][]} quietos */
+  const pegarQuietos = quietos => {
+    for (const [, s] of quietos) s.pegado = true;
+    for (let vuelta = 0; vuelta < quietos.length; vuelta++) {
+      const L = dinamica(S, modo, y, restriccionesDelModo(S, modo)).lambdas;
+      let peor = null, exceso = 1e-12;
+      for (const [clave, s] of quietos) {
+        if (!s.pegado) continue;
+        const sup = S.sup[s.sup], ex = Math.abs(L[`pegado:${clave}`]) - (sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]);
+        if (ex > exceso) { exceso = ex; peor = s; }
+      }
+      if (!peor) break;
+      peor.pegado = false;
+    }
+  };
+  pegarQuietos(Object.entries(modo.contactos).filter(([, s]) => S.sup[s.sup].mu > 0 && Math.abs(deslizamiento(S, S.sup[s.sup], y, s.i, s.k ?? -1).vt) <= 1e-12));
 
   // Paso máximo según la rapidez: en un paso, nada recorre más de un cuarto de
   // la escala menor de la escena (radio, medio segmento, medio radio de arco).
@@ -1157,7 +1168,15 @@ export function simularMecanica(escena) {
   let perdidaAnotada = 0;
   const anotar = (clave, aplicar) => {
     const K0 = energiaCinetica(S, y), W0 = trabajoImpulsivo, descripcion = aplicar(), perdida = K0 - energiaCinetica(S, y) + trabajoImpulsivo - W0;
-    if (descripcion) { eventos.push({ t, nombre: descripcion, clave, perdida: perdida > 0 ? perdida : 0, y: y.slice() }); perdidaAnotada += perdida > 0 ? perdida : 0; }
+    if (descripcion) {
+      // El mismo choque repetido en el instante (los impulsos secuenciales
+      // entre dos vértices de un bloque que cae de plano) es un solo evento
+      let previo = null;
+      for (let q = eventos.length - 1; q >= 0 && eventos[q].t === t; q--) if (eventos[q].clave === clave) { previo = eventos[q]; break; }
+      if (previo) { previo.perdida += perdida > 0 ? perdida : 0; previo.y = y.slice(); }
+      else eventos.push({ t, nombre: descripcion, clave, perdida: perdida > 0 ? perdida : 0, y: y.slice() });
+      perdidaAnotada += perdida > 0 ? perdida : 0;
+    }
     return descripcion;
   };
   // Choques en el mismo instante (una bola que toca a dos, un disco que llega
@@ -1434,20 +1453,37 @@ export function simularMecanica(escena) {
       delete modo.contactos[clave];
       descripcion = `Sale del borde (${S.P[apoyoDe(partes[1])[0]].id})`;
     } else if (partes[0] === 'vt0') {
-      const clave = `${partes[1]}:${partes[2]}`, i = apoyoDe(partes[1])[0], s = modo.contactos[clave];
-      s.pegado = true;
+      const clave = `${partes[1]}:${partes[2]}`, i = apoyoDe(partes[1])[0], s = modo.contactos[clave], sup = S.sup[s.sup];
       const restr2 = restriccionesDelModo(S, modo);
-      const L = dinamica(S, modo, y, restr2).lambdas, sup = S.sup[s.sup];
-      // ¿La fricción estática alcanza para mantenerlo quieto?
-      if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
+      // Adherencia que haría falta para que no deslice (para el sentido si no alcanza)
+      s.pegado = true;
+      const L = dinamica(S, modo, y, restr2).lambdas;
+      // ¿La fricción estática alcanza para mantenerlo quieto? Con los demás
+      // apoyos del mismo cuerpo que tampoco deslizan (los vértices de un
+      // bloque que se detiene dejan de deslizar a la vez)
+      const hermanos = Object.entries(modo.contactos).filter(([c, x]) => c !== clave && !x.pegado && x.i === i && S.sup[x.sup].mu > 0 && Math.abs(deslizamiento(S, S.sup[x.sup], y, x.i, x.k ?? -1).vt) <= 1e-9);
+      pegarQuietos([[clave, s], ...hermanos]);
       descripcion = s.pegado ? (S.vert[i] ? `Deja de deslizar (${S.P[i].id})` : S.rot[i] >= 0 ? `Rueda sin deslizar (${S.P[i].id})` : `Se detiene (${S.P[i].id})`) : `Invierte el deslizamiento (${S.P[i].id})`;
       if (!s.pegado) {
-        // Empuja un poco para que el evento no se repita en el mismo instante
-        // (con el sentido de la aceleración del deslizamiento, giro incluido)
-        const { t: tg, grad } = deslizamiento(S, sup, y, i, s.k ?? -1), a = dinamica(S, modo, y, restr2).acc;
-        let at = 0;
-        for (const [q, gx, gy] of grad) at += gx * a[2 * q] + gy * a[2 * q + 1];
-        const sgn = Math.sign(at) || 1;
+        // Empuja un poco para que el evento no se repita en el mismo instante,
+        // en un sentido coherente: con la fricción cinética opuesta a ese
+        // sentido, el deslizamiento tiene que acelerar hacia él. Con el sentido
+        // del tramo anterior (el de antes de invertirse) la aceleración salía
+        // al revés en un bloque que vuelca, y el evento se repetía sin fin.
+        const { t: tg, grad } = deslizamiento(S, sup, y, i, s.k ?? -1);
+        const acelDesliz = sentido => {
+          s.sentido = sentido;
+          const a = dinamica(S, modo, y, restr2).acc;
+          let at = 0;
+          for (const [q, gx, gy] of grad) at += gx * a[2 * q] + gy * a[2 * q + 1];
+          return at;
+        };
+        // Si los dos o ninguno son coherentes (paradoja de Painlevé), el
+        // sentido en que tiraba la adherencia que no alcanzó: desliza al revés
+        const tendencia = -Math.sign(L[`pegado:${clave}`] || 0) || 1;
+        const ok = [1, -1].filter(sg => Math.sign(acelDesliz(sg)) === sg);
+        const sgn = ok.length === 1 ? ok[0] : tendencia;
+        s.sentido = 0;
         y[4 * i + 2] += sgn * 1e-12 * tg[0]; y[4 * i + 3] += sgn * 1e-12 * tg[1];
       }
     } else if (partes[0] === 'desliza') {

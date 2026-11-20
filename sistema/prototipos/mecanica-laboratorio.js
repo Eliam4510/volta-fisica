@@ -55,7 +55,7 @@ const copia = o => JSON.parse(JSON.stringify(o));
 export function claseDe(o) { return o.tipo === 'superficie' ? o.forma : o.tipo; }
 
 export const ICONOS = {
-  particula: 'o-particula', disco: 'o-disco', suelo: 'o-suelo', pared: 'o-pared', plano: 'o-plano-inclinado',
+  particula: 'o-particula', disco: 'o-disco', bloque: 'o-bloque', suelo: 'o-suelo', pared: 'o-pared', plano: 'o-plano-inclinado',
   segmento: 'o-trazo-libre', arco: 'o-arco', cuerda: 'o-cuerda', resorte: 'o-resorte', varilla: 'o-varilla',
   polea: 'o-polea', union: 'o-fijacion', prensa: 'o-prensa-hidraulica', regla: 'n-regla', fotopuerta: 'n-fotopuerta', clavo: 'o-clavo', escena: 'o-gravedad',
 };
@@ -188,6 +188,8 @@ export function normalizarEscena(d) {
         F: numero(o.F, 0, 0, 1e9), angF: numero(o.angF, 0, -360, 360), cinematica: o.cinematica === true,
         // Giro de un disco: I = inercia·m·r² (0, no gira) y ω inicial (rad/s)
         inercia: numero(o.inercia, 0, 0, 1), w: numero(o.w, 0, -1e4, 1e4),
+        // Bloque rígido: rectángulo de ancho × alto con orientación inicial (°)
+        ...(o.forma === 'bloque' ? { forma: 'bloque', ancho: numero(o.ancho, 0.4, 1e-3, 100), alto: numero(o.alto, 0.3, 1e-3, 100), orient: numero(o.orient, 0, -360, 360) } : {}),
         // Aceleración impuesta por tramos [hasta t, ax, ay], hasta 12 tramos
         perfil: o.cinematica === true && Array.isArray(o.perfil) && o.perfil.length
           ? o.perfil.filter(f => Array.isArray(f) && f.length === 3).slice(0, 12).map(f => [numero(f[0], 0, 0, 1e6), numero(f[1], 0, -1e4, 1e4), numero(f[2], 0, -1e4, 1e4)])
@@ -246,12 +248,32 @@ export function objeto(esc, id) { return esc.objetos.find(o => o.id === id) || n
 /** Posición inicial de una partícula: si está apoyada en una superficie, proyectada exactamente sobre ella. */
 export function posicionParticula(esc, p) {
   const s = p.sobre ? objeto(esc, p.sobre) : null;
-  return s ? proyectarSobre(s, [p.x, p.y], p.radio || 0) : [p.x, p.y];
+  return s ? proyectarSobre(s, [p.x, p.y], radioApoyo(p)) : [p.x, p.y];
 }
 /** Velocidad inicial [vx, vy] de una partícula (ángulos de 90° exactos). */
 export function velocidadParticula(p) { return [p.v * cosd(p.ang), p.v * sind(p.ang)]; }
-/** ¿La partícula es un disco que gira? (con radio e inercia, y no de movimiento impuesto) */
-export const gira = p => p.tipo === 'particula' && p.radio > 0 && p.inercia > 0 && !p.cinematica;
+/** ¿Es un bloque rígido? */
+export const esBloque = p => p?.tipo === 'particula' && p.forma === 'bloque';
+/** ¿La partícula gira? Un bloque siempre; un disco, con radio e inercia; nunca la de movimiento impuesto. */
+export const gira = p => p.tipo === 'particula' && !p.cinematica && (esBloque(p) || (p.radio > 0 && p.inercia > 0));
+/** Distancia del centro a la superficie en la que se apoya: el radio, o medio alto de un bloque. */
+export const radioApoyo = p => (esBloque(p) ? p.alto / 2 : p.radio || 0);
+/** Momento de inercia respecto del centro (kg·m²). */
+export const momentoInercia = p => (esBloque(p) ? p.m * (p.ancho ** 2 + p.alto ** 2) / 12 : (p.inercia || 0) * p.m * (p.radio || 0) ** 2);
+/**
+ * Orientación inicial (°) de un bloque: la de su superficie si está apoyado
+ * en un segmento (de plano sobre ella), si no la suya.
+ */
+export function orientacionBloque(esc, p) {
+  const s = p.sobre ? objeto(esc, p.sobre) : null;
+  if (s && s.tipo === 'superficie' && s.forma !== 'arco') return Math.atan2(s.b[1] - s.a[1], s.b[0] - s.a[0]) / DEG;
+  return p.orient || 0;
+}
+/** Vértices de un bloque de centro c y orientación th (rad), en el orden del motor. */
+export function verticesBloque(c, ancho, alto, th) {
+  const co = Math.cos(th), si = Math.sin(th);
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => { const x = sx * ancho / 2, y = sy * alto / 2; return [c[0] + co * x - si * y, c[1] + si * x + co * y]; });
+}
 /** Formas de giro: factor k de I = k·m·r². */
 export const FORMAS_GIRO = [['0', 'No gira'], ['0.5', 'Disco'], ['0.4', 'Esfera'], ['1', 'Aro']];
 
@@ -343,7 +365,7 @@ export function aMotor(esc) {
       id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0,
       ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)] } : {}),
       ...(p.cinematica ? { cinematica: true, ...(p.perfil && p.perfil.length ? { perfil: p.perfil.map(f => [...f]) } : {}) } : {}),
-      ...(gira(p) ? { inercia: p.inercia, w: p.w || 0 } : {}),
+      ...(esBloque(p) ? { forma: 'bloque', ancho: p.ancho, alto: p.alto, theta: orientacionBloque(esc, p) * DEG, w: p.w || 0, radio: 0 } : gira(p) ? { inercia: p.inercia, w: p.w || 0 } : {}),
     })),
     // Una superficie llevada por un cuerpo se da relativa a su posición inicial
     superficies: superficies.map(s => {
@@ -370,7 +392,7 @@ export function tramoEn(sim, t) {
 }
 /** Contactos de un modo como lista {i, sup, pegado}, en el formato nuevo («i:js») o en el anterior («i»). */
 export function contactosDe(modo) {
-  return Object.entries(modo?.contactos || {}).map(([k, v]) => ({ i: v.i ?? Number(k.split(':')[0]), sup: v.sup, pegado: !!v.pegado, ...(v.sentido ? { sentido: v.sentido } : {}) }));
+  return Object.entries(modo?.contactos || {}).map(([k, v]) => ({ i: v.i ?? Number(k.split(':')[0]), sup: v.sup, pegado: !!v.pegado, ...(v.sentido ? { sentido: v.sentido } : {}), ...(v.k >= 0 ? { k: v.k } : {}) }));
 }
 
 /**
@@ -381,7 +403,8 @@ export function contactosDe(modo) {
  */
 export function describirEvento(ev, M) {
   const partes = String(ev.clave || '').split(':');
-  const P = i => conArticulo(M.particulas[Number(i)]?.nombre ?? '?');
+  // «i» o «i.k» (vértice k de un bloque)
+  const P = i => conArticulo(M.particulas[parseInt(String(i), 10)]?.nombre ?? '?');
   const S = js => conArticulo(M.superficies[Number(js)]?.nombre ?? 'superficie');
   const con = M.conectores.find(c => c.id === partes[1]);
   const C = () => conArticulo(con?.nombre ?? partes[1]);
@@ -391,7 +414,7 @@ export function describirEvento(ev, M) {
     case 'impacto': d = `${P(partes[1])} choca con ${S(partes[2])}${contacto ? ' y queda en contacto' : ''}`; break;
     case 'despegue': d = partes[2] != null ? `${P(partes[1])} se despega de ${S(partes[2])}` : `${P(partes[1])} se despega`; break;
     case 'fin': d = partes[2] != null ? `${P(partes[1])} sale por el borde de ${S(partes[2])}` : `${P(partes[1])} sale por el borde`; break;
-    case 'vt0': d = /detiene/.test(ev.nombre || '') ? `${P(partes[1])} se detiene` : /Rueda/.test(ev.nombre || '') ? `${P(partes[1])} rueda sin deslizar` : `${P(partes[1])} invierte el deslizamiento`; break;
+    case 'vt0': d = /detiene/.test(ev.nombre || '') ? `${P(partes[1])} se detiene` : /Rueda/.test(ev.nombre || '') ? `${P(partes[1])} rueda sin deslizar` : /Deja de deslizar/.test(ev.nombre || '') ? `${P(partes[1])} deja de deslizar` : `${P(partes[1])} invierte el deslizamiento`; break;
     case 'desliza': d = `${P(partes[1])} empieza a deslizar`; break;
     case 'tensa':
       if (con?.tipo === 'union') d = `Se unen ${P(M.indice[con.a])} y ${P(M.indice[con.b])}`;
@@ -499,22 +522,30 @@ export function fuerzasEn(sim, M, t) {
   // Columnas de las restricciones activas: [{grad: [[i, gx, gy]...], usar(λ)}]
   const cols = [];
   for (const k of contactosDe(modo)) {
-    const sup = mot.superficies[k.sup], i = k.i, p = pos(i), v = vel(i);
+    const sup = mot.superficies[k.sup], i = k.i, pc = pos(i), v = vel(i);
     if (!sup) continue;
+    // Vértice k de un bloque: el contacto está en el vértice, a b = R(θ)·v_k del centro
+    const pb = mot.particulas[i], b = k.k >= 0 && rot[i] >= 0 ? (() => {
+      const th = y[base + 2 * rot[i]], vx = (k.k === 0 || k.k === 3 ? -1 : 1) * pb.ancho / 2, vy = (k.k < 2 ? -1 : 1) * pb.alto / 2;
+      return [Math.cos(th) * vx - Math.sin(th) * vy, Math.sin(th) * vx + Math.cos(th) * vy];
+    })() : null;
+    const p = b ? [pc[0] + b[0], pc[1] + b[1]] : pc;
     let nrm, tg;
     if (sup.tipo === 'segmento') { const geo = geoSegmento(sup.a, sup.b); nrm = geo.n; tg = geo.t; }
     else { const d = resta(p, sup.c), D = largo(d) || 1e-300, sg = sup.cara === 'interior' ? -1 : 1; nrm = [sg * d[0] / D, sg * d[1] / D]; tg = [-d[1] / D, d[0] / D]; }
     // Deslizamiento del punto de contacto: t̂·v + cr·ω en un disco que gira
     // (cr = −r·t̂·(ẑ×n̂), como en el motor), relativo a la superficie
     const j = sup.sobre != null ? idx[sup.sobre] : -1;
-    const cr = rot[i] >= 0 ? -(mot.particulas[i].radio || 0) * (tg[1] * nrm[0] - tg[0] * nrm[1]) : 0;
+    // gn, cr: entradas de giro de la normal y del deslizamiento (vértice: n̂·(ẑ×b) y t̂·(ẑ×b))
+    const gn = b ? nrm[1] * b[0] - nrm[0] * b[1] : 0;
+    const cr = b ? tg[1] * b[0] - tg[0] * b[1] : rot[i] >= 0 ? -(pb.radio || 0) * (tg[1] * nrm[0] - tg[0] * nrm[1]) : 0;
     const vt = punto(tg, j >= 0 ? resta(v, vel(j)) : v) + cr * omega(i);
     const desliza = sup.mu > 0 && !k.pegado && (!!k.sentido || Math.abs(vt) > 1e-15), sgn = k.sentido || Math.sign(vt);
     const dir = desliza ? [nrm[0] - sup.mu * sgn * tg[0], nrm[1] - sup.mu * sgn * tg[1]] : nrm;
     // Si la superficie va sobre un cuerpo j, la reacción lo empuja al revés;
     // la fricción hace par sobre el disco que gira (entrada n + q del giro)
     const conJ = (gx, gy, gr = 0) => [[i, gx, gy], ...(gr && rot[i] >= 0 ? [[n + rot[i], gr, 0]] : []), ...(j >= 0 ? [[j, -gx, -gy]] : [])];
-    cols.push({ grad: conJ(dir[0], dir[1], desliza ? -sup.mu * sgn * cr : 0), usar: L => {
+    cols.push({ grad: conJ(dir[0], dir[1], gn + (desliza ? -sup.mu * sgn * cr : 0)), usar: L => {
       lista[i].push({ tipo: 'normal', F: [L * nrm[0], L * nrm[1]], valor: L, id: sup.id });
       if (desliza) lista[i].push({ tipo: 'friccion', F: [-sup.mu * sgn * L * tg[0], -sup.mu * sgn * L * tg[1]], valor: Math.abs(sup.mu * L), id: sup.id });
     } });
@@ -772,6 +803,21 @@ export const ESCENARIOS = [
         objetos.push({ id: `f${q}`, tipo: 'fotopuerta', nombre: `Meta ${q}`, a: [2.4, yq], b: [2.4, yq + 0.5] });
       });
       return { duracion: 2.2, objetos };
+    },
+  },
+  {
+    id: 'vuelco', tipo: 'ejemplo', titulo: 'Bloques en un plano: uno se queda y otro vuelca',
+    nota: ['La fricción (μ = 0.9 > tan 25°) impide que deslicen. Lo que decide es la geometría: un bloque vuelca si la vertical por su centro cae fuera de su base, es decir, si tan θ > a/h.', 'El ancho (a/h = 1.5) se queda; el alto (a/h = ⅓ < tan 25° ≈ 0.47) gira sobre su arista de abajo desde el primer instante.', 'Selecciona cada bloque: su estado dice si está apoyado de plano o sobre una arista. Cambia el ancho del alto a 0.4 m y ya no vuelca.'],
+    crear: () => {
+      const th = 25, [a, b] = planoDesde([0, 2], th, 4), t = [cosd(th), -sind(th)], n = [sind(th), cosd(th)];
+      const bloque = (id, nombre, s0, an, al) => ({ ...P_(id, nombre, 1, a[0] + s0 * t[0] + al / 2 * n[0], a[1] + s0 * t[1] + al / 2 * n[1], { sobre: 's1' }), forma: 'bloque', ancho: an, alto: al, orient: 0, inercia: 0, w: 0 });
+      return {
+        duracion: 2.5,
+        objetos: [
+          SEG('s1', 'plano', 'Plano', a, b, { e: 0, mu: 0.9 }), SEG('s2', 'suelo', 'Suelo', [b[0], b[1]], [7.5, b[1]], { e: 0, mu: 0.9 }),
+          bloque('p1', 'Ancho', 0.8, 0.6, 0.4), bloque('p2', 'Alto', 2.3, 0.25, 0.75),
+        ],
+      };
     },
   },
   {
@@ -1456,7 +1502,9 @@ function iniciar() {
     const pos = est.map(s => [s.x, s.y]), off = desplazamientos(pos);
     return pos.map((p, i) => [p[0] + off[i][0], p[1] + off[i][1]]);
   }
-  const radioPx = i => Math.max(G.particula, (M.motor.particulas[i]?.radio || 0) * tz.vista.escala);
+  const radioPx = i => { const q = M.motor.particulas[i]; return Math.max(G.particula, (q?.forma === 'bloque' ? Math.min(q.ancho, q.alto) / 2 : q?.radio || 0) * tz.vista.escala); };
+  /** Ángulo (rad) de la partícula i en el estado q (el inicial si no hay simulación). */
+  const anguloDe = (i, q) => q?.th ?? M.motor.particulas[i]?.theta ?? 0;
 
   // -------------------------------------------------------------------------
   // Encuadre
@@ -1476,7 +1524,7 @@ function iniciar() {
       }
       else if (o.ancla) sumar(o.ancla);
     }
-    for (const p of M.motor.particulas) { sumar([p.p[0] - p.radio, p.p[1] - p.radio]); sumar([p.p[0] + p.radio, p.p[1] + p.radio]); }
+    for (const p of M.motor.particulas) { const r = p.forma === 'bloque' ? Math.hypot(p.ancho, p.alto) / 2 : p.radio; sumar([p.p[0] - r, p.p[1] - r]); sumar([p.p[0] + r, p.p[1] + r]); }
     for (const m of MUESTRAS) for (const s of m.est) sumar([s.x, s.y]);
     if (!xs.length) return { x0: -2, x1: 2, y0: -1, y1: 2 };
     let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
@@ -1560,8 +1608,8 @@ function iniciar() {
       if (capas.estrobo && t > 0) {
         const dt = intervaloEstrobo();
         for (let k = 0; k * dt < t - 1e-9; k++) {
-          const q = posDibujo(estadoEn(k * dt));
-          q.forEach((p, i) => { if (radioPx(i) > G.particula) tz.ctx.save(), (tz.ctx.globalAlpha = 0.5), tz.ctx.setLineDash([]), (tz.ctx.strokeStyle = tz.t['texto-3']), (tz.ctx.lineWidth = 1), tz.ctx.beginPath(), tz.ctx.arc(v.X(p[0]), v.Y(p[1]), radioPx(i), 0, 2 * Math.PI), tz.ctx.stroke(), tz.ctx.restore(); else tz.fantasma(p); });
+          const est = estadoEn(k * dt), q = posDibujo(est);
+          q.forEach((p, i) => { const ob = M.particulas[i]; if (esBloque(ob)) { const vs = verticesBloque(p, ob.ancho, ob.alto, anguloDe(i, est[i])).map(w => v.P(w)); tz.ctx.save(); tz.ctx.globalAlpha = 0.5; tz.ctx.setLineDash([]); tz.ctx.strokeStyle = tz.t['texto-3']; tz.ctx.lineWidth = 1; tz.ctx.beginPath(); vs.forEach(([x, y], k2) => (k2 ? tz.ctx.lineTo(x, y) : tz.ctx.moveTo(x, y))); tz.ctx.closePath(); tz.ctx.stroke(); tz.ctx.restore(); return; } if (radioPx(i) > G.particula) tz.ctx.save(), (tz.ctx.globalAlpha = 0.5), tz.ctx.setLineDash([]), (tz.ctx.strokeStyle = tz.t['texto-3']), (tz.ctx.lineWidth = 1), tz.ctx.beginPath(), tz.ctx.arc(v.X(p[0]), v.Y(p[1]), radioPx(i), 0, 2 * Math.PI), tz.ctx.stroke(), tz.ctx.restore(); else tz.fantasma(p); });
         }
       }
     }
@@ -1570,7 +1618,8 @@ function iniciar() {
     dibujarConectores(s, pd, tr);
     for (const o of esc.objetos) if (o.tipo === 'clavo') tz.mecClavo([o.x, o.y], { grueso: hover === o.id });
     M.particulas.forEach((o, i) => {
-      tz.mecDisco(pd[i], o.radio || 0, { etiqueta: o.nombre, grueso: hover === o.id, lado: ladoRotulo(i, s[i]), ...(gira(o) ? { giro: s[i]?.th ?? 0 } : {}) });
+      if (esBloque(o)) tz.mecBloque(pd[i], o.ancho, o.alto, anguloDe(i, s[i]), { etiqueta: o.nombre, grueso: hover === o.id, lado: ladoRotulo(i, s[i]) });
+      else tz.mecDisco(pd[i], o.radio || 0, { etiqueta: o.nombre, grueso: hover === o.id, lado: ladoRotulo(i, s[i]), ...(gira(o) ? { giro: s[i]?.th ?? 0 } : {}) });
     });
 
     // 7. Magnitudes
@@ -1765,7 +1814,7 @@ function iniciar() {
     const v = tz.vista, o = objeto(esc, sel);
     if (!o) return;
     if (o.tipo === 'particula') {
-      const i = M.indice[o.id], [x, y] = v.P(pd[i]); tz.seleccionCirculo(x, y, radioPx(i) + 5);
+      const i = M.indice[o.id], [x, y] = v.P(pd[i]); tz.seleccionCirculo(x, y, (esBloque(o) ? Math.hypot(o.ancho, o.alto) / 2 * v.escala : radioPx(i)) + 5);
     } else if (o.tipo === 'superficie') {
       if (o.forma === 'arco') {
         tz.mecSeleccionArco(o.c, o.r, o.a0 * DEG, o.a1 * DEG);
@@ -1879,7 +1928,7 @@ function iniciar() {
       default: return o.e < 1 ? 'e ' + limpio(o.e, 2) : o.mu > 0 ? 'μ ' + limpio(o.mu, 2) : '';
     }
   }
-  function icono(o) { return o.tipo === 'particula' && o.radio > 0 ? ICONOS.disco : ICONOS[claseDe(o)]; }
+  function icono(o) { return esBloque(o) ? ICONOS.bloque : o.tipo === 'particula' && o.radio > 0 ? ICONOS.disco : ICONOS[claseDe(o)]; }
   function construirArbol() {
     const orden = ['particula', 'superficie', ...CONECTORES, 'clavo', ...INSTRUMENTOS];
     const lista = [...esc.objetos].sort((a, b) => orden.indexOf(a.tipo) - orden.indexOf(b.tipo));
@@ -1956,13 +2005,21 @@ function iniciar() {
       h += grupoMostrar();
       h += grupo('Energía en t = 0', '<div class="lecturas" id="lecturas"></div>', 'lect-titulo');
     } else if (o.tipo === 'particula') {
-      h += cab(icono(o), o.nombre, o.radio > 0 ? 'Disco' : 'Partícula');
+      h += cab(icono(o), o.nombre, esBloque(o) ? 'Bloque' : o.radio > 0 ? 'Disco' : 'Partícula');
       let c = fila('Masa', campo(`${o.id}.m`, o.m, 'masa'));
       const p = M.posiciones[M.indice[o.id]] || [o.x, o.y];
       c += fila('Posición', doble(campo(`${o.id}.x`, p[0], 'longitud', 'x'), campo(`${o.id}.y`, p[1], 'longitud', 'y')));
       c += fila('Velocidad', doble(campo(`${o.id}.v`, o.v, 'velocidad', 'v'), campo(`${o.id}.ang`, o.ang, 'angulo', 'α', 'Ángulo desde el eje x|Direction')));
-      c += fila('Radio', campo(`${o.id}.radio`, o.radio, 'longitud', 'r', 'Con radio, choca con otros discos y apoya su borde en las superficies; 0 es una partícula puntual|Radius'));
-      if (o.radio > 0 && !o.cinematica) {
+      if (esBloque(o)) {
+        c += fila('Tamaño', doble(campo(`${o.id}.ancho`, o.ancho, 'longitud', 'a', 'Ancho|Width'), campo(`${o.id}.alto`, o.alto, 'longitud', 'h', 'Alto|Height')));
+        if (o.sobre && objeto(esc, o.sobre)?.forma !== 'arco') c += fila('Orientación', `<span class="dato">${fmt(orientacionBloque(esc, o), 4)}° (la de su apoyo)</span>`);
+        else c += fila('Orientación', campo(`${o.id}.orient`, o.orient || 0, 'angulo', 'θ', 'Giro del bloque, antihorario desde la horizontal|Orientation'));
+        if (!o.cinematica) {
+          c += fila('Velocidad angular', campo(`${o.id}.w`, o.w || 0, 'angular', 'ω', 'Positiva en sentido antihorario|Angular velocity'));
+          c += ayudaFila('Bloque rígido: gira con I = m(a² + h²)/12 y se apoya por sus cuatro vértices, así que puede volcar. No choca con otros cuerpos.');
+        }
+      } else c += fila('Radio', campo(`${o.id}.radio`, o.radio, 'longitud', 'r', 'Con radio, choca con otros discos y apoya su borde en las superficies; 0 es una partícula puntual|Radius'));
+      if (!esBloque(o) && o.radio > 0 && !o.cinematica) {
         const k = FORMAS_GIRO.find(([v]) => Math.abs(Number(v) - (o.inercia || 0)) < 1e-9)?.[0] ?? '';
         c += fila('Giro', segmentado(`${o.id}.giro`, FORMAS_GIRO.map(([v, t]) => [v, t === 'No gira' ? 'No' : t]), k));
         if (gira(o)) {
@@ -2115,6 +2172,14 @@ function iniciar() {
       if (prop === 'm') { if (!(v > 0)) return 'La masa tiene que ser positiva.'; o.m = v; return; }
       if (prop === 'radio') { if (!(v >= 0)) return 'El radio no puede ser negativo.'; o.radio = v; return; }
       if (prop === 'w') { if (!(Math.abs(v) <= 1e4)) return 'La velocidad angular va de −10 000 a 10 000 rad/s.'; o.w = v; return; }
+      if (prop === 'ancho' || prop === 'alto') {
+        if (!(v > 0 && v <= 100)) return 'El tamaño va de 0 a 100 m.';
+        o[prop] = v;
+        // Apoyado: sigue tocando su superficie con el alto nuevo
+        if (o.sobre) { const sp = objeto(esc, o.sobre); if (sp) { const q = proyectarSobre(sp, [o.x, o.y], radioApoyo(o)); o.x = q[0]; o.y = q[1]; } }
+        return;
+      }
+      if (prop === 'orient') { o.orient = ((v + 180) % 360 + 360) % 360 - 180; return; }
       if (prop === 'v') { if (!(v >= 0)) return 'Escribe la rapidez (positiva) y la dirección en α.'; o.v = v; return; }
       if (prop === 'ang') { o.ang = ((v + 180) % 360 + 360) % 360 - 180; return; }
       if (prop === 'F') { if (!(v >= 0)) return 'Escribe el módulo de la fuerza (positivo) y su dirección en β.'; o.F = v; return; }
@@ -2124,7 +2189,7 @@ function iniciar() {
         if (o.sobre) {
           // Apoyada: se desliza sobre su superficie (cambia la otra coordenada);
           // si la superficie no pasa por ese valor, se suelta
-          const q = deslizarSobre(objeto(esc, o.sobre), posicionParticula(esc, o), prop === 'x' ? 0 : 1, v, o.radio);
+          const q = deslizarSobre(objeto(esc, o.sobre), posicionParticula(esc, o), prop === 'x' ? 0 : 1, v, radioApoyo(o));
           if (q) { o.x = q[0]; o.y = q[1]; ajustarConectores(o.id); return; }
           o.sobre = null;
         }
@@ -2238,7 +2303,7 @@ function iniciar() {
   function seguirSuperficie(s) {
     for (const p of esc.objetos) {
       if (p.tipo !== 'particula' || p.sobre !== s.id) continue;
-      const q = proyectarSobre(s, [p.x, p.y], p.radio); p.x = q[0]; p.y = q[1];
+      const q = proyectarSobre(s, [p.x, p.y], radioApoyo(p)); p.x = q[0]; p.y = q[1];
       ajustarConectores(p.id);
     }
   }
@@ -2308,13 +2373,14 @@ function iniciar() {
       if (s) {
         h += filaL('x', '', s.x, 'm') + filaL('y', '', s.y, 'm') + filaL('v', 'x', s.vx, 'm/s', false) + filaL('v', 'y', s.vy, 'm/s', false) + `${simHTML('|v|')}<span class="v">${fmt(Math.hypot(s.vx, s.vy), 4)}</span><span class="u">m/s</span>`;
         // Con giro, E_k suma la de rotación ½Iω²
-        const Erot = gira(o) ? 0.5 * o.inercia * o.m * o.radio * o.radio * s.w * s.w : 0;
+        const Erot = gira(o) ? 0.5 * momentoInercia(o) * s.w * s.w : 0;
+        if (esBloque(o)) h += filaL('θ', '', s.th / DEG, '°', false);
         if (gira(o)) h += filaL('ω', '', s.w, 'rad/s', false);
         h += filaL('E', 'k', 0.5 * o.m * (s.vx * s.vx + s.vy * s.vy) + Erot, 'J');
         if (gira(o)) h += filaL('E', 'rot', Erot, 'J');
         if (f) for (const x of f.porParticula[i]) if (['normal', 'friccion', 'tension', 'elastica'].includes(x.tipo)) { const [a, b] = SIMBOLO_F[x.tipo]; h += filaL(a, b, x.valor, 'N'); }
       }
-      const est = $('#insp-estado'); if (est) est.textContent = `${o.radio > 0 ? 'Disco' : 'Partícula'} · ${estadoParticula(i)}`;
+      const est = $('#insp-estado'); if (est) est.textContent = `${esBloque(o) ? 'Bloque' : o.radio > 0 ? 'Disco' : 'Partícula'} · ${estadoParticula(i)}`;
     } else if (CONECTORES.includes(o.tipo) && SIM) {
       const ia = M.indice[o.a], s = estadoEn(t), pa = [s[ia].x, s[ia].y];
       if (o.tipo === 'prensa') {
@@ -2353,6 +2419,10 @@ function iniciar() {
     if (M.particulas[i]?.cinematica) return 'movimiento impuesto';
     if (!SIM) return 'en reposo';
     const tr = tramoEn(SIM, Math.min(t, tFinal())), k = contactosDe(tr.modo).find(c => c.i === i);
+    if (k && esBloque(M.particulas[i])) {
+      const n = contactosDe(tr.modo).filter(c => c.i === i).length, sobreQue = conArticulo(M.superficies[k.sup]?.nombre ?? '');
+      return n >= 2 ? `apoyado de plano sobre ${sobreQue}` : `sobre una arista, en ${sobreQue}`;
+    }
     if (k) {
       const giro = gira(M.particulas[i] ?? {}), sobreQue = conArticulo(M.superficies[k.sup]?.nombre ?? '');
       if (giro && (M.superficies[k.sup]?.mu ?? 0) > 0) return `${k.pegado ? 'rueda sin deslizar sobre' : 'desliza girando sobre'} ${sobreQue}`;
@@ -2703,8 +2773,8 @@ function iniciar() {
     anadir({ id: nuevoId(esc, 'n'), tipo: herr, nombre: nuevoNombre(esc, herr), a: [...p0], b });
     terminarCreacion();
   }
-  function crearParticula(p) {
-    const o = { id: nuevoId(esc, 'p'), tipo: 'particula', nombre: nuevoNombre(esc, 'particula'), m: 1, x: p[0], y: p[1], v: 0, ang: 0, radio: 0, sobre: null };
+  function crearParticula(p, bloque = false) {
+    const o = { id: nuevoId(esc, 'p'), tipo: 'particula', nombre: nuevoNombre(esc, 'particula'), m: 1, x: p[0], y: p[1], v: 0, ang: 0, radio: 0, sobre: null, ...(bloque ? { forma: 'bloque', ancho: 0.4, alto: 0.3, orient: 0, inercia: 0, w: 0 } : {}) };
     anadir(o); return o;
   }
   function crearConector(herr, a, destino) {
@@ -2752,7 +2822,7 @@ function iniciar() {
     if (o.tipo === 'particula') {
       c.x += d;
       const s0 = o.sobre ? objeto(esc, o.sobre) : null;
-      const q = s0 ? deslizarSobre(s0, posicionParticula(esc, o), 0, c.x, o.radio) : null;
+      const q = s0 ? deslizarSobre(s0, posicionParticula(esc, o), 0, c.x, radioApoyo(o)) : null;
       if (q) { c.x = q[0]; c.y = q[1]; } else { c.y -= d; c.sobre = null; }
     } else if (o.tipo === 'clavo') { c.x += d; c.y -= d; }
     else if (INSTRUMENTOS.includes(o.tipo)) { c.a = mover(o.a); c.b = mover(o.b); }
@@ -2770,6 +2840,7 @@ function iniciar() {
   // -------------------------------------------------------------------------
   const HINT = {
     particula: 'Clic en el lienzo para colocar una partícula; cerca de una superficie se apoya en ella. Mayús: sin ajuste.',
+    bloque: 'Clic en el lienzo para colocar un bloque que gira y puede volcar; cerca de una superficie se apoya de plano en ella. Mayús: sin ajuste.',
     suelo: 'Clic para un suelo de 4 m, o arrastra para darle largo.', pared: 'Clic para una pared de 2 m, o arrastra.',
     plano: 'Clic para un plano de 30°, o arrastra del extremo alto al bajo.', segmento: 'Arrastra de un extremo al otro.',
     arco: 'Clic para un hemisferio de 1 m, o arrastra desde el centro para el radio.',
@@ -2814,6 +2885,7 @@ function iniciar() {
   function soltarDesdePaleta(herr, w, libre) {
     if (t > 0) irA(0);
     if (herr === 'particula') { const o = crearParticula(w); apoyarSiCerca(o, libre); terminarCreacion(); }
+    if (herr === 'bloque') { const o = crearParticula(w, true); apoyarSiCerca(o, libre); terminarCreacion(); }
     else if (herr === 'clavo') { crearClavo(w); terminarCreacion(); }
     else if (['suelo', 'pared', 'plano', 'segmento', 'arco'].includes(herr)) crearSuperficie(herr, w, null);
     else elegirHerramienta(herr);
@@ -2837,7 +2909,15 @@ function iniciar() {
       if ((o.tipo === 'superficie' && o.forma !== 'arco') || INSTRUMENTOS.includes(o.tipo)) for (const k of ['a', 'b']) if (largo(resta(q, P(o[k]))) < 8) return { id: o.id, parte: k };
       if (o.forma === 'arco') for (const a of asasArco(o)) if (largo(resta(q, P(a.p))) < 8) return { id: o.id, parte: a.cual };
     }
-    for (let i = M.particulas.length - 1; i >= 0; i--) if (largo(resta(q, P(pd[i]))) < radioPx(i) + 4) return { id: M.particulas[i].id, parte: 'cuerpo' };
+    for (let i = M.particulas.length - 1; i >= 0; i--) {
+      const ob = M.particulas[i];
+      if (esBloque(ob)) {
+        // Al marco del bloque: dentro del rectángulo (con 4 px de holgura)
+        const c = P(pd[i]), th = anguloDe(i, estadoEn(t)[i]), d = resta(q, c), hol = 4;
+        const lx = Math.cos(th) * d[0] - Math.sin(th) * d[1], ly = Math.sin(th) * d[0] + Math.cos(th) * d[1];   // y de pantalla hacia abajo: el giro se invierte
+        if (Math.abs(lx) <= ob.ancho / 2 * tz.vista.escala + hol && Math.abs(ly) <= ob.alto / 2 * tz.vista.escala + hol) return { id: ob.id, parte: 'cuerpo' };
+      } else if (largo(resta(q, P(pd[i]))) < radioPx(i) + 4) return { id: ob.id, parte: 'cuerpo' };
+    }
     for (const n of esc.objetos) if (n.tipo === 'clavo' && largo(resta(q, P([n.x, n.y]))) < 8) return { id: n.id, parte: 'cuerpo' };
     for (const n of esc.objetos) if (INSTRUMENTOS.includes(n.tipo) && distSegPx(q, P(n.a), P(n.b)) < 6) return { id: n.id, parte: 'cuerpo' };
     for (const c of esc.objetos) {
@@ -2881,8 +2961,8 @@ function iniciar() {
   function apoyarSiCerca(o, libre) {
     o.sobre = null;
     if (libre) return null;
-    const s = superficieCercana([o.x, o.y], o.radio);
-    if (s) { const q = proyectarSobre(s, [o.x, o.y], o.radio); o.x = q[0]; o.y = q[1]; o.sobre = s.id; }
+    const s = superficieCercana([o.x, o.y], radioApoyo(o));
+    if (s) { const q = proyectarSobre(s, [o.x, o.y], radioApoyo(o)); o.x = q[0]; o.y = q[1]; o.sobre = s.id; }
     return s;
   }
 
@@ -2965,7 +3045,7 @@ function iniciar() {
       if (!libre) {
         let paso = 5, ref = null;
         const s = o.sobre ? objeto(esc, o.sobre) : null;
-        if (s) { const n = huecoSuperficie(s, posicionParticula(esc, o), o.radio).n; ref = Math.atan2(-n[0], n[1]) / DEG; }
+        if (s) { const n = huecoSuperficie(s, posicionParticula(esc, o), radioApoyo(o)).n; ref = Math.atan2(-n[0], n[1]) / DEG; }
         const cand = [Math.round(ang / paso) * paso];
         if (ref != null) cand.push(ref, ref + 180, ref - 180);
         ang = cand.reduce((b, c) => (Math.abs(c - ang) < 4 && Math.abs(c - ang) < Math.abs(b - ang) ? c : b), cand[0]);
@@ -3176,7 +3256,7 @@ function iniciar() {
     ['i-exportar', 'Exportar datos a CSV', '', exportarCSV],
     ['i-evento', 'Exportar eventos a CSV', '', exportarEventos],
     ['i-imagen', 'Exportar imagen del lienzo', '', exportarPNG],
-    ...['particula', 'suelo', 'pared', 'plano', 'segmento', 'arco', 'cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa', 'clavo', 'regla', 'fotopuerta'].map(h => [ICONOS[h], `Añadir ${(document.querySelector(`#paleta [data-herr="${h}"] span`)?.textContent || h).toLowerCase()}`, h === 'particula' ? 'P' : '', () => elegirHerramienta(h)]),
+    ...['particula', 'bloque', 'suelo', 'pared', 'plano', 'segmento', 'arco', 'cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa', 'clavo', 'regla', 'fotopuerta'].map(h => [ICONOS[h], `Añadir ${(document.querySelector(`#paleta [data-herr="${h}"] span`)?.textContent || h).toLowerCase()}`, h === 'particula' ? 'P' : '', () => elegirHerramienta(h)]),
     ...ESCENARIOS.map(e => [e.tipo === 'mext' ? 'i-mext' : e.tipo === 'tutorial' ? 'i-tutorial' : 'i-ejemplo', `Escenario: ${e.titulo}${e.ref ? ` (MEXT ${e.ref})` : ''}`, '', () => cargarEscenario(e.id)]),
   ];
   let selCmd = 0;

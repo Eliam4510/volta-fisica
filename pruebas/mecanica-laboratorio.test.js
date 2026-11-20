@@ -366,3 +366,39 @@ describe('discos que giran en el laboratorio', () => {
     cerca(estadoMecanica(sim, 1.5)[0].vx, 25 / 7, 1e-8);
   });
 });
+
+describe('bloques rígidos en el laboratorio', () => {
+  it('se sanean al abrir, sobreviven a guardar y abrir, y llegan al motor con la orientación de su apoyo', () => {
+    const e = escenaDeEscenario('vuelco');
+    expect(normalizarEscena(JSON.parse(JSON.stringify(e)))).toEqual(e);
+    const raro = normalizarEscena({ ...escenaVacia(), objetos: [{ id: 'p1', tipo: 'particula', nombre: 'B', m: 1, x: 0, y: 0, forma: 'bloque', ancho: -3, alto: 1e9, orient: 999 }] }).objetos[0];
+    expect([raro.forma, raro.ancho, raro.alto, raro.orient]).toEqual(['bloque', 1e-3, 100, 360]);
+    const M = aMotor(e), P = M.motor.particulas[M.indice.p1];
+    expect(P.forma).toBe('bloque');
+    cerca(P.theta, -25 * Math.PI / 180, 1e-12);
+    expect(P.radio).toBe(0);
+  });
+
+  it('en el plano de 25° con μ = 0.9 el ancho se queda y el alto vuelca (tan θ > a/h)', () => {
+    const e = escenaDeEscenario('vuelco'), M = aMotor(e), sim = simularMecanica(M.motor);
+    expect(sim.incompleta).toBeNull();
+    const [A0, B0] = estadoMecanica(sim, 0), [A, B] = estadoMecanica(sim, 0.8);
+    cerca(A.x, A0.x, 1e-9); cerca(A.y, A0.y, 1e-9); cerca(A.th, -25 * Math.PI / 180, 1e-9);
+    expect(B.th).toBeLessThan(B0.th - 0.3);
+  });
+
+  it('fuerzasEn de un bloque quieto: las normales suman m·g·cos θ y las fricciones m·g·sen θ', () => {
+    const e = escenaDeEscenario('vuelco'), M = aMotor(e), sim = simularMecanica(M.motor);
+    const f = fuerzasEn(sim, M, 0.5).porParticula[M.indice.p1], th = 25 * Math.PI / 180;
+    const suma = tipo => f.filter(x => x.tipo === tipo).reduce((s, x) => s + x.valor, 0);
+    expect(f.filter(x => x.tipo === 'normal')).toHaveLength(2);
+    cerca(suma('normal'), g * Math.cos(th), 1e-7);
+    cerca(suma('friccion'), g * Math.sin(th), 1e-7);
+  });
+
+  it('los eventos de un vértice («i.k») se describen con el nombre del bloque', () => {
+    const e = escenaDeEscenario('vuelco'), M = aMotor(e);
+    expect(describirEvento({ clave: 'despegue:1.0:0', nombre: 'Se despega (p2)' }, M)).toBe('Alto se despega del plano');
+    expect(describirEvento({ clave: 'vt0:1.1:0', nombre: 'Deja de deslizar (p2)' }, M)).toBe('Alto deja de deslizar');
+  });
+});
