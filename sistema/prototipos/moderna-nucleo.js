@@ -26,6 +26,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { evaluar } from '../nucleo/unidades.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -1071,12 +1072,14 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   $('#b-deshacer').addEventListener('click', deshacer);
   $('#b-rehacer').addEventListener('click', rehacer);
 
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     ESC = completa(escenaDe(clave)); aplicarVariables();
     sel = ESC.sel || 'escena'; vistaTocada = false; herramienta = null; t = 0; jugando = false;
     titulo2(); construirVariables(); inspector(); recalcular();
     escala0 = tz.vista.escala; zoomTexto();
     if (historial) { historial.reiniciar(sinSel(instantanea())); botonesHistorial(); }
+    documentoNuevo();
   }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false)); }
   const PAGINAS = { fotoelectrico: 'moderna.html', nucleo: 'moderna-nucleo.html' };
@@ -1291,7 +1294,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     else { ESC = datosSeguros(previa.datos); sel = ESC.sel || 'escena'; }
     aplicarVariables();
     if (q.has('sel')) { const s = q.get('sel'); if (s === 'escena' || nuDe(s) || (s === 'muestra' && ESC.muestra) || (s === 'decaimiento' && ESC.decaimiento) || (s.startsWith('celda:') && nuclido(s.slice(6)))) sel = s; }
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'moderna-nucleo', escena: escenaActual, origen: (!q.has('escena') && previa) || null, abrir, guardar });
     t = q.has('t') && ESC.muestra ? Math.max(0, Math.min(ESC.duracion, (parseFloat(q.get('t')) || 0) * U())) : 0;
     titulo2(); construirVariables(); inspector();
     recalcular(); escala0 = tz.vista.escala; zoomTexto();

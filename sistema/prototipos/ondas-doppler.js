@@ -20,6 +20,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { evaluar } from '../nucleo/unidades.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -611,12 +612,14 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   function deshacer() { const d = historial?.deshacer(); if (d) { restaurar({ ...d, obs: d.obs }); ESC.obs = Math.min(d.obs || 0, ESC.observadores.length - 1); recalcular(); botonesHistorial(); avisar('Cambio deshecho', false); } }
   function rehacer() { const d = historial?.rehacer(); if (d) { restaurar(d); ESC.obs = Math.min(d.obs || 0, ESC.observadores.length - 1); recalcular(); botonesHistorial(); avisar('Cambio rehecho', false); } }
   $('#b-deshacer').addEventListener('click', deshacer); $('#b-rehacer').addEventListener('click', rehacer);
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     detenerAudio();
     ESC = completa(ESCENAS.find(e => e.clave === clave) || ESCENAS[0]); aplicarVariables();
     sel = 'fuente:0'; t = 0; jugando = false; vistaTocada = false;
     titulo(); construirVariables(); inspector(); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); recalcular();
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
+    documentoNuevo();
   }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false)); }
   const PAGINAS_ONDAS = { 'medio-1d': 'ondas.html', doppler: 'ondas-doppler.html', cubeta: 'ondas-cubeta.html' };
@@ -878,7 +881,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     else ESC = datosSeguros(previa.datos);
     aplicarVariables();
     if (qp.has('obs')) ESC.obs = Math.max(0, Math.min(ESC.observadores.length - 1, parseInt(qp.get('obs'), 10) || 0));
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'ondas-doppler', escena: escenaActual, origen: (!(qp.has('escena') || !previa || previa.espacio !== 'doppler') && previa) || null, abrir, guardar });
     titulo(); construirVariables(); inspector(); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); recalcular();
     if (qp.has('t')) t = Math.max(0, Math.min(ESC.duracion, parseFloat(qp.get('t')) || 0));
     const pe = qp.get('pest'); if (pe) { const b = document.querySelector(`#pest [aria-controls="p-${pe}"]`); if (b) b.click(); }

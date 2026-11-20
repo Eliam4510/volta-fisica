@@ -79,6 +79,8 @@
     <span class="separador-v"></span>
     <button class="btn btn-icono" id="b-deshacer" data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
     <button class="btn btn-icono" id="b-rehacer" data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" data-accion="abrir" data-ayuda="Abrir escena (cualquier módulo)|Open|Ctrl O"><svg class="ico"><use href="#i-carpeta"/></svg></button>
+    <button class="btn btn-icono" data-accion="guardar" data-ayuda="Guardar escena (Mayús: guardar como)|Save|Ctrl S"><svg class="ico"><use href="#i-guardar"/></svg></button>
     <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
     <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
   </header>
@@ -98,7 +100,7 @@
           <button class="herr" data-herr="calentador" data-ayuda="Calentador en el cilindro o en un recipiente|Heater"><svg class="ico"><use href="#o-calentador"/></svg><span>Calentador</span></button>
           <button class="herr" data-herr="bano" data-ayuda="Baño térmico del cilindro o de un recipiente|Heat bath"><svg class="ico"><use href="#o-bano-termico"/></svg><span>Baño térmico</span></button>
           <button class="herr" data-herr="gas" data-ayuda="Gas ideal para un recipiente vacío|Ideal gas"><svg class="ico"><use href="#o-gas"/></svg><span>Gas</span></button>
-          <button class="herr" data-herr="resorte" data-ayuda="Resorte: el motor del cilindro aún no lo simula|Spring"><svg class="ico"><use href="#o-resorte"/></svg><span>Resorte</span></button>
+          
           <button class="herr" data-herr="globo" data-ayuda="Globo aerostático con quemador|Hot-air balloon"><svg class="ico"><use href="#o-globo"/></svg><span>Globo</span></button>
           <button class="herr" data-herr="columna" data-ayuda="Columna de líquido con una burbuja que sube|Liquid column"><svg class="ico"><use href="#o-columna-liquido"/></svg><span>Columna de líquido</span></button>
         </div>
@@ -178,7 +180,7 @@
         <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
         <div class="lecturas" id="lecturas"></div>
       </details>
-      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir variable|Add variable"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables<span class="sp"></span></div>
       <div class="variables" id="variables"></div>
     </div>
   </aside>

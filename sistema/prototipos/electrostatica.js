@@ -23,6 +23,7 @@ import { evaluar, DIM as DIMS } from '../nucleo/unidades.js';
 import { crearEscena, numero, texto, magnitud } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
 
 (function () {
@@ -1347,13 +1348,15 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
     document.querySelectorAll('.capa-btn').forEach(b => b.setAttribute('aria-pressed', String(!!ESC.capas[/** @type {HTMLElement} */ (b).dataset.capa])));
   }
   function escenaActual() { return crearEscena({ modulo: 'electrostatica', espacio: ESPACIO, titulo: ESC.titulo, datos: instantanea() }); }
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     ESC = completa(escenaDe(clave));
     sel = ESC.particula ? 'P' : ESC.camino ? 'camino' : 'sonda'; t = 0; jugando = false; herramienta = null; soltarHerramienta();
     titulo(); construirVariables(); recalcular(); encuadrar(); escala0 = tz.vista.escala; zoomTexto();
     construirArbol(); construirInspector(); todo();
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
     if (autoguardar) autoguardado.guardar('electrostatica', escenaActual());
+    documentoNuevo();
   }
 
   const TIPOS_OK = ['puntual', 'esfera', 'hilo', 'segmento', 'anillo', 'lamina', 'uniforme'];
@@ -1742,7 +1745,8 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
     const previa = pend || (limpioURL ? autoguardado.leer('electrostatica', { modulo: 'electrostatica' }) : null);
     if (q.has('escena') || !previa) ESC = completa(escenaDe(q.get('escena') || 'mext-2020-2'));
     else ESC = datosSeguros(previa.datos);
-    autoguardar = limpioURL || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'electrostatica', escena: escenaActual, origen: (!q.has('escena') && previa) || null, abrir, guardar });
     if (q.get('mapa') === '1') ESC.capas.mapa = true;
     if (q.get('malla') === '1') ESC.capas.malla = true;
     if (q.get('fuentes') === 'todas') ESC.vista.fuentes = 'todas';

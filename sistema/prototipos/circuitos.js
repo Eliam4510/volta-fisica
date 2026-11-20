@@ -24,6 +24,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { evaluar } from '../nucleo/unidades.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -1592,11 +1593,13 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   $('#b-deshacer').addEventListener('click', deshacer);
   $('#b-rehacer').addEventListener('click', rehacer);
 
-  function abrirEscenario(clave) {
+  async function abrirEscenario(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     cargarEscenario(clave); t = 0; jugando = false; vistaTocada = false;
     titulo(); construirVariables(); inspector();
     recalcular(); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); todo();
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
+    documentoNuevo();
   }
   function guardar() {
     guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false));
@@ -1868,7 +1871,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     else { ESC = datosSeguros(previa.datos); aplicarVariables(); sel = null; }
     if (q.has('sel')) sel = q.get('sel') ? 'el:' + q.get('sel') : null;
     if (q.get('modo') === 'realista') ESC.modo = 'realista';
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'circuitos', escena: escenaActual, origen: (!pedida && previa) || null, abrir, guardar });
     titulo(); construirVariables();
     tz.ajustar(); encuadrar(); escala0 = tz.vista.escala;
     recalcular(); inspector(); zoomTexto();

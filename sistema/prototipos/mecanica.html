@@ -41,6 +41,8 @@
     <span class="separador-v"></span>
     <button class="btn btn-icono" id="b-deshacer" disabled data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
     <button class="btn btn-icono" id="b-rehacer" disabled data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" data-accion="abrir" data-ayuda="Abrir escena (cualquier módulo)|Open|Ctrl O"><svg class="ico"><use href="#i-carpeta"/></svg></button>
+    <button class="btn btn-icono" data-accion="guardar" data-ayuda="Guardar escena (Mayús: guardar como)|Save|Ctrl S"><svg class="ico"><use href="#i-guardar"/></svg></button>
     <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
     <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
   </header>
@@ -50,28 +52,10 @@
     <div class="desplaza">
       <div class="seccion">
         <div class="panel-cab">Objetos</div>
-        <div class="paleta" data-exclusivo>
-          <button class="herr" data-ayuda="Partícula|Particle"><svg class="ico"><use href="#o-particula"/></svg><span>Partícula</span></button>
-          <button class="herr" data-ayuda="Lanzador|Launcher"><svg class="ico"><use href="#o-lanzador"/></svg><span>Lanzador</span></button>
-          <button class="herr" data-ayuda="Suelo|Ground"><svg class="ico"><use href="#o-suelo"/></svg><span>Suelo</span></button>
-          <button class="herr" data-ayuda="Plano inclinado|Inclined plane"><svg class="ico"><use href="#o-plano-inclinado"/></svg><span>Plano inclinado</span></button>
-          <button class="herr" data-ayuda="Pared|Wall"><svg class="ico"><use href="#o-pared"/></svg><span>Pared</span></button>
-          <button class="herr" data-ayuda="Arco|Arc surface"><svg class="ico"><use href="#o-arco"/></svg><span>Arco</span></button>
-          <button class="herr" data-ayuda="Curva y = f(x)|Curve"><svg class="ico"><use href="#o-curva"/></svg><span>Curva</span></button>
-          <button class="herr" data-ayuda="Resistencia del aire|Air drag"><svg class="ico"><use href="#o-viento"/></svg><span>Aire</span></button>
-        </div>
+        <p class="nota-panel">Esta pantalla estudia el tiro con su montaje fijo. Para colocar partículas, superficies e instrumentos libremente, usa el <a href="mecanica-laboratorio.html">Laboratorio</a>.</p>
       </div>
       <div class="seccion">
-        <div class="panel-cab">Instrumentos</div>
-        <div class="paleta" data-exclusivo>
-          <button class="herr" data-ayuda="Regla|Ruler"><svg class="ico"><use href="#n-regla"/></svg><span>Regla</span></button>
-          <button class="herr" data-ayuda="Transportador|Protractor"><svg class="ico"><use href="#n-transportador"/></svg><span>Transportador</span></button>
-          <button class="herr" data-ayuda="Cronómetro|Stopwatch"><svg class="ico"><use href="#n-cronometro"/></svg><span>Cronómetro</span></button>
-          <button class="herr" data-ayuda="Fotopuerta|Photogate"><svg class="ico"><use href="#n-fotopuerta"/></svg><span>Fotopuerta</span></button>
-        </div>
-      </div>
-      <div class="seccion">
-        <div class="panel-cab">Escena<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir objeto|Add object"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+        <div class="panel-cab">Escena<span class="sp"></span></div>
         <div class="arbol" id="arbol">
           <div class="nodo" aria-selected="true"><svg class="ico"><use href="#o-particula"/></svg><span class="nombre">Bola</span><span class="acciones fijas"><svg class="ico"><use href="#i-ojo"/></svg></span></div>
           <div class="nodo"><svg class="ico"><use href="#o-suelo"/></svg><span class="nombre">Plataforma</span><span class="acciones"><svg class="ico"><use href="#i-candado"/></svg></span></div>
@@ -138,7 +122,7 @@
         <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
         <div class="lecturas" id="lecturas"></div>
       </details>
-      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir variable|Add variable"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables<span class="sp"></span></div>
       <div class="variables" id="variables"></div>
     </div>
   </aside>

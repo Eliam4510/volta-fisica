@@ -14,7 +14,23 @@
   .pagina { min-height: 100vh; display: grid; grid-template-rows: var(--est-barra) 1fr; }
   .barra { position: sticky; top: 0; z-index: 5; }
   .buscador { width: 420px; height: 30px; display: flex; align-items: center; gap: var(--e-2); padding: 0 var(--e-2); border-radius: var(--r-control); border: 1px solid var(--linea); background: var(--campo); color: var(--texto-3); cursor: text; }
-  .buscador span { flex: 1; }
+  .buscador { position: relative; }
+  .buscador input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; color: var(--texto); outline: none; }
+  .buscador input::placeholder { color: var(--texto-3); }
+  .buscador input::-webkit-search-cancel-button { display: none; }
+  .buscador:focus-within { border-color: var(--tinta); }
+  .resultados { position: absolute; top: 34px; left: 0; right: 0; max-height: 440px; overflow: auto; z-index: 20; }
+  .resultados .menu-item[aria-selected="true"] { background: var(--campo-hover); }
+  .resultados .tipo { margin-left: auto; color: var(--texto-3); font-size: var(--t-pequeno); }
+  .archivos { display: flex; flex-direction: column; border: 1px solid var(--linea-suave); border-radius: var(--r-tarjeta); overflow: hidden; }
+  .archivo { display: flex; align-items: center; gap: var(--e-3); padding: var(--e-2) var(--e-3); background: var(--panel); border: 0; border-top: 1px solid var(--linea-suave); color: var(--texto); font: inherit; text-align: left; cursor: pointer; }
+  .archivo:first-child { border-top: 0; }
+  .archivo:hover { background: var(--campo-hover); }
+  .archivo .ruta { margin-left: auto; color: var(--texto-3); font-size: var(--t-pequeno); max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; }
+  .nueva-modulo { display: flex; flex-direction: column; gap: 2px; }
+  .nueva-modulo b { font-size: var(--t-pequeno); color: var(--texto-3); font-weight: var(--peso-medio); margin-top: var(--e-2); }
+  .nueva-rejilla { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-1) var(--e-4); max-height: 60vh; overflow: auto; }
+  .nueva-rejilla .menu-item { border-radius: var(--r-control); }
   main { width: min(1240px, calc(100% - 64px)); margin: 0 auto; padding: var(--e-8) 0 var(--e-12); display: flex; flex-direction: column; gap: var(--e-12); }
   .cab-inicio { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--e-6); }
   .cab-inicio h1 { margin: 0; font-size: var(--t-pantalla); line-height: var(--t-pantalla-alto); font-weight: var(--peso-fuerte); letter-spacing: -0.01em; }
@@ -48,13 +64,11 @@
       <b>Volta</b>
     </a>
     <span class="sp"></span>
-    <div class="buscador" data-ayuda="Buscar|Search|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg><span>Buscar escenas, módulos u objetos</span><kbd>Ctrl K</kbd></div>
+    <div class="buscador" id="buscador"><svg class="ico"><use href="#i-buscar"/></svg><input id="buscar" type="search" placeholder="Buscar módulos, espacios, escenas y acciones" autocomplete="off" spellcheck="false" aria-label="Buscar" aria-controls="resultados"><kbd>Ctrl K</kbd>
+      <div class="menu resultados" id="resultados" role="listbox" hidden></div></div>
     <span class="sp"></span>
-    <a class="btn btn-compacto" href="guia.html"><svg class="ico"><use href="#i-nota"/></svg>Lenguaje de diseño</a>
-    <a class="btn btn-compacto" href="../iconos/catalogo.html"><svg class="ico"><use href="#i-cuadricula"/></svg>Iconos</a>
-    <span class="separador-v"></span>
     <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
-    <button class="btn btn-icono" data-ayuda="Ajustes|Settings"><svg class="ico"><use href="#i-ajustes"/></svg></button>
+    <button class="btn btn-icono" id="b-ajustes" data-ayuda="Ajustes|Settings|Ctrl ,"><svg class="ico"><use href="#i-ajustes"/></svg></button>
   </header>
 
   <main>
@@ -65,13 +79,18 @@
       </div>
       <div class="acciones">
         <button class="btn btn-secundario" id="b-abrir" data-ayuda="Abrir una escena .volta|Open scene|Ctrl O"><svg class="ico"><use href="#i-carpeta"/></svg>Abrir archivo</button>
-        <a class="btn btn-primario" id="b-nueva" href="mecanica.html" data-ayuda="Nueva escena en Mecánica|New scene"><svg class="ico"><use href="#i-mas"/></svg>Nueva escena</a>
+        <button class="btn btn-primario" id="b-nueva" data-ayuda="Nueva escena: elige el módulo y el espacio|New scene|Ctrl N"><svg class="ico"><use href="#i-mas"/></svg>Nueva escena</button>
       </div>
     </div>
 
     <section>
       <header><h2>Continuar</h2><span class="nota">Recientes en este equipo</span></header>
       <div class="rejilla-4" id="recientes"></div>
+    </section>
+
+    <section id="sec-archivos" hidden>
+      <header><h2>Archivos recientes</h2><span class="nota">Escenas guardadas o abiertas en este equipo</span></header>
+      <div class="archivos" id="archivos"></div>
     </section>
 
     <section>
@@ -107,6 +126,8 @@ import { abrirEscena, recientes } from '../componentes/archivos.js';
 import { texto } from '../nucleo/escena.js';
 import { avisar } from '../componentes/exportar.js';
 import { anunciarActualizacion } from '../componentes/actualizacion.js';
+import { elegirArchivo, llevarAEscena, confirmarCambiosDe, claveDe, archivosRecientes, escenaDeRuta, vigilarCierre, recibirArchivos, nombreDeRuta, NOMBRES_MODULO } from '../componentes/documento.js';
+import { abrirPreferencias } from '../componentes/preferencias.js';
 (function () {
   'use strict';
   // [id, nombre, descripción, espacios de trabajo, escenas MEXT que existen, pantalla].
@@ -123,18 +144,17 @@ import { anunciarActualizacion } from '../componentes/actualizacion.js';
     ['moderna', 'Física moderna', 'Efecto fotoeléctrico con medida de h, decaimientos, cadenas y retroceso nuclear.', 2, 4, 'moderna.html'],
   ];
   const ESCENAS = [
-    { t: 'Salto hacia una pendiente', m: 'Mecánica', tipo: 'MEXT', ref: '2019 · P3', mini: 'proyectil', href: 'mecanica.html' },
-    { t: 'Dos cargas iguales', m: 'Electrostática', tipo: 'MEXT', ref: '2020 · P2', mini: 'cargas', href: 'electrostatica.html' },
-    { t: 'Émbolo con pesa', m: 'Termodinámica', tipo: 'MEXT', ref: '2019 · P4', mini: 'embolo', href: 'termodinamica.html' },
+    { t: 'Salto hacia una pendiente', m: 'Mecánica', tipo: 'MEXT', ref: '2019 · P3', mini: 'proyectil', href: 'mecanica.html?escena=salto' },
+    { t: 'Dos cargas iguales', m: 'Electrostática', tipo: 'MEXT', ref: '2020 · P2', mini: 'cargas', href: 'electrostatica.html?escena=mext-2020-2' },
+    { t: 'Émbolo con pesa', m: 'Termodinámica', tipo: 'MEXT', ref: '2019 · P4', mini: 'embolo', href: 'termodinamica.html?escena=mext-2019-p4' },
     { t: 'Péndulo con clavo', m: 'Mecánica', tipo: 'MEXT', ref: '2014 · P3', mini: 'pendulo', href: 'mecanica-laboratorio.html?escena=mext-2014-p3' },
     { t: 'Alcance de un tiro oblicuo', m: 'Mecánica', tipo: 'MEXT', ref: '2015 · 1-(1)', mini: 'tiro', href: 'mecanica-laboratorio.html?escena=mext-2015-1-1' },
     { t: 'Resorte y bloque', m: 'Mecánica', tipo: 'Ejemplo', ref: 'Oscilaciones', mini: 'resorte', href: 'mecanica-laboratorio.html?escena=resorte' },
     { t: 'Dipolo eléctrico', m: 'Electrostática', tipo: 'Tutorial', ref: 'Líneas de campo', mini: 'dipolo', href: 'electrostatica.html?escena=dipolo' },
     { t: 'Doble rendija de Young', m: 'Óptica', tipo: 'MEXT', ref: '2023 · P5', mini: 'young', href: 'optica-ondas.html?escena=mext-2023-5' },
     { t: 'Ciclo rectangular', m: 'Termodinámica', tipo: 'MEXT', ref: '2018 · P4', mini: 'ciclo', href: 'termodinamica-ciclos.html?escena=mext-2018-p4' },
-    { t: 'Carga de un capacitor', m: 'Circuitos', tipo: 'Ejemplo', ref: 'Transitorio RC', mini: 'rc', href: 'circuitos.html' },
+    { t: 'Carga de un capacitor', m: 'Circuitos', tipo: 'Ejemplo', ref: 'Transitorio RC', mini: 'rc', href: 'circuitos.html?escena=rc' },
     { t: 'Ambulancia que pasa', m: 'Ondas y sonido', tipo: 'MEXT', ref: '2007 · P5', mini: 'doppler', href: 'ondas-doppler.html?escena=mext-2007-5' },
-    { t: 'Mi rampa con fricción', m: 'Mecánica', tipo: 'Propio', ref: 'Editado hoy', mini: 'rampa', href: 'mecanica-laboratorio.html?escena=plano' },
   ];
 
   // ---------- Miniaturas con la gramática del lienzo ----------
@@ -268,27 +288,131 @@ import { anunciarActualizacion } from '../componentes/actualizacion.js';
 
   document.fonts.ready.then(() => { pintarBiblioteca(''); dibujarMinis(); });
 
-  // ---------- Abrir y nueva escena ----------
-  // La escena viaja a su pantalla por sessionStorage ("volta.abrir").
-  const PANTALLAS = { mecanica: 'mecanica.html', electrostatica: 'electrostatica.html', termodinamica: 'termodinamica.html', gravitacion: 'gravitacion.html', circuitos: 'circuitos.html', ondas: 'ondas.html', optica: 'optica.html', magnetismo: 'magnetismo.html', moderna: 'moderna.html' };
-  // Espacios con pantalla propia dentro de un módulo
-  const ESPACIOS = { 'mecanica:laboratorio': 'mecanica-laboratorio.html', 'gravitacion:sistema-solar': 'gravitacion-sistema-solar.html', 'gravitacion:maniobras': 'gravitacion-maniobras.html', 'ondas:cubeta': 'ondas-cubeta.html', 'termodinamica:ciclos': 'termodinamica-ciclos.html', 'termodinamica:molecular': 'termodinamica-molecular.html', 'termodinamica:calor': 'termodinamica-calor.html', 'electrostatica:conductores': 'electrostatica-conductores.html', 'ondas:doppler': 'ondas-doppler.html', 'optica:interferencia': 'optica-ondas.html', 'optica:peliculas': 'optica-peliculas.html', 'magnetismo:particulas': 'magnetismo-particulas.html', 'magnetismo:induccion': 'magnetismo-induccion.html', 'moderna:nucleo': 'moderna-nucleo.html' };
+  // ---------- Abrir, nueva escena, archivos recientes ----------
+  // Cada archivo va a la pantalla de su módulo y espacio (documento.js),
+  // preguntando antes si allí hay cambios sin guardar
   function abrir() {
-    abrirEscena({}).then(e => {
-      // Algunos módulos tienen varios espacios, cada uno con su pantalla
-      const destino = ESPACIOS[`${e.modulo}:${e.espacio}`] || PANTALLAS[e.modulo];
-      if (!destino) { avisar(document.body, `El módulo «${e.modulo}» todavía no tiene pantalla.`); return; }
-      try { sessionStorage.setItem('volta.abrir', JSON.stringify(e)); } catch { /* sin almacenamiento */ }
-      location.href = destino;
-    }).catch(err => avisar(document.body, err.message));
+    elegirArchivo().then(e => e && llevarAEscena(e, 'inicio.html')).catch(err => avisar(document.body, err.message));
   }
+  /** Ir a una pantalla para cargar otra escena: antes, sus cambios sin guardar. @param {string} href */
+  async function irA(href, accion = 'abrir otra escena') {
+    const pagina = href.split('?')[0];
+    if (await confirmarCambiosDe(claveDe(pagina), accion)) location.href = href;
+  }
+  // Las tarjetas que cargan una escena (?escena=) reemplazan el trabajo de esa pantalla
+  document.addEventListener('click', ev => {
+    const a = ev.target.closest('a.tarjeta-escena');
+    if (!a || !a.getAttribute('href') || !a.getAttribute('href').includes('?')) return;
+    ev.preventDefault();
+    irA(a.getAttribute('href'));
+  });
   document.getElementById('b-abrir').addEventListener('click', abrir);
-  document.getElementById('b-nueva').addEventListener('click', () => {
-    try { localStorage.removeItem('volta.escena.mecanica'); } catch { /* sin almacenamiento */ }
+
+  // Nueva escena: módulo y espacio. Los espacios que saben empezar vacíos
+  // abren una escena vacía; los demás, su escena base
+  const VACIA = new Set(['mecanica-laboratorio.html', 'termodinamica.html', 'termodinamica-molecular.html', 'termodinamica-calor.html']);
+  function nuevaEscena() {
+    const mods = (window.Volta?.MODULOS || []);
+    const fondo = document.createElement('div');
+    fondo.className = 'dialogo-fondo';
+    fondo.innerHTML = `<div class="dialogo dialogo-ancho" role="dialog" aria-modal="true" aria-labelledby="nueva-titulo" style="width:min(760px,calc(100vw - 48px))">
+      <h2 id="nueva-titulo">Nueva escena</h2>
+      <p>Elige dónde trabajar. Los espacios marcados con «vacía» empiezan sin objetos; los demás, con su montaje base para editarlo.</p>
+      <div class="nueva-rejilla">${mods.map(m => `<div class="nueva-modulo"><b>${m.nombre}</b>${m.espacios.map(([h, t, i]) =>
+        `<button class="menu-item" data-href="${h}${VACIA.has(h) ? '?vacia=1' : '?nueva=1'}"><svg class="ico"><use href="#${i}"/></svg>${t}${VACIA.has(h) ? '<span class="atajo">vacía</span>' : ''}</button>`).join('')}</div>`).join('')}</div>
+      <div class="dialogo-acciones"><button class="btn btn-secundario" data-cerrar>Cancelar</button></div></div>`;
+    document.body.appendChild(fondo);
+    const cerrar = () => { document.removeEventListener('keydown', esc, true); fondo.remove(); };
+    const esc = ev => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cerrar(); } };
+    document.addEventListener('keydown', esc, true);
+    fondo.addEventListener('pointerdown', ev => { if (ev.target === fondo) cerrar(); });
+    fondo.addEventListener('click', ev => {
+      if (ev.target.closest('[data-cerrar]')) { cerrar(); return; }
+      const b = ev.target.closest('[data-href]');
+      if (b) { cerrar(); irA(b.dataset.href, 'empezar una escena nueva'); }
+    });
+    fondo.querySelector('.menu-item')?.focus();
+  }
+  document.getElementById('b-nueva').addEventListener('click', nuevaEscena);
+  document.getElementById('b-ajustes').addEventListener('click', () => abrirPreferencias());
+
+  // Archivos recientes: rutas reales (solo en la aplicación)
+  function pintarArchivos() {
+    const l = archivosRecientes().slice(0, 8), cont = document.getElementById('archivos');
+    document.getElementById('sec-archivos').hidden = !l.length;
+    cont.innerHTML = '';
+    for (const r of l) {
+      const b = document.createElement('button');
+      b.className = 'archivo';
+      b.innerHTML = '<svg class="ico"><use href="#i-escena"/></svg><span class="nombre"></span><span class="meta"></span><span class="ruta"></span>';
+      b.querySelector('.nombre').textContent = nombreDeRuta(r.ruta) || r.titulo;
+      b.querySelector('.meta').textContent = `· ${NOMBRES_MODULO[r.modulo] || r.modulo} · ${hace(r.t)}`;
+      b.querySelector('.ruta').textContent = r.ruta;
+      b.title = r.ruta;
+      b.addEventListener('click', () => escenaDeRuta(r.ruta).then(e => llevarAEscena(e, 'inicio.html')).catch(err => avisar(document.body, `No se pudo abrir «${nombreDeRuta(r.ruta)}»: ${err.message || err}`)));
+      cont.appendChild(b);
+    }
+  }
+  pintarArchivos();
+
+  // ---------- Buscador (Ctrl K): módulos, espacios, escenas, archivos y acciones ----------
+  const sinAcentos = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function indiceBusqueda() {
+    const r = [];
+    for (const m of (window.Volta?.MODULOS || [])) {
+      r.push({ t: m.nombre, tipo: 'Módulo', icono: m.icono, ir: () => { location.href = m.espacios[0][0]; } });
+      for (const [h, t, i] of m.espacios) r.push({ t: `${t}`, extra: m.nombre, tipo: 'Espacio', icono: i, ir: () => { location.href = h; } });
+    }
+    for (const e of ESCENAS) r.push({ t: e.t, extra: `${e.m} ${e.ref} ${e.tipo}`, tipo: e.tipo || 'Escena', icono: 'i-escena', ir: () => irA(e.href) });
+    for (const e of REC) r.push({ t: e.t, extra: e.m, tipo: 'Continuar', icono: 'i-escena', ir: () => { location.href = e.href; } });
+    for (const f of archivosRecientes()) r.push({ t: nombreDeRuta(f.ruta) || f.titulo, extra: f.ruta, tipo: 'Archivo', icono: 'i-carpeta', ir: () => escenaDeRuta(f.ruta).then(e => llevarAEscena(e, 'inicio.html')).catch(err => avisar(document.body, err.message)) });
+    r.push({ t: 'Abrir archivo…', extra: 'abrir escena volta', tipo: 'Acción', icono: 'i-carpeta', ir: abrir });
+    r.push({ t: 'Nueva escena…', extra: 'crear vacia proyecto', tipo: 'Acción', icono: 'i-mas', ir: nuevaEscena });
+    r.push({ t: 'Ajustes', extra: 'preferencias opciones tema tamaño letra zoom actualizaciones', tipo: 'Acción', icono: 'i-ajustes', ir: () => abrirPreferencias() });
+    r.push({ t: 'Cambiar tema claro u oscuro', extra: 'tema oscuro claro', tipo: 'Acción', icono: 'i-tema-oscuro', ir: () => document.querySelector('[data-accion="tema"]')?.click() });
+    if (window.__TAURI__) r.push({ t: 'Buscar actualizaciones', extra: 'version nueva actualizar', tipo: 'Acción', icono: 'i-reiniciar', ir: () => document.getElementById('b-actualizar').click() });
+    return r;
+  }
+  const entrada = document.getElementById('buscar'), lista = document.getElementById('resultados');
+  let hallados = [], marcado = 0;
+  function buscar() {
+    const q = sinAcentos(entrada.value.trim());
+    if (!q) { lista.hidden = true; return; }
+    const palabras = q.split(/\s+/);
+    hallados = indiceBusqueda().map(x => {
+      const t = sinAcentos(x.t), todo = t + ' ' + sinAcentos(x.extra || '') + ' ' + sinAcentos(x.tipo);
+      if (!palabras.every(w => todo.includes(w))) return null;
+      return { x, p: (t.startsWith(q) ? 0 : t.includes(q) ? 1 : 2) + (x.tipo === 'Acción' ? 0.5 : 0) };
+    }).filter(Boolean).sort((a, b) => a.p - b.p).slice(0, 12).map(h => h.x);
+    marcado = 0;
+    lista.innerHTML = hallados.length ? hallados.map((h, k) => `<div class="menu-item" role="option" data-k="${k}" aria-selected="${k === 0}"><svg class="ico"><use href="#${h.icono}"/></svg><span></span><span class="tipo">${h.tipo}</span></div>`).join('')
+      : '<div class="menu-titulo">Sin resultados</div>';
+    lista.querySelectorAll('.menu-item span:not(.tipo)').forEach((el, k) => { el.textContent = hallados[k].t + (hallados[k].extra && hallados[k].tipo === 'Espacio' ? ` · ${hallados[k].extra}` : ''); });
+    lista.hidden = false;
+  }
+  function marcar(k) { marcado = (k + hallados.length) % hallados.length; lista.querySelectorAll('.menu-item').forEach((el, i) => el.setAttribute('aria-selected', String(i === marcado))); lista.querySelector(`[data-k="${marcado}"]`)?.scrollIntoView({ block: 'nearest' }); }
+  entrada.addEventListener('input', buscar);
+  entrada.addEventListener('focus', buscar);
+  entrada.addEventListener('keydown', ev => {
+    if (ev.key === 'ArrowDown' && hallados.length) { ev.preventDefault(); marcar(marcado + 1); }
+    else if (ev.key === 'ArrowUp' && hallados.length) { ev.preventDefault(); marcar(marcado - 1); }
+    else if (ev.key === 'Enter' && hallados[marcado]) { ev.preventDefault(); lista.hidden = true; hallados[marcado].ir(); }
+    else if (ev.key === 'Escape') { entrada.value = ''; lista.hidden = true; entrada.blur(); }
   });
+  lista.addEventListener('pointerdown', ev => { const it = ev.target.closest('[data-k]'); if (it) { ev.preventDefault(); lista.hidden = true; hallados[+it.dataset.k].ir(); } });
+  document.addEventListener('pointerdown', ev => { if (!ev.target.closest('#buscador')) lista.hidden = true; });
   document.addEventListener('keydown', ev => {
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'o') { ev.preventDefault(); abrir(); }
+    const k = ev.key.toLowerCase(), ctrl = ev.ctrlKey || ev.metaKey;
+    if (ctrl && k === 'o') { ev.preventDefault(); abrir(); }
+    else if (ctrl && k === 'k') { ev.preventDefault(); entrada.focus(); entrada.select(); }
+    else if (ctrl && k === 'n') { ev.preventDefault(); nuevaEscena(); }
+    else if (ctrl && k === ',') { ev.preventDefault(); abrirPreferencias(); }
   });
+
+  // Aplicación: cerrar con cambios sin guardar en alguna pantalla; archivos
+  // .volta que llegan de Windows (doble clic, arrastrar, otra instancia)
+  vigilarCierre();
+  recibirArchivos();
 
   // ---------- Versión desde la aplicación nativa (si existe) ----------
   const tauri = window.__TAURI__;

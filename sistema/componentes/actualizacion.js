@@ -127,6 +127,8 @@ export function abrirDescarga() {
 export async function anunciarActualizacion(contenedor, o = {}) {
   if (!nativa()) { if (o.manual) o.avisar?.('Las actualizaciones se buscan desde la aplicación de Windows.'); return; }
   if (!o.manual && !debeBuscar(leerEstado(), Date.now())) return;
+  // Ajustes: «Buscar actualizaciones al abrir Inicio» desactivado
+  if (!o.manual) { try { if (localStorage.getItem('volta.actualizacion.auto') === 'no') return; } catch { /* sin almacenamiento */ } }
   let r;
   try { r = await buscarActualizacion(); }
   catch { if (o.manual) o.avisar?.('No se pudo consultar GitHub. Revisa la conexión y vuelve a intentarlo.'); return; }

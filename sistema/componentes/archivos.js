@@ -1,48 +1,39 @@
 /* ==========================================================================
    Volta — guardar y abrir escenas, y autoguardado
-   Usa la descarga del navegador para guardar y un selector de archivos para
-   abrir; funciona igual en la aplicación de Windows (WebView2).
+   Guardar escribe en el archivo del documento (o pregunta dónde la primera
+   vez); Abrir pregunta antes de perder cambios y lleva cada archivo a la
+   pantalla de su módulo. La lógica del documento está en documento.js.
    ========================================================================== */
-import { serializar, leerEscena, EXTENSION } from '../nucleo/escena.js';
-import { descargarTexto, nombreArchivo, nativo, FILTROS } from './exportar.js';
+import { serializar, leerEscena } from '../nucleo/escena.js';
+import { guardarDocumento, elegirArchivo, llevarAEscena, cambioDocumento, documentoAbierto } from './documento.js';
 
 /**
- * Guarda la escena como archivo .volta.
+ * Guarda la escena en su archivo, o con «Guardar como» si todavía no tiene.
  * @param {import('../nucleo/escena.js').Escena} escena
  * @returns {Promise<string | null>} ruta guardada, o null si se canceló
  */
 export function guardarEscena(escena) {
-  return descargarTexto(nombreArchivo(escena.titulo) + EXTENSION, serializar(escena), 'application/json;charset=utf-8');
+  return guardarDocumento({ escena });
 }
 
 /**
- * Abre un selector de archivos y devuelve la escena validada.
- * @param {{modulo?: string}} esperado
+ * Diálogo «Abrir»: devuelve la escena si es de esta pantalla (la pantalla la
+ * carga y queda como documento abierto, con su ruta). Si es de otro módulo
+ * o espacio, va a su pantalla. Si se cancela, la promesa no se resuelve.
+ * @param {{modulo?: string}} [_esperado] (sin uso: cualquier escena va a su pantalla)
  * @returns {Promise<import('../nucleo/escena.js').Escena>}
  */
-export function abrirEscena(esperado) {
-  const t = nativo();
-  if (t) {
-    // Diálogo «Abrir» de Windows. Si se cancela, la promesa no se resuelve.
-    return new Promise((resolver, rechazar) => {
-      t.dialog.open({ multiple: false, directory: false, filters: [...FILTROS.volta, { name: 'JSON', extensions: ['json'] }] })
-        .then(async ruta => {
-          if (!ruta) return;
-          try { resolver(leerEscena(await t.fs.readTextFile(ruta), esperado)); }
-          catch (e) { rechazar(e); }
-        }, rechazar);
-    });
-  }
+export function abrirEscena(_esperado) {
   return new Promise((resolver, rechazar) => {
-    const entrada = document.createElement('input');
-    entrada.type = 'file'; entrada.accept = `${EXTENSION},.json,application/json`;
-    entrada.addEventListener('change', async () => {
-      const archivo = entrada.files && entrada.files[0];
-      if (!archivo) return;
-      try { resolver(leerEscena(await archivo.text(), esperado)); }
-      catch (e) { rechazar(e); }
-    });
-    entrada.click();
+    elegirArchivo()
+      .then(e => (e ? llevarAEscena(e) : null))
+      .then(e => {
+        if (!e) return;
+        resolver(e);
+        // La pantalla la carga en su .then (síncrono); después queda como el
+        // documento abierto, sin cambios y con su ruta
+        setTimeout(() => documentoAbierto(e), 0);
+      }, rechazar);
   });
 }
 
@@ -74,14 +65,16 @@ export const autoguardado = {
   guardar(clave, escena) {
     try { localStorage.setItem('volta.escena.' + clave, serializar(escena)); } catch { /* sin almacenamiento */ }
     registrarReciente(clave, escena);
+    cambioDocumento();
   },
   /** @param {string} clave @param {{modulo?: string}} esperado */
   leer(clave, esperado) {
     try {
       const t = localStorage.getItem('volta.escena.' + clave);
       const e = t ? leerEscena(t, esperado) : null;
-      // Recuperar el trabajo de una pantalla también es «continuarlo»
-      if (e) registrarReciente(clave, e);
+      // Recuperar el trabajo de una pantalla también es «continuarlo»; la
+      // marca le dice a registrarDocumento que recupere su archivo y cambios
+      if (e) { registrarReciente(clave, e); /** @type {any} */ (e).recuperada = true; }
       return e;
     } catch { return null; }
   },

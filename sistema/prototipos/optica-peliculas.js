@@ -24,6 +24,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { evaluar } from '../nucleo/unidades.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -644,7 +645,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   function deshacer() { const d = historial?.deshacer(); if (d) { restaurar(d); botonesHistorial(); avisar('Cambio deshecho', false); } }
   function rehacer() { const d = historial?.rehacer(); if (d) { restaurar(d); botonesHistorial(); avisar('Cambio rehecho', false); } }
   $('#b-deshacer').addEventListener('click', deshacer); $('#b-rehacer').addEventListener('click', rehacer);
-  function abrirEscena1(clave) { ESC = completa(escenaDe(clave)); aplicarVariables(); sel = 'objeto'; t = 0; jugando = false; titulo(); construirVariables(); inspector(); recalcular(); if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); } }
+  async function abrirEscena1(clave) { if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return; ESC = completa(escenaDe(clave)); aplicarVariables(); sel = 'objeto'; t = 0; jugando = false; titulo(); construirVariables(); inspector(); recalcular(); if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); } documentoNuevo(); }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false)); }
   const PAGINAS_OPTICA = { geometrica: 'optica.html', interferencia: 'optica-ondas.html', peliculas: 'optica-peliculas.html' };
   // Una escena de otro espacio de Óptica se abre en su pantalla
@@ -781,7 +782,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     ESC = q.has('escena') || !previa ? completa(escenaDe(q.get('escena') || 'jabon')) : datosSeguros(previa.datos);
     aplicarVariables();
     if (q.get('sel') === 'fuente') sel = 'fuente';
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'optica-peliculas', escena: escenaActual, origen: (!q.has('escena') && previa) || null, abrir, guardar });
     titulo(); construirVariables(); inspector(); recalcular();
     if (q.has('t')) t = Math.max(0, Math.min(ESC.duracion, parseFloat(q.get('t')) || 0));
     const pe = q.get('pest'); if (pe) { const b = document.querySelector(`#pest [aria-controls="p-${pe}"]`); if (b) b.click(); }

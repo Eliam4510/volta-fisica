@@ -9,6 +9,50 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Documentos de verdad en las 23 pantallas: Guardar escribe en el archivo
+  de la escena (la primera vez pregunta dónde) y Guardar como (Ctrl Mayús
+  S) elige otro; el título de la ventana dice el archivo y marca los
+  cambios sin guardar, igual que el punto junto al nombre de la escena.
+  Antes de perder cambios (otra escena del catálogo, abrir un archivo,
+  cerrar la ventana, abrir desde Inicio una escena de esa pantalla) Volta
+  pregunta si guardarlos. Abrir y Guardar están a la vista en todas las
+  barras.
+- Los archivos .volta se abren con Volta desde Windows: doble clic en el
+  Explorador, arrastrarlos a la ventana o abrirlos con Volta ya abierta
+  (una sola instancia). Cualquier archivo va a la pantalla de su módulo y
+  espacio, también con Ctrl O desde otro módulo.
+- Inicio: buscador de módulos, espacios, escenas, archivos y acciones
+  (Ctrl K); «Nueva escena» elige módulo y espacio (vacía donde se puede);
+  «Archivos recientes» con rutas reales; Ajustes (tema claro, oscuro o el
+  de Windows, también en la barra de título; tamaño de la interfaz de 90 a
+  150 %; buscar actualizaciones al abrir).
+- La ventana recuerda su tamaño y posición, arranca maximizada y cabe en
+  pantallas de 1366 × 768.
+
+### Cambiado
+
+- La aplicación ya no se comporta como un navegador: sin menú contextual de
+  Edge, sin recargar con F5 ni ir atrás con Alt+←, sin seleccionar el texto
+  de la interfaz.
+- El ejecutable solo lleva la aplicación: la guía del lenguaje de diseño,
+  el catálogo de iconos y los generadores quedan fuera (y sus botones,
+  fuera de Inicio).
+
+### Quitado
+
+- Controles que no hacían nada o solo avisaban de algo futuro: paletas de
+  Cinemática y Órbitas (ahora llevan al Laboratorio, a Sistema solar o a
+  Maniobras), atmósfera, sonda de potencial y voltímetro, resorte del
+  laboratorio de gases, «Añadir variable» y «Añadir objeto» sin efecto, y
+  la escena inventada de la Biblioteca.
+
+### Corregido
+
+- Se perdía trabajo sin aviso: al elegir otra escena o abrir un archivo se
+  sobrescribía el autoguardado, y una pantalla abierta desde la Biblioteca
+  no autoguardaba en toda la sesión. «Nueva escena» de Inicio borraba el
+  trabajo de Mecánica.
+
 - Actualizaciones desde GitHub: Volta instalado busca versiones nuevas al
   abrir Inicio (cada 6 horas como mucho) y con «Buscar actualizaciones»; el
   aviso muestra las novedades y «Instalar y reiniciar» descarga el

@@ -4,7 +4,9 @@
   "version": "0.15.0",
   "identifier": "io.github.eliam4510.volta",
   "build": {
-    "frontendDist": "../sistema"
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "node herramientas/preparar-app.mjs",
+    "beforeDevCommand": "node herramientas/preparar-app.mjs"
   },
   "app": {
     "withGlobalTauri": true,
@@ -12,11 +14,12 @@
       {
         "title": "Volta",
         "url": "prototipos/inicio.html",
-        "width": 1440,
-        "height": 900,
-        "minWidth": 1200,
-        "minHeight": 720,
-        "center": true
+        "width": 1366,
+        "height": 820,
+        "minWidth": 1100,
+        "minHeight": 640,
+        "center": true,
+        "maximized": true
       }
     ],
     "security": {
@@ -48,7 +51,18 @@
         "displayLanguageSelector": false,
         "installMode": "currentUser"
       }
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "volta"
+        ],
+        "name": "Escena de Volta",
+        "description": "Escena de simulación de Volta",
+        "role": "Editor",
+        "mimeType": "application/x-volta"
+      }
+    ]
   },
   "plugins": {
     "updater": {

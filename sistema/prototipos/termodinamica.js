@@ -18,6 +18,7 @@
 import { aCSV } from '../nucleo/csv.js';
 import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 import { descargarTexto, avisar as avisarLienzo } from '../componentes/exportar.js';
 import { simularGas, estadoEn, banderas, NOMBRES_ACCION as NOMBRES, calorTotal, residuoGas, residuoEmbolo, R_GAS } from '../motores/gas.js';
 import { simularRecipientes, simularAbierto, simularBurbuja, estadoRecipientes, estadoMuestras } from '../motores/recipientes.js';
@@ -1581,13 +1582,15 @@ import {
     lt.duracion = DUR;
     ponerTitulo(e, 'Laboratorio de gases');
   }
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     const e = escenaPorClave(clave); if (!e) return;
     if (e.espacio !== ESPACIO) { irAEscenaDeOtroEspacio(e); return; }
     guardarHistorial();
     cargarEscena(e); construirVariables();
     jugando = false; t = 0;
     recalcular(); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); inspector(); todo();
+    documentoNuevo();
   }
   let autoguardar = false;
   const TIPOS_ACCION = { pesa: 'boolean', calentador: 'boolean', paredes: 'string', giro: 'number', valvula: 'boolean', bano: 'boolean' };
@@ -1889,7 +1892,8 @@ import {
     if (q.has('sel')) sel = q.get('sel');
     if (!selValida(sel)) sel = selPorOmision();
     if (q.has('mostrar')) q.get('mostrar').split(',').forEach(k => { const c = $('#m-' + k); if (c) c.checked = true; });
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'termodinamica', escena: escenaActual, origen: (!pedida && previa) || null, abrir, guardar });
     simular(); construirVariables(); inspector();
     if (q.has('t')) t = Math.max(0, Math.min(DUR, parseFloat(q.get('t')) || 0));
     const pe = q.get('pestana') || q.get('pest'); if (pe) { const b = document.querySelector(`[aria-controls="p-${pe}"]`); if (b) b.click(); }

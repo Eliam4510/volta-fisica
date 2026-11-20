@@ -24,6 +24,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { descargarTexto, descargarLienzo, nombreArchivo } from '../componentes/exportar.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -605,7 +606,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     document.querySelectorAll('.capa-btn').forEach(b => b.setAttribute('aria-pressed', String(!!capas[b.dataset.capa])));
     titulo(); construirVars(); recalcular(false); inspector();
   }
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     const e = escenaPorClave(clave); if (!e) return;
     if (e.espacio !== ESPACIO) { irAEscenaDeOtroEspacio(e); return; }
     ESC = e; VAR = copia(e.variables || {}); guionPropio = false; sel = 'escena'; MONTAJE = null; INSTR = [];
@@ -613,6 +615,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     vistaTocada = false; encuadrar(); escala0 = tz.vista.escala; zoomTexto();
     inspector(); repro.irA(0);
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
+    documentoNuevo();
   }
   function escenaActual() { return crearEscena({ modulo: 'termodinamica', espacio: ESPACIO, titulo: ESC.titulo, datos: instantanea() }); }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada'); }, e => avisar(`No se pudo guardar: ${e}`)); }
@@ -834,7 +837,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       titulo(); construirVars(); recalcular(false);
     } else restaurar(previa.datos);
     if (q.has('sel')) sel = q.get('sel');
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'termodinamica-calor', escena: escenaActual, origen: (!q.has('montaje') && !q.has('vacia') && !q.has('escena') && previa) || null, abrir, guardar });
     encuadrar(); escala0 = tz.vista.escala; zoomTexto();
     inspector();
     const pe = q.get('pest'); if (pe) { const b = document.querySelector(`#pest [aria-controls="p-${pe}"]`); if (b) b.click(); }

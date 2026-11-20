@@ -144,3 +144,19 @@ vieja.
     repositorio). Si la clave privada se pierde, las versiones instaladas
     ya no podrán actualizarse solas: habría que publicar una con clave
     nueva y que cada usuario la instale a mano.
+22. **Un documento por pantalla, sobre el autoguardado (2026-11-19).** Cada
+    pantalla sigue editando una escena y autoguardándola, pero ahora sabe
+    de qué archivo viene y si tiene cambios: `componentes/documento.js`
+    compara una huella del contenido con la de lo último guardado o abierto
+    (así no hace falta que cada pantalla lleve la cuenta de sus cambios) y
+    guarda la ruta y el estado junto al autoguardado, de modo que sobreviven
+    a cambiar de pantalla y a reiniciar. Al recuperar el autoguardado se
+    confía en el estado guardado, no en la huella (la pantalla puede
+    normalizar los datos al cargarlos). Cerrar sin guardar no pierde nada:
+    se recupera la próxima vez, pero no queda en ningún archivo; por eso el
+    aviso al cerrar lo dice. Leer y escribir escenas lo hace Rust
+    (`leer_escena`, `escribir_escena`, con escritura atómica): el plugin fs
+    exigiría ampliar su ámbito a todo el disco para reabrir rutas
+    recordadas. El aviso es un diálogo propio (`componentes/dialogo.js`),
+    no `confirm()`, para tener tres botones y el lenguaje de diseño.
+

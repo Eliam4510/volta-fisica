@@ -22,6 +22,7 @@ import { evaluar, DIM as DIMS } from '../nucleo/unidades.js';
 import { crearEscena, numero, texto, magnitud } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
 
 (function () {
@@ -954,12 +955,14 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
     document.querySelectorAll('.capa-btn').forEach(b => b.setAttribute('aria-pressed', String(!!ESC.capas[/** @type {HTMLElement} */ (b).dataset.capa])));
   }
   function escenaActual() { return crearEscena({ modulo: 'electrostatica', espacio: ESPACIO, titulo: ESC.titulo, datos: instantanea() }); }
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     ESC = completa(escenaDe(clave));
     sel = esPlacas() ? 'capacitor' : ESC.gauss ? 'gauss' : 'central'; t = 0; jugando = false; $('#arbol').innerHTML = '';
     titulo(); construirVariables(); recalcular(); construirArbol(); construirInspector();
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
     if (autoguardar) autoguardado.guardar('electrostatica-conductores', escenaActual());
+    documentoNuevo();
   }
   // Valida y acota lo que viene de un archivo
   function datosSeguros(d = {}) {
@@ -1247,7 +1250,8 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
     tz.ajustar();
     if (q.has('escena') || !previa) ESC = completa(escenaDe(q.get('escena') || 'capacitor'));
     else ESC = datosSeguros(previa.datos);
-    autoguardar = limpioURL || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'electrostatica-conductores', escena: escenaActual, origen: (!q.has('escena') && previa) || null, abrir, guardar });
     sel = esPlacas() ? 'capacitor' : ESC.gauss ? 'gauss' : 'central';
     titulo(); construirVariables(); recalcular();
     if (q.has('sel')) sel = q.get('sel');

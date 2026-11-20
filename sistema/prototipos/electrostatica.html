@@ -64,6 +64,8 @@
     <span class="separador-v"></span>
     <button class="btn btn-icono" id="b-deshacer" disabled data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
     <button class="btn btn-icono" id="b-rehacer" disabled data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" data-accion="abrir" data-ayuda="Abrir escena (cualquier módulo)|Open|Ctrl O"><svg class="ico"><use href="#i-carpeta"/></svg></button>
+    <button class="btn btn-icono" data-accion="guardar" data-ayuda="Guardar escena (Mayús: guardar como)|Save|Ctrl S"><svg class="ico"><use href="#i-guardar"/></svg></button>
     <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
     <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
   </header>
@@ -89,12 +91,12 @@
         <div class="paleta" data-exclusivo id="paleta-instrumentos">
           <button class="herr" data-instrumento="sonda" data-ayuda="Sonda de campo: E y V en un punto|Field probe"><svg class="ico"><use href="#n-sonda-campo"/></svg><span>Sonda de campo</span></button>
           <button class="herr" data-instrumento="gauss" data-ayuda="Superficie gaussiana: flujo y carga encerrada|Gaussian surface"><svg class="ico"><use href="#n-superficie-gauss"/></svg><span>Gauss</span></button>
-          <button class="herr" data-instrumento="potencial" data-pendiente="La sonda de campo ya da el potencial V en su punto; una sonda solo de potencial llega en una próxima versión." data-ayuda="Sonda de potencial|Potential probe"><svg class="ico"><use href="#n-sonda-potencial"/></svg><span>Potencial</span></button>
-          <button class="herr" data-instrumento="voltimetro" data-pendiente="El voltímetro de dos puntas llega en una próxima versión; mientras, compara V en dos puntos con la sonda o con la tabla de puntos." data-ayuda="Voltímetro|Voltmeter"><svg class="ico"><use href="#n-voltimetro"/></svg><span>Voltímetro</span></button>
+          
+          
         </div>
       </div>
       <div class="seccion">
-        <div class="panel-cab">Escena<span class="sp"></span><button class="btn btn-compacto btn-icono" data-pendiente="Coloca los objetos con la paleta de arriba: elige uno y haz clic en el lienzo." data-ayuda="Añadir objeto|Add object"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+        <div class="panel-cab">Escena<span class="sp"></span></div>
         <div class="arbol" id="arbol"></div>
       </div>
     </div>
@@ -127,7 +129,7 @@
     <div class="desplaza">
       <div class="panel-cab">Inspector</div>
       <div id="inspector"></div>
-      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables<span class="sp"></span><button class="btn btn-compacto btn-icono" data-pendiente="Las variables de cada escena vienen con ella; crear variables propias llega en una próxima versión." data-ayuda="Añadir variable|Add variable"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables<span class="sp"></span></div>
       <div class="variables" id="variables"></div>
     </div>
   </aside>

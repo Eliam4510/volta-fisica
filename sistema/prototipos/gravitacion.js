@@ -19,6 +19,7 @@ import { aCSV, muestrear } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
 import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 import { evaluar } from '../nucleo/unidades.js';
 
 (function () {
@@ -922,7 +923,7 @@ import { evaluar } from '../nucleo/unidades.js';
     menu.hidden = false;
   }
   const cerrarEscenas = () => { $('#menu-escenas').hidden = true; };
-  function irAEscena(id) { if (id === esc.id) return; guardarHistorial(); cargarEscena(id); }
+  async function irAEscena(id) { if (id === esc.id) return; if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return; guardarHistorial(); cargarEscena(id); documentoNuevo(); }
   $('#b-escenas').addEventListener('click', ev => { ev.stopPropagation(); if ($('#menu-escenas').hidden) abrirEscenas(); else cerrarEscenas(); });
   $('#menu-escenas').addEventListener('click', ev => { const it = ev.target.closest('.menu-item'); if (it) { cerrarEscenas(); irAEscena(it.dataset.id); } });
   document.addEventListener('pointerdown', ev => { if (!ev.target.closest('#menu-escenas, #b-escenas')) cerrarEscenas(); });
@@ -1006,7 +1007,8 @@ import { evaluar } from '../nucleo/unidades.js';
     const pend = escenaPendiente('gravitacion');
     if (pend && aOtroEspacio(pend)) return;
     const previa = pend || (limpio ? autoguardado.leer('gravitacion', { modulo: 'gravitacion' }) : null);
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'gravitacion', escena: escenaActual, origen: (previa) || null, abrir, guardar });
     if (previa) { const d = datosSeguros(previa.datos); cargarEscena(d.escena, d); $('#f-m').value = String(masa); }
     else cargarEscena(q.get('escena') || 'canon');
     if (q.get('areas') === '1') ponerCapa('areas', true);

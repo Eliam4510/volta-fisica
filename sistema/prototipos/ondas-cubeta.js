@@ -27,6 +27,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { evaluar } from '../nucleo/unidades.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -976,11 +977,13 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   function rehacer() { const d = historial?.rehacer(); if (d) { restaurar(d); botonesHistorial(); avisar('Cambio rehecho', false); } }
   $('#b-deshacer').addEventListener('click', deshacer);
   $('#b-rehacer').addEventListener('click', rehacer);
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     ESC = completa(escenaDe(clave)); aplicarVariables();
     sel = 'medio'; t = 0; jugando = false; vistaTocada = false; herramienta = null; marcarHerramienta();
     titulo(); construirVariables(); inspector(); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); recalcular();
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
+    documentoNuevo();
   }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false)); }
   const PAGINAS_ONDAS = { 'medio-1d': 'ondas.html', doppler: 'ondas-doppler.html', cubeta: 'ondas-cubeta.html' };
@@ -1286,7 +1289,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (q.has('capas')) for (const k of q.get('capas').split(',')) if (k in ESC.capas) ESC.capas[k] = true;
     if (q.has('modelo') && q.get('modelo') === 'analitico' && analiticoValido()) ESC.modelo = 'analitico';
     if (q.has('sel')) { const s = q.get('sel'); if (selValida(s)) sel = s; }
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'ondas-cubeta', escena: escenaActual, origen: (!(q.has('escena') || !previa || (previa.espacio && previa.espacio !== 'cubeta')) && previa) || null, abrir, guardar });
     titulo(); construirVariables(); inspector(); encuadrar(); escala0 = tz.vista.escala; zoomTexto();
     recalcular();
     // Instante pedido (capturas): se calcula de una vez antes de dibujar

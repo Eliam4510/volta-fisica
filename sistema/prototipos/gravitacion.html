@@ -57,6 +57,8 @@
     <span class="separador-v"></span>
     <button class="btn btn-icono" id="b-deshacer" data-ayuda="Deshacer|Undo|Ctrl Z"><svg class="ico"><use href="#i-deshacer"/></svg></button>
     <button class="btn btn-icono" id="b-rehacer" data-ayuda="Rehacer|Redo|Ctrl Y"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+    <button class="btn btn-icono" data-accion="abrir" data-ayuda="Abrir escena (cualquier módulo)|Open|Ctrl O"><svg class="ico"><use href="#i-carpeta"/></svg></button>
+    <button class="btn btn-icono" data-accion="guardar" data-ayuda="Guardar escena (Mayús: guardar como)|Save|Ctrl S"><svg class="ico"><use href="#i-guardar"/></svg></button>
     <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
     <button class="btn btn-icono" id="b-comandos" data-ayuda="Comandos|Command palette|Ctrl K"><svg class="ico"><use href="#i-buscar"/></svg></button>
   </header>
@@ -66,26 +68,10 @@
     <div class="desplaza">
       <div class="seccion">
         <div class="panel-cab">Objetos</div>
-        <div class="paleta" data-exclusivo data-pendiente="Este espacio trabaja con un planeta y un satélite; añadir cuerpos, naves e impulsos llega con el espacio «Sistema solar».">
-          <button class="herr" data-ayuda="Planeta|Planet"><svg class="ico"><use href="#o-planeta"/></svg><span>Planeta</span></button>
-          <button class="herr" data-ayuda="Satélite|Satellite"><svg class="ico"><use href="#o-satelite"/></svg><span>Satélite</span></button>
-          <button class="herr" data-ayuda="Cuerpo masivo|Massive body"><svg class="ico"><use href="#o-cuerpo-masivo"/></svg><span>Cuerpo masivo</span></button>
-          <button class="herr" data-ayuda="Nave con impulsos programados|Spacecraft"><svg class="ico"><use href="#o-nave"/></svg><span>Nave</span></button>
-          <button class="herr" data-ayuda="Atmósfera (arrastre)|Atmosphere"><svg class="ico"><use href="#o-atmosfera"/></svg><span>Atmósfera</span></button>
-          <button class="herr" data-ayuda="Impulso Δv|Impulse"><svg class="ico"><use href="#o-impulso"/></svg><span>Impulso</span></button>
-        </div>
+        <p class="nota-panel">Este espacio estudia un satélite alrededor de un planeta. Para colocar cuerpos libremente ve a <a href="gravitacion-sistema-solar.html">Sistema solar</a>; para naves con impulsos, a <a href="gravitacion-maniobras.html">Maniobras</a>.</p>
       </div>
       <div class="seccion">
-        <div class="panel-cab">Instrumentos</div>
-        <div class="paleta" data-exclusivo data-pendiente="Los instrumentos llegan en una próxima versión. Mientras, el inspector da r, h, |v|, v_c y v_e en cada instante.">
-          <button class="herr" data-ayuda="Regla|Ruler"><svg class="ico"><use href="#n-regla"/></svg><span>Regla</span></button>
-          <button class="herr" data-ayuda="Cronómetro|Stopwatch"><svg class="ico"><use href="#n-cronometro"/></svg><span>Cronómetro</span></button>
-          <button class="herr" data-ayuda="Medidor de periodo|Period meter"><svg class="ico"><use href="#n-periodo"/></svg><span>Periodo</span></button>
-          <button class="herr" data-ayuda="Velocímetro|Speedometer"><svg class="ico"><use href="#n-velocimetro"/></svg><span>Velocímetro</span></button>
-        </div>
-      </div>
-      <div class="seccion">
-        <div class="panel-cab">Escena<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir objeto|Add object"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+        <div class="panel-cab">Escena<span class="sp"></span></div>
         <div class="arbol" id="arbol"></div>
       </div>
     </div>
@@ -148,7 +134,7 @@
         <summary><svg class="ico"><use href="#i-chevron-abajo"/></svg><span id="lect-titulo">Lecturas</span></summary>
         <div class="lecturas" id="lecturas"></div>
       </details>
-      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables<span class="sp"></span><button class="btn btn-compacto btn-icono" data-ayuda="Añadir variable|Add variable"><svg class="ico"><use href="#i-mas"/></svg></button></div>
+      <div class="panel-cab" style="border-top:1px solid var(--linea-suave)">Variables<span class="sp"></span></div>
       <div class="variables" id="variables"></div>
     </div>
   </aside>

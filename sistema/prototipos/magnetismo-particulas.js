@@ -25,6 +25,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { evaluar } from '../nucleo/unidades.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -1371,12 +1372,14 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   $('#b-deshacer').addEventListener('click', deshacer);
   $('#b-rehacer').addEventListener('click', rehacer);
 
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     ESC = completa(escenaDe(clave)); aplicarVariables();
     sel = ESC.sel || 'escena'; vistaTocada = false; herramienta = null; marcarHerramienta(); t = 0; jugando = false;
     titulo(); construirVariables(); recalcular(); inspector();
     escala0 = tz.vista.escala; zoomTexto();
     if (historial) { historial.reiniciar(sinSel(instantanea())); botonesHistorial(); }
+    documentoNuevo();
   }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false)); }
   const PAGINAS = { campos: 'magnetismo.html', particulas: 'magnetismo-particulas.html', induccion: 'magnetismo-induccion.html' };
@@ -1621,7 +1624,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     else { ESC = datosSeguros(previa.datos); sel = ESC.sel || 'escena'; }
     aplicarVariables();
     if (q.has('capas')) for (const k of q.get('capas').split(',')) if (k in ESC.capas) ESC.capas[k] = true;
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'magnetismo-particulas', escena: escenaActual, origen: (!q.has('escena') && previa) || null, abrir, guardar });
     titulo(); construirVariables();
     recalcular();
     if (q.has('sel')) { const s = q.get('sel'); if (s === 'escena' || elDe(s) || (/^tr:\d+$/.test(s) && SIM && SIM.trayectorias[+s.slice(3)])) sel = s; }

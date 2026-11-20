@@ -22,6 +22,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { evaluar, DIM } from '../nucleo/unidades.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 // ===========================================================================
 // 1. Lógica pura
@@ -2805,8 +2806,14 @@ function iniciar() {
       cargar(e.datos); avisar(area, `Escena abierta: ${esc.titulo}`);
     }).catch(err => avisar(area, err.message));
   }
-  function cargarEscenario(id) { const d = escenaDeEscenario(id); if (d) cargar(d); }
-  function nuevaEscena() { cargar(escenaVacia()); avisar(area, 'Escena vacía: coloca objetos desde la paleta'); }
+  async function cargarEscenario(id) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
+    const d = escenaDeEscenario(id); if (d) { cargar(d); documentoNuevo(); }
+  }
+  async function nuevaEscena() {
+    if (hayCambios() && !(await confirmarCambios('empezar una escena nueva'))) return;
+    cargar(escenaVacia()); documentoNuevo(); avisar(area, 'Escena vacía: coloca objetos desde la paleta');
+  }
 
   // -------------------------------------------------------------------------
   // Deshacer y rehacer
@@ -3422,18 +3429,20 @@ function iniciar() {
     // ?escena=<id> carga un escenario (enlaces y capturas). Si no, la escena
     // que otra pantalla dejó para abrir, el autoguardado o el escenario por defecto.
     const limpioURL = !params.has('t') && !captura && !params.has('escena');
-    let datos = null;
+    let datos = null, origen = null;
     if (params.has('escena')) datos = escenaDeEscenario(params.get('escena'));
+    else if (params.has('vacia')) datos = escenaVacia();
     if (!datos) {
       const pend = escenaPendiente('mecanica');
-      if (pend && pend.espacio === ESPACIO) datos = pend.datos;
+      if (pend && pend.espacio === ESPACIO) { datos = pend.datos; origen = pend; }
       else if (pend) { try { sessionStorage.setItem('volta.abrir', JSON.stringify(pend)); } catch { /* sin almacenamiento */ } location.href = 'mecanica.html'; return; }
     }
-    if (!datos && limpioURL) { const g = autoguardado.leer(CLAVE_AUTOGUARDADO, { modulo: 'mecanica' }); if (g && g.espacio === ESPACIO) datos = g.datos; }
+    if (!datos && limpioURL) { const g = autoguardado.leer(CLAVE_AUTOGUARDADO, { modulo: 'mecanica' }); if (g && g.espacio === ESPACIO) { datos = g.datos; origen = g; } }
     if (!datos) datos = escenaDeEscenario('mext-2017-p3');
     historial = new Historial(copia(normalizarEscena(datos)));
     cargar(datos, { sel: params.get('sel') });
-    autoguardadoActivo = limpioURL;
+    autoguardadoActivo = true;
+    registrarDocumento({ clave: CLAVE_AUTOGUARDADO, escena: escenaActual, origen, abrir, guardar });
     const pest = params.get('pest');
     if (pest) { const b = document.querySelector(`.pestana[aria-controls="p-${pest}"]`); if (b) b.click(); }
     if (params.has('t')) irA(parseFloat(params.get('t')) || 0);

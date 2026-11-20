@@ -11,6 +11,7 @@ import { Historial } from '../nucleo/historial.js';
 import { evaluar, DIM } from '../nucleo/unidades.js';
 import { fmtPaso } from '../nucleo/formato.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -437,9 +438,6 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     ['i-reiniciar', 'Reiniciar la simulación', 'Inicio', () => { t = 0; jugando = false; todo(); }],
     ['i-encuadrar', 'Encuadrar todo', 'F', () => { encuadrar(); zoomTexto(); dibujar(); }],
     ['i-tema-oscuro', 'Cambiar tema claro u oscuro', '', () => Volta.ponerTema(document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')],
-    ['o-particula', 'Añadir partícula', 'P', () => {}],
-    ['o-plano-inclinado', 'Añadir plano inclinado', '', () => {}],
-    ['n-regla', 'Colocar regla', 'R', () => {}],
     ['i-exportar', 'Exportar datos a CSV', '', () => exportarCSV()],
     ['i-imagen', 'Exportar imagen del lienzo', '', () => exportarPNG()],
   ];
@@ -498,7 +496,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       alfa = numero(d.alfaGrados, 0, -80, 80) * Math.PI / 180;
       M = numero(d.masa, M, 1e-6, 1e6); $('#f-m').value = fmtPaso(M, 0.01);
     }
-    autoguardar = limpio;
+    autoguardar = true;
+    registrarDocumento({ clave: 'mecanica', escena: escenaActual, origen: (guardada) || null, abrir, guardar });
     simular(); construirVariables();
     if (q.has('t')) t = Math.max(0, Math.min(DUR, parseFloat(q.get('t'))));
     tz.ajustar(); encuadrar(); escala0 = tz.vista.escala;

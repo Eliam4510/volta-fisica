@@ -10,16 +10,40 @@
 
   function leerTema() { try { return localStorage.getItem('volta.tema'); } catch { return null; } }
   function guardarTema(t) { try { localStorage.setItem('volta.tema', t); } catch { /* sin almacenamiento */ } }
+  const oscuroDelSistema = () => !!(global.matchMedia && global.matchMedia('(prefers-color-scheme: dark)').matches);
+  /** Tema elegido: 'claro', 'oscuro' o 'sistema' (por omisión, el de Windows). */
+  const preferenciaTema = () => { const t = leerTema(); return t === 'claro' || t === 'oscuro' ? t : 'sistema'; };
+  const temaEfectivo = () => { const p = preferenciaTema(); return p === 'sistema' ? (oscuroDelSistema() ? 'oscuro' : 'claro') : p; };
+  const tauri = () => global.__TAURI__ || null;
 
-  // Tema: el parámetro ?tema= manda (capturas); si no, lo guardado; si no, claro.
+  // Tema: el parámetro ?tema= manda (capturas); si no, la preferencia.
   const param = new URLSearchParams(location.search).get('tema');
-  raiz.dataset.tema = param || leerTema() || 'claro';
+  raiz.dataset.tema = param || temaEfectivo();
+  /** La barra de título de Windows sigue al tema de la aplicación. */
+  function temaVentana(t) { try { tauri()?.window?.getCurrentWindow?.().setTheme?.(t === 'oscuro' ? 'dark' : 'light'); } catch { /* fuera de la aplicación */ } }
+  temaVentana(raiz.dataset.tema);
 
-  function ponerTema(t) {
-    raiz.dataset.tema = t; guardarTema(t);
+  function aplicarTema(t) {
+    raiz.dataset.tema = t; temaVentana(t);
     document.querySelectorAll('[data-accion="tema"]').forEach(b => b.setAttribute('aria-label', t === 'oscuro' ? 'Tema claro' : 'Tema oscuro'));
     oyentesTema.forEach(f => f(t));
   }
+  /** Tema explícito (el botón de la barra) o preferencia ('sistema' sigue a Windows). */
+  function ponerTema(t) { guardarTema(t); aplicarTema(t === 'sistema' ? temaEfectivo() : t); }
+  if (global.matchMedia) global.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (!param && preferenciaTema() === 'sistema') aplicarTema(temaEfectivo()); });
+
+  // Tamaño de la interfaz (preferencia): zoom de la vista de la aplicación
+  const ZOOMS = [0.9, 1, 1.1, 1.25, 1.5];
+  function leerZoom() { try { const z = parseFloat(localStorage.getItem('volta.zoom') || '1'); return ZOOMS.includes(z) ? z : 1; } catch { return 1; } }
+  function ponerZoom(z) {
+    if (!ZOOMS.includes(z)) return false;
+    try { localStorage.setItem('volta.zoom', String(z)); } catch { /* sin almacenamiento */ }
+    const w = tauri()?.webview?.getCurrentWebview?.();
+    if (!w?.setZoom) return false;
+    w.setZoom(z).catch(() => {});
+    return true;
+  }
+  { const z = leerZoom(); if (z !== 1) ponerZoom(z); }
   function alCambiarTema(f) { oyentesTema.push(f); }
 
   // Deslizador: pinta el tramo recorrido con --p
@@ -30,6 +54,7 @@
 
   function iniciar() {
     document.querySelectorAll('[data-accion="tema"]').forEach(b => b.addEventListener('click', () => ponerTema(raiz.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')));
+    iniciarAplicacion();
 
     // Pestañas: [role=tablist] > [role=tab]
     document.querySelectorAll('[role="tablist"]').forEach(lista => {
@@ -62,6 +87,28 @@
     if (new URLSearchParams(location.search).has('captura')) document.body.classList.add('captura');
     iniciarAyudas();
     iniciarNavegacion();
+  }
+
+  /**
+   * Que no se comporte como un navegador: sin menú contextual de Edge fuera
+   * de los campos de texto, sin recargar (F5, Ctrl R) ni imprimir la página
+   * (Ctrl P), sin ir atrás con Alt+← ni con los botones del ratón, sin
+   * seleccionar el texto de la interfaz y sin Ctrl+rueda (el tamaño se
+   * cambia en Ajustes).
+   */
+  function iniciarAplicacion() {
+    if (new URLSearchParams(location.search).has('captura')) return;
+    document.documentElement.classList.add('app');
+    document.addEventListener('contextmenu', ev => {
+      if (ev.defaultPrevented) return;
+      if (!ev.target.closest('input, textarea, [contenteditable="true"]')) ev.preventDefault();
+    });
+    document.addEventListener('keydown', ev => {
+      const k = ev.key.toLowerCase();
+      if (ev.key === 'F5' || ((ev.ctrlKey || ev.metaKey) && (k === 'r' || k === 'p')) || (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) || ev.key === 'BrowserBack') ev.preventDefault();
+    }, true);
+    global.addEventListener('wheel', ev => { if (ev.ctrlKey) ev.preventDefault(); }, { passive: false });
+    global.addEventListener('mouseup', ev => { if (ev.button === 3 || ev.button === 4) ev.preventDefault(); });
   }
 
   let relojPendiente = null;
@@ -148,5 +195,5 @@
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
-  global.Volta = Object.assign(global.Volta || {}, { ponerTema, alCambiarTema, pintarDeslizador });
+  global.Volta = Object.assign(global.Volta || {}, { ponerTema, alCambiarTema, pintarDeslizador, preferenciaTema, ponerZoom, leerZoom, ZOOMS, MODULOS });
 })(window);

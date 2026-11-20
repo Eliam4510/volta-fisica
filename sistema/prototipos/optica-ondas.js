@@ -25,6 +25,7 @@ import { crearEscena, numero, texto } from '../nucleo/escena.js';
 import { Historial } from '../nucleo/historial.js';
 import { evaluar } from '../nucleo/unidades.js';
 import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../componentes/archivos.js';
+import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from '../componentes/documento.js';
 
 (function () {
   'use strict';
@@ -634,10 +635,12 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   function rehacer() { const d = historial?.rehacer(); if (d) { restaurar(d); botonesHistorial(); avisar('Cambio rehecho', false); } }
   $('#b-deshacer').addEventListener('click', deshacer);
   $('#b-rehacer').addEventListener('click', rehacer);
-  function abrirEscena1(clave) {
+  async function abrirEscena1(clave) {
+    if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
     ESC = completa(escenaDe(clave)); aplicarVariables(); sel = 'rendijas'; herramienta = null; marcarHerramienta();
     titulo(); construirVariables(); inspector(); recalcular();
     if (historial) { historial.reiniciar(instantanea()); botonesHistorial(); }
+    documentoNuevo();
   }
   function guardar() { guardarEscena(escenaActual()).then(r => { if (r) avisar('Escena guardada', false); }, e => avisar(`No se pudo guardar: ${e}`, false)); }
   const PAGINAS_OPTICA = { geometrica: 'optica.html', interferencia: 'optica-ondas.html', peliculas: 'optica-peliculas.html' };
@@ -813,7 +816,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     else ESC = datosSeguros(previa.datos);
     aplicarVariables();
     if (q.has('sel') && ['fuente', 'rendijas', 'medio', 'pantalla', 'punto', 'regla'].includes(q.get('sel'))) sel = q.get('sel');
-    autoguardar = limpio || !!previa;
+    autoguardar = true;
+    registrarDocumento({ clave: 'optica-ondas', escena: escenaActual, origen: (!q.has('escena') && previa) || null, abrir, guardar });
     titulo(); construirVariables(); inspector(); recalcular();
     const pe = q.get('pest'); if (pe) { const b = document.querySelector(`#pest [aria-controls="p-${pe}"]`); if (b) b.click(); }
     todo();
