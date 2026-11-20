@@ -7,6 +7,12 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Laboratorio de Mecánica: ejemplos «Osciladores acoplados» (pulsaciones
+  con el acoplamiento kc en un deslizador) y «Escalera que resbala» (deja
+  la pared cuando su centro baja a 2/3 de su altura inicial).
+
 ## [0.18.0] - 2026-11-20
 
 Geocentrismo, heliocentrismo y Ptolomeo en el Sistema solar; fuerzas que
