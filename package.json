@@ -1,6 +1,6 @@
 {
   "name": "volta-fisica",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Volta: simulador de física para Windows, organizado en módulos y orientado al temario de Física MEXT.",
   "private": true,
   "type": "module",

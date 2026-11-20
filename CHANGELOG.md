@@ -7,6 +7,11 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.14.0] - 2026-11-19
+
+Empujar un bloque en cualquier punto y apilar cajas: los bloques chocan
+entre sí y con los discos.
+
 ### Añadido
 
 - Mecánica: fuerza aplicada en un punto de un cuerpo que gira: hace par y
