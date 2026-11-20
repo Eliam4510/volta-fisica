@@ -216,6 +216,16 @@ function preparar(e) {
       caras.push([i, q]);
     }
   });
+  // Esquinas de los bloques: un disco que llega a la esquina choca con ella
+  // (arco de radio 0 en el vértice). Sin ellas, un disco que entra por la
+  // esquina pasa por detrás de las dos caras y atraviesa el bloque
+  vert.forEach((vs, i) => {
+    if (!vs) return;
+    for (let q = 0; q < 4; q++) {
+      sup.push({ id: `${P[i].id}#v${q}`, tipo: 'arco', c: vs[q], r: 0, cara: 'exterior', e: e.eParticulas ?? 1, mu: e.muCuerpos ?? 0, geo: null, j: i, gira: true, esquina: true });
+      caras.push([i, 4 + q]);
+    }
+  });
   const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2, vert, nReales, caras };
   actualizarImpuestas(S, 0);
   return S;
@@ -329,6 +339,19 @@ function restriccionApoyo(S, sup, i, k) {
     // Cara de un bloque: el hueco se mide en el marco del bloque; la velocidad
     // y el gradiente, en el mundo (con el giro del bloque)
     const rr = k < 0 ? radio(S, i) : 0;
+    if (sup.esquina) {
+      // Esquina Q = c_B + R·c0 contra el centro de un disco: C = |P − Q| − r.
+      // J̇v: la curvatura (|ḋ|² − (û·ḋ)²)/D y la centrípeta de la esquina
+      return {
+        evaluar(y) {
+          const m = marcoPortador(S, sup, y), pt = datosPunto(S, y, i, k), rho = alMundo(m, sup.c), Q = [m.c[0] + rho[0], m.c[1] + rho[1]];
+          const d = sub(pt.P, Q), D = norm(d), u = [d[0] / D, d[1] / D], f = filaGirando(S, sup, m, pt, u);
+          const VQ = [m.v[0] - m.w * rho[1], m.v[1] + m.w * rho[0]], dd = sub(pt.V, VQ), ud = dot(u, dd);
+          const jdv = dot(u, pt.A0) + m.w * m.w * dot(u, rho) + (dot(dd, dd) - ud * ud) / D;
+          return { C: D - rr, Cp: f.valor, grad: f.grad, jdv };
+        },
+      };
+    }
     return {
       evaluar(y) {
         const m = marcoPortador(S, sup, y), pt = datosPunto(S, y, i, k), n = alMundo(m, sup.geo.n), d = sub(pt.P, m.c);
@@ -376,7 +399,13 @@ function deslizamiento(S, sup, y, i, kv = -1) {
   if (sup.gira) {
     // Contra la cara de un bloque: el punto de contacto es el vértice, o el
     // borde del disco (c − r·n̂, que gira con el disco si gira)
-    const m = marcoPortador(S, sup, y), t = alMundo(m, sup.geo.t), n = alMundo(m, sup.geo.n);
+    const m = marcoPortador(S, sup, y);
+    let t, n;
+    if (sup.esquina) {
+      // En la esquina, la normal va de la esquina al centro del disco
+      const rho = alMundo(m, sup.c), d = sub([y[4 * i], y[4 * i + 1]], [m.c[0] + rho[0], m.c[1] + rho[1]]), D = norm(d);
+      n = [d[0] / D, d[1] / D]; t = [-n[1], n[0]];
+    } else { t = alMundo(m, sup.geo.t); n = alMundo(m, sup.geo.n); }
     let pt = datosPunto(S, y, i, kv);
     if (kv < 0) {
       const r = radio(S, i), q = S.rot[i], w = q >= 0 ? y[S.base + 2 * q + 1] : 0, b = [-r * n[0], -r * n[1]];
@@ -437,7 +466,8 @@ function proximoCorte(S, t) {
  * @param {any} S @param {number} i @param {any} sup
  */
 function ajenos(S, i, sup) {
-  return sup.j === i || (S.im[i] === 0 && (sup.j < 0 || S.im[sup.j] === 0));
+  // (un bloque no se apoya con sus vértices en la esquina de otro: vértice contra vértice no cuenta)
+  return sup.j === i || (S.im[i] === 0 && (sup.j < 0 || S.im[sup.j] === 0)) || (sup.esquina === true && !!S.vert[i]);
 }
 
 /** Estado inicial empaquetado [x, y, vx, vy] por partícula. @param {any} S */

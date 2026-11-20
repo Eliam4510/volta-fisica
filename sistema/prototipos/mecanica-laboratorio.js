@@ -175,6 +175,8 @@ export function normalizarEscena(d) {
   e.b = numero(d.b, 0, 0, 1e4);
   e.cAire = numero(d.cAire, 0, 0, 1e4);
   e.eParticulas = numero(d.eParticulas, 1, 0, 1);
+  // Fricción en las caras de los bloques (bloques apilados, discos contra bloques)
+  e.muCuerpos = numero(d.muCuerpos, 0.5, 0, 10);
   e.duracion = numero(d.duracion, 4, 0.1, 120);
   const ids = new Set(), lista = Array.isArray(d.objetos) ? d.objetos : [];
   const material = o => ({ e: numero(o.e, 1, 0, 1), mu: numero(o.mu, 0, 0, 10), muS: o.muS == null ? null : numero(o.muS, 0, 0, 10) });
@@ -362,7 +364,7 @@ export function aMotor(esc) {
     conectores.push(m); conObjs.push(c);
   }
   const motor = {
-    g: [esc.g * cosd(esc.gAng), esc.g * sind(esc.gAng)], b: esc.b, cAire: esc.cAire, eParticulas: esc.eParticulas, duracion: esc.duracion,
+    g: [esc.g * cosd(esc.gAng), esc.g * sind(esc.gAng)], b: esc.b, cAire: esc.cAire, eParticulas: esc.eParticulas, muCuerpos: esc.muCuerpos ?? 0.5, duracion: esc.duracion,
     particulas: particulas.map((p, i) => ({
       id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0,
       ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)], ...(gira(p) && (p.Fbx || p.Fby) ? { Fpunto: [p.Fbx || 0, p.Fby || 0] } : {}) } : {}),
@@ -379,7 +381,14 @@ export function aMotor(esc) {
     }),
     conectores,
   };
-  return { motor, avisos, particulas, superficies, clavos, conectores: conObjs, indice, posiciones };
+  // Caras de los bloques: el motor las añade después de las superficies, cuatro
+  // por bloque libre y en el orden de las partículas ([índice, cara])
+  const caras = [];
+  // y después sus cuatro esquinas ([índice, 4 + vértice])
+  const libres = particulas.map((p, i) => (esBloque(p) && !p.cinematica ? i : -1)).filter(i => i >= 0);
+  for (const i of libres) for (let q = 0; q < 4; q++) caras.push([i, q]);
+  for (const i of libres) for (let q = 0; q < 4; q++) caras.push([i, 4 + q]);
+  return { motor, avisos, particulas, superficies, clavos, conectores: conObjs, indice, posiciones, caras };
 }
 
 // ---------------------------------------------------------------------------
@@ -407,7 +416,10 @@ export function describirEvento(ev, M) {
   const partes = String(ev.clave || '').split(':');
   // «i» o «i.k» (vértice k de un bloque)
   const P = i => conArticulo(M.particulas[parseInt(String(i), 10)]?.nombre ?? '?');
-  const S = js => conArticulo(M.superficies[Number(js)]?.nombre ?? 'superficie');
+  const S = js => {
+    const k = Number(js), cara = M.caras?.[k - M.superficies.length];
+    return conArticulo(M.superficies[k]?.nombre ?? (cara ? M.particulas[cara[0]]?.nombre : null) ?? 'superficie');
+  };
   const con = M.conectores.find(c => c.id === partes[1]);
   const C = () => conArticulo(con?.nombre ?? partes[1]);
   const contacto = /contacto/.test(ev.nombre || '');
@@ -534,6 +546,38 @@ export function fuerzasEn(sim, M, t) {
   const cols = [];
   for (const k of contactosDe(modo)) {
     const sup = mot.superficies[k.sup], i = k.i, pc = pos(i), v = vel(i);
+    // Cara de un bloque B (el motor las pone tras las superficies): la
+    // reacción actúa en el punto de contacto sobre los dos cuerpos, con las
+    // entradas de traslación y giro de ambos
+    const cara = !sup ? M.caras?.[k.sup - mot.superficies.length] : null;
+    if (cara && rot[cara[0]] >= 0) {
+      const B = cara[0], pB = mot.particulas[B], q = cara[1], thB = y[base + 2 * rot[B]], cB = pos(B), vB = vel(B), wB = omega(B);
+      const R = u => [Math.cos(thB) * u[0] - Math.sin(thB) * u[1], Math.sin(thB) * u[0] + Math.cos(thB) * u[1]];
+      const vs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => [sx * pB.ancho / 2, sy * pB.alto / 2]);
+      // Cara q < 4; esquina q − 4: la normal va de la esquina al centro del disco
+      let tw, nw;
+      if (q >= 4) { const rho = R(vs[q - 4]); nw = unitario(resta(pc, [cB[0] + rho[0], cB[1] + rho[1]])); tw = [-nw[1], nw[0]]; }
+      else { const t0 = unitario(resta(vs[q], vs[(q + 1) % 4])); tw = R(t0); nw = R([-t0[1], t0[0]]); }
+      // Punto de contacto: el vértice de A o el borde del disco (c − r·n̂)
+      let bA;
+      if (k.k >= 0 && rot[i] >= 0) {
+        const pa = mot.particulas[i], th = y[base + 2 * rot[i]], vx = (k.k === 0 || k.k === 3 ? -1 : 1) * pa.ancho / 2, vy = (k.k < 2 ? -1 : 1) * pa.alto / 2;
+        bA = [Math.cos(th) * vx - Math.sin(th) * vy, Math.sin(th) * vx + Math.cos(th) * vy];
+      } else bA = [-(mot.particulas[i].radio || 0) * nw[0], -(mot.particulas[i].radio || 0) * nw[1]];
+      const P = [pc[0] + bA[0], pc[1] + bA[1]], rB = resta(P, cB), wA = omega(i);
+      const VP = [v[0] - wA * bA[1], v[1] + wA * bA[0]], rel = [VP[0] - vB[0] + wB * rB[1], VP[1] - vB[1] - wB * rB[0]];
+      const vt = punto(tw, rel), muC = mot.muCuerpos ?? 0;
+      const desliza = muC > 0 && !k.pegado && (!!k.sentido || Math.abs(vt) > 1e-15), sgn = k.sentido || Math.sign(vt);
+      const filas = d => [[i, d[0], d[1]], ...(rot[i] >= 0 ? [[n + rot[i], d[1] * bA[0] - d[0] * bA[1], 0]] : []), [B, -d[0], -d[1]], [n + rot[B], d[0] * rB[1] - d[1] * rB[0], 0]];
+      const ambos = (tipo, F, valor) => { lista[i].push({ tipo, F, valor, id: pB.id, rel: bA }); lista[B].push({ tipo, F: [-F[0], -F[1]], valor, id: mot.particulas[i].id, rel: rB }); };
+      const dirN = desliza ? [nw[0] - muC * sgn * tw[0], nw[1] - muC * sgn * tw[1]] : nw;
+      cols.push({ grad: filas(dirN), usar: L => {
+        ambos('normal', [L * nw[0], L * nw[1]], L);
+        if (desliza) ambos('friccion', [-muC * sgn * L * tw[0], -muC * sgn * L * tw[1]], Math.abs(muC * L));
+      } });
+      if (k.pegado && muC > 0) cols.push({ grad: filas(tw), usar: L => ambos('friccion', [L * tw[0], L * tw[1]], Math.abs(L)) });
+      continue;
+    }
     if (!sup) continue;
     // Vértice k de un bloque: el contacto está en el vértice, a b = R(θ)·v_k del centro
     const pb = mot.particulas[i], b = k.k >= 0 && rot[i] >= 0 ? (() => {
@@ -842,6 +886,21 @@ export const ESCENARIOS = [
         { ...PF('p1', 'Bloque', 2, 0, 0.4, 8, 0, { sobre: 's1' }), forma: 'bloque', ancho: 0.4, alto: 0.8, orient: 0, inercia: 0, w: 0, Fbx: -0.2, Fby: 0.3 },
       ],
     }),
+  },
+  {
+    id: 'apiladas', tipo: 'ejemplo', titulo: 'Cajas apiladas y una bola que las golpea',
+    nota: ['Tres cajas apiladas se sostienen por sus caras: la de arriba se apoya en la de en medio y esta en la de abajo.', 'La bola golpea la caja de arriba: la empuja, la hace girar y la tira. La fricción entre cajas (Gravedad y medio) decide cuánto arrastra a las de abajo.', 'Selecciona una caja con Fuerzas activadas: las normales y las fricciones salen de los vértices que se apoyan.'],
+    crear: () => {
+      const caja = (id, nombre, m, x, y, an, al) => ({ ...P_(id, nombre, m, x, y), forma: 'bloque', ancho: an, alto: al, orient: 0, inercia: 0, w: 0 });
+      return {
+        duracion: 2.5, eParticulas: 0.3, muCuerpos: 0.5,
+        objetos: [
+          SEG('s1', 'suelo', 'Suelo', [-1, 0], [4, 0], { e: 0.3, mu: 0.6 }),
+          caja('p1', 'Caja 1', 2, 1.5, 0.15, 0.5, 0.3), caja('p2', 'Caja 2', 1.5, 1.5, 0.45, 0.4, 0.3), caja('p3', 'Caja 3', 1, 1.5, 0.75, 0.3, 0.3),
+          P_('p4', 'Bola', 0.5, -0.5, 0.75, { v: 5, ang: 20, radio: 0.08 }),
+        ],
+      };
+    },
   },
   {
     id: 'bolos', tipo: 'ejemplo', titulo: 'Bola que desliza y acaba rodando',
@@ -2026,7 +2085,8 @@ function iniciar() {
       h += grupo('Escena', fila('Título', `<div class="campo texto"><input data-clave="escena.titulo" data-u="texto" value="${esc.titulo.replace(/"/g, '&quot;')}"></div>`) + fila('Duración', campo('escena.duracion', esc.duracion, 'tiempo')));
       h += grupo('Gravedad', fila('Intensidad', campo('escena.g', esc.g, 'aceleracion', 'g')) + fila('Dirección', campo('escena.gAng', esc.gAng, 'angulo', null, 'Ángulo desde el eje x; −90° apunta hacia abajo|Direction')) + ayudaFila('Con g = 0, el plano se ve desde arriba (una mesa sin fricción).'));
       h += grupo('Medio y choques', fila('Arrastre', campo('escena.b', esc.b, 'amort', 'b', 'Arrastre lineal: F = −b·v|Linear drag')) + fila('Cuadrático', campo('escena.cAire', esc.cAire, 'arrastre2', 'c', 'Arrastre cuadrático: F = −c·|v|·v|Quadratic drag')) +
-        fila('Restitución', campo('escena.eParticulas', esc.eParticulas, 'adim', 'e', 'Coeficiente de restitución entre discos|Restitution between bodies')));
+        fila('Restitución', campo('escena.eParticulas', esc.eParticulas, 'adim', 'e', 'Coeficiente de restitución entre discos y contra los bloques|Restitution between bodies')) +
+        (esc.objetos.some(esBloque) ? fila('Fricción entre cuerpos', campo('escena.muCuerpos', esc.muCuerpos ?? 0.5, 'adim', 'μ', 'Fricción en las caras de los bloques: un bloque sobre otro, un disco contra un bloque|Friction between bodies')) : ''));
       h += grupoMostrar();
       h += grupo('Energía en t = 0', '<div class="lecturas" id="lecturas"></div>', 'lect-titulo');
     } else if (o.tipo === 'particula') {
@@ -2179,6 +2239,7 @@ function iniciar() {
       if (prop === 'gAng') { esc.gAng = v; return; }
       if (prop === 'b' || prop === 'cAire') { if (!(v >= 0)) return 'El arrastre no puede ser negativo.'; esc[prop] = v; return; }
       if (prop === 'eParticulas') { if (!(v >= 0 && v <= 1)) return 'El coeficiente de restitución va de 0 a 1.'; esc.eParticulas = v; return; }
+      if (prop === 'muCuerpos') { if (!(v >= 0 && v <= 10)) return 'El coeficiente de fricción va de 0 a 10.'; esc.muCuerpos = v; return; }
       return;
     }
     const o = objeto(esc, id); if (!o) return;
@@ -2448,11 +2509,13 @@ function iniciar() {
     if (!SIM) return 'en reposo';
     const tr = tramoEn(SIM, Math.min(t, tFinal())), k = contactosDe(tr.modo).find(c => c.i === i);
     if (k && esBloque(M.particulas[i])) {
-      const n = contactosDe(tr.modo).filter(c => c.i === i).length, sobreQue = conArticulo(M.superficies[k.sup]?.nombre ?? '');
+      const cara = M.caras?.[k.sup - M.superficies.length];
+      const n = contactosDe(tr.modo).filter(c => c.i === i).length, sobreQue = conArticulo(M.superficies[k.sup]?.nombre ?? M.particulas[cara?.[0]]?.nombre ?? '');
       return n >= 2 ? `apoyado de plano sobre ${sobreQue}` : `sobre una arista, en ${sobreQue}`;
     }
     if (k) {
-      const giro = gira(M.particulas[i] ?? {}), sobreQue = conArticulo(M.superficies[k.sup]?.nombre ?? '');
+      const cara = M.caras?.[k.sup - M.superficies.length];
+      const giro = gira(M.particulas[i] ?? {}), sobreQue = conArticulo(M.superficies[k.sup]?.nombre ?? M.particulas[cara?.[0]]?.nombre ?? '');
       if (giro && (M.superficies[k.sup]?.mu ?? 0) > 0) return `${k.pegado ? 'rueda sin deslizar sobre' : 'desliza girando sobre'} ${sobreQue}`;
       return `${k.pegado ? 'quieta sobre' : 'sobre'} ${sobreQue}`;
     }

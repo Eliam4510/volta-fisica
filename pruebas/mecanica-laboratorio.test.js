@@ -423,3 +423,26 @@ describe('fuerza aplicada en un punto del bloque', () => {
     expect(conAltura(0.15)).toBeLessThan(-0.05);
   });
 });
+
+describe('cajas apiladas en el laboratorio', () => {
+  it('se sostienen por sus caras: normales en cadena y nombres de los eventos con las cajas', () => {
+    const e = escenaDeEscenario('apiladas'), M = aMotor(e), sim = simularMecanica(M.motor);
+    expect(sim.incompleta).toBeNull();
+    expect(M.caras).toHaveLength(3 * 8);
+    // Antes del golpe: la caja 1 recibe del suelo el peso de las tres y de la caja 2 el de las dos de arriba
+    const f = fuerzasEn(sim, M, 0.2).porParticula, suma = (l, tipo) => l.filter(x => x.tipo === tipo).reduce((s, x) => s + x.valor, 0);
+    cerca(suma(f[0].filter(x => x.id === 's1'), 'normal'), 4.5 * g, 1e-7);
+    cerca(suma(f[0].filter(x => x.id === 'p2'), 'normal'), 2.5 * g, 1e-7);
+    cerca(suma(f[2], 'normal'), 1 * g, 1e-7);
+    expect(describirEvento(sim.eventos[0], M)).toBe('La bola choca con Caja 3');
+    // La bola no atraviesa ninguna caja: su centro queda fuera de las tres
+    const fin = estadoMecanica(sim, 2.5), bola = fin[3];
+    for (const k of [0, 1, 2]) {
+      const c = fin[k], o = e.objetos.find(x => x.id === `p${k + 1}`), dx = bola.x - c.x, dy = bola.y - c.y;
+      const lx = Math.cos(c.th) * dx + Math.sin(c.th) * dy, ly = -Math.sin(c.th) * dx + Math.cos(c.th) * dy;
+      expect(Math.abs(lx) > o.ancho / 2 || Math.abs(ly) > o.alto / 2).toBe(true);
+    }
+    const en = energiaMecanica(sim, 2.5);
+    cerca(en.E + en.Qc + en.Qi, energiaMecanica(sim, 0).E, 1e-7);
+  });
+});
