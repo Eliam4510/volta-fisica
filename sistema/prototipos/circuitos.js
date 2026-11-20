@@ -38,6 +38,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   const CAT = {
     bateria: { nombre: 'Batería', en: 'Battery', ico: 'o-bateria', pref: 'E', params: [['E', 'Fem', 'V', 'potencial', 6], ['r', 'Resistencia interna', 'Ω', 'resistencia', 0]] },
     'fuente-ca': { nombre: 'Fuente alterna', en: 'AC source', ico: 'o-fuente-ca', pref: 'V', params: [['V0', 'Amplitud', 'V', 'potencial', 10], ['f', 'Frecuencia', 'Hz', 'frecuencia', 50], ['fase', 'Fase', '°', 'angulo', 0], ['r', 'Resistencia interna', 'Ω', 'resistencia', 0]] },
+    diodo: { nombre: 'Diodo', en: 'Diode', ico: 'o-diodo', pref: 'D', params: [['Vd', 'Voltaje directo (10 mA)', 'V', 'potencial', 0.7], ['n', 'Factor de idealidad', '', 'adimensional', 1.8]] },
+    led: { nombre: 'LED', en: 'LED', ico: 'o-led', pref: 'LED', params: [['Vd', 'Voltaje directo (20 mA)', 'V', 'potencial', 2], ['n', 'Factor de idealidad', '', 'adimensional', 2]] },
     'fuente-corriente': { nombre: 'Fuente de corriente', en: 'Current source', ico: 'o-fuente-corriente', pref: 'J', params: [['I', 'Corriente', 'A', 'corriente', 0.01]] },
     resistencia: { nombre: 'Resistencia', en: 'Resistor', ico: 'o-resistencia', pref: 'R', params: [['R', 'Resistencia', 'Ω', 'resistencia', 100]] },
     reostato: { nombre: 'Reóstato', en: 'Rheostat', ico: 'o-reostato', pref: 'Rv', params: [['R', 'Resistencia total', 'Ω', 'resistencia', 100], ['x', 'Cursor', '', 'adimensional', 0.5]] },
@@ -51,9 +53,11 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     tierra: { nombre: 'Tierra', en: 'Ground', ico: 'o-tierra', pref: 'T', params: [] },
   };
   const ES_INTERRUPTOR = tipo => tipo === 'interruptor' || tipo === 'interruptor-3';
+  // Color del LED: nombre, longitud de onda (m; null = blanca) y voltaje directo típico a 20 mA
+  const COLORES_LED = { rojo: ['Rojo', 630e-9, 2.0], amarillo: ['Amarillo', 590e-9, 2.1], verde: ['Verde', 525e-9, 3.0], azul: ['Azul', 465e-9, 3.1], blanco: ['Blanco', null, 3.1] };
 
   // Prefijos SI que entiende nucleo/unidades.js para cada unidad
-  const PREF = { V: ['k', '', 'm'], A: ['', 'm', 'µ'], 'Ω': ['M', 'k', ''], F: ['', 'm', 'µ', 'n', 'p'], H: ['', 'm', 'µ'], C: ['', 'm', 'µ', 'n', 'p'], W: ['k', '', 'm'], J: ['k', '', 'm', 'µ'], s: ['', 'm', 'µ'] };
+  const PREF = { V: ['k', '', 'm'], A: ['', 'm', 'µ', 'n'], 'Ω': ['M', 'k', ''], F: ['', 'm', 'µ', 'n', 'p'], H: ['', 'm', 'µ'], C: ['', 'm', 'µ', 'n', 'p'], W: ['k', '', 'm'], J: ['k', '', 'm', 'µ'], s: ['', 'm', 'µ'] };
   const FAC = { M: 1e6, k: 1e3, '': 1, m: 1e-3, 'µ': 1e-6, n: 1e-9, p: 1e-12 };
   // Valor SI → [número, unidad con el prefijo que le corresponde]
   function enUnidad(v, u) {
@@ -119,6 +123,46 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       },
       graficas: [{ m: 'V', series: [{ id: 'V' }, { id: 'C' }] }, { m: 'I', series: [{ id: 'R' }] }, { m: 'bode', id: 'R', mag: 'i', parte: 'amp' }],
       sel: 'R',
+    },
+    {
+      clave: 'rectificador', titulo: 'Rectificador de media onda con filtro', tipo: 'Ejemplo', duracion: 0.1, dt: 0.0001,
+      nota: 'El diodo solo deja pasar los semiciclos positivos. Sin el capacitor, la carga recibe pulsos; con él, el capacitor se carga en cada pico y se descarga despacio por R, y el voltaje queda casi constante con un rizado de unos I/(f·C). Cierra S para conectar el capacitor y mueve C.',
+      elementos: [
+        { id: 'V', tipo: 'fuente-ca', p: [0, 4], rot: 270, V0: 10, f: 50, fase: 0, r: 0, etq: 'izq' },
+        { id: 'D', tipo: 'diodo', p: [3, 8], rot: 0, Vd: 0.7, n: 1.8, etq: 'arr' },
+        { id: 'S', tipo: 'interruptor', p: [6, 6], rot: 270, cerrado: false, etq: 'izq' },
+        { id: 'C', tipo: 'capacitor', p: [6, 3], rot: 270, C: 100e-6, q0: 0, etq: 'izq' },
+        { id: 'R', tipo: 'resistencia', p: [10, 4], rot: 270, R: 1000, etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [5, 0], rot: 0 },
+      ],
+      cables: [[[0, 5], [0, 8], [2, 8]], [[4, 8], [10, 8], [10, 5]], [[6, 8], [6, 7]], [[6, 5], [6, 4]], [[6, 2], [6, 0]], [[10, 3], [10, 0], [0, 0], [0, 3]]],
+      nodos: {},
+      acciones: [{ t: 0.04, id: 'S', estado: true }],
+      variables: {
+        C: { sim: 'C', val: 100, min: 10, max: 1000, paso: 10, u: 'µF', factor: 1e-6, liga: [['C', 'C']] },
+      },
+      graficas: [{ m: 'V', series: [{ id: 'V' }, { id: 'R' }] }, { m: 'I', series: [{ id: 'D' }] }, { m: 'V', series: [{ id: 'D' }] }],
+      sel: 'R',
+    },
+    {
+      clave: 'led', titulo: 'LED con su resistencia', tipo: 'Tutorial', duracion: 2, dt: 0.002,
+      nota: 'Un LED necesita una resistencia en serie: sin ella, una corriente enorme lo quemaría. Con 5 V y un LED rojo (unos 2 V), R = (5 − 2)/20 mA = 150 Ω. Mueve R y mira cómo cambian la corriente y el brillo; cambia el color en el inspector (un LED azul necesita unos 3 V).',
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 4], rot: 270, E: 5, r: 0, etq: 'izq' },
+        { id: 'S', tipo: 'interruptor', p: [3, 8], rot: 0, cerrado: false, etq: 'arr' },
+        { id: 'R', tipo: 'resistencia', p: [7, 8], rot: 0, R: 150, etq: 'arr' },
+        { id: 'D', tipo: 'led', p: [10, 4], rot: 270, Vd: 2, n: 2, color: 'rojo', etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [5, 0], rot: 0 },
+      ],
+      cables: [[[0, 5], [0, 8], [2, 8]], [[4, 8], [6, 8]], [[8, 8], [10, 8], [10, 5]], [[10, 3], [10, 0], [0, 0], [0, 3]]],
+      nodos: {},
+      acciones: [{ t: 0.3, id: 'S', estado: true }],
+      variables: {
+        R: { sim: 'R', val: 150, min: 50, max: 2000, paso: 10, u: 'Ω', factor: 1, liga: [['R', 'R']] },
+        E: { sim: 'E', val: 5, min: 0, max: 12, paso: 0.1, u: 'V', factor: 1, liga: [['E', 'E']] },
+      },
+      graficas: [{ m: 'I', series: [{ id: 'D' }] }, { m: 'V', series: [{ id: 'D' }, { id: 'R' }] }, { m: 'V', series: [{ id: 'E' }] }],
+      sel: 'D',
     },
     {
       clave: 'filtro-rc', titulo: 'Filtro RC pasabajas', tipo: 'Ejemplo', duracion: 0.05, dt: 0.00005,
@@ -599,7 +643,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   const bornes = el => (LOCALES[el.tipo] || [[-1, 0], [1, 0]]).map(l => { const [x, y] = rotar(l, el.rot || 0); return [el.p[0] + x, el.p[1] + y]; });
   // Tramo de patilla de cada borne (del borne al cuerpo), en coordenadas locales
   const PATILLAS = { 'interruptor-3': [[[-1, 0], [-0.5, 0]], [[1, 1], [0.5, 1]], [[1, 0], [0.91, 0]], [[1, -1], [0.5, -1]]], tierra: [] };
-  const CUERPO = { resistencia: 0.56, reostato: 0.56, bateria: 0.13, capacitor: 0.13, inductor: 0.56, bombilla: 0.3, voltimetro: 0.3, amperimetro: 0.3, 'fuente-corriente': 0.3, interruptor: 0.5 };
+  const CUERPO = { resistencia: 0.56, reostato: 0.56, bateria: 0.13, 'fuente-ca': 0.42, diodo: 0.3, led: 0.3, capacitor: 0.13, inductor: 0.56, bombilla: 0.3, voltimetro: 0.3, amperimetro: 0.3, 'fuente-corriente': 0.3, interruptor: 0.5 };
   function patillas(el) {
     const loc = PATILLAS[el.tipo] || [[[-1, 0], [-CUERPO[el.tipo], 0]], [[1, 0], [CUERPO[el.tipo], 0]]];
     return loc.map(([a, b]) => [a, b].map(l => { const [x, y] = rotar(l, el.rot || 0); return [el.p[0] + x, el.p[1] + y]; }));
@@ -630,6 +674,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       for (const [k] of CAT[el.tipo].params) if (el[k] != null) c[k] = el[k];
       if (el.tipo === 'interruptor') c.cerrado = !!el.cerrado;
       if (el.tipo === 'interruptor-3') c.posicion = el.posicion || null;
+      if (el.tipo === 'led') c.color = el.color || 'rojo';
       if (el.tipo === 'capacitor' && el.placa) c.perfil = perfilPlaca(el.placa);
       return c;
     });
@@ -831,6 +876,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     if (k >= 0) {
       if (el.tipo === 'capacitor' && capas.cargas) { o.q = s.q[k]; o.qRef = X.qRef; }
       if (el.tipo === 'bombilla') o.brillo = Math.sqrt(Math.max(0, s.v[k] * s.I[k]) / el.Pn);
+      if (el.tipo === 'led') { o.brillo = Math.sqrt(Math.max(0, s.I[k]) / 0.02); o.lambda = COLORES_LED[el.color || 'rojo'][1]; }
       if (el.tipo === 'resistencia' || el.tipo === 'reostato') o.calor = Math.abs(s.v[k] * s.I[k]) / X.Pmax;
     }
     tz.circElemento(forma(el), o);
@@ -844,6 +890,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     switch (el.tipo) {
       case 'bateria': valor = valorCon(el.E, 'V'); break;
       case 'fuente-ca': valor = `${valorCon(el.V0, 'V')} · ${valorCon(el.f, 'Hz')}`; break;
+      case 'diodo': case 'led': valor = k >= 0 ? `I = ${valorCon(s.I[k], 'A')}` : valorCon(el.Vd, 'V'); break;
       case 'fuente-corriente': valor = valorCon(el.I, 'A'); break;
       case 'resistencia': case 'reostato': valor = valorCon(el.R, 'Ω'); break;
       case 'capacitor': valor = k >= 0 ? `q = ${valorCon(s.q[k], 'C')}` : valorCon(el.C, 'F'); break;
@@ -981,6 +1028,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       }
       if (!CAT[el.tipo].params.length) props.insertAdjacentHTML('beforeend', `<p class="ayuda-fila" style="margin-left:0">${ES_INTERRUPTOR(el.tipo) ? 'Un clic sobre él en el lienzo lo acciona en el instante actual.' : 'Ideal: no altera el circuito.'}</p>`);
       if (el.tipo === 'capacitor' && el.placa) props.insertAdjacentHTML('beforeend', `<p class="ayuda-fila" style="margin-left:0">${textoPlaca(el.placa)}</p>`);
+      if (el.tipo === 'led') props.insertAdjacentHTML('beforeend', fila('Color', `<div class="campo texto"><select id="p-color" aria-label="Color">${Object.entries(COLORES_LED).map(([v, [txt]]) => `<option value="${v}"${v === (el.color || 'rojo') ? ' selected' : ''}>${txt}</option>`).join('')}</select></div>`, 'Color de la luz; cambia también el voltaje directo al típico de ese color|LED color'));
       props.insertAdjacentHTML('beforeend', `<div class="fila"><span class="etq">Esquema</span><div style="display:flex;gap:4px"><button class="btn btn-secundario btn-compacto" id="p-rotar" data-ayuda="Girar 90°|Rotate|R"><svg class="ico"><use href="#i-rotar"/></svg>Girar</button><button class="btn btn-secundario btn-compacto" id="p-borrar" data-ayuda="Quitar del circuito|Delete|Supr"><svg class="ico"><use href="#i-borrar"/></svg>Quitar</button></div></div>`);
     } else if (cab) {
       props.innerHTML = `<div class="fila"><span class="etq">Esquema</span><div><button class="btn btn-secundario btn-compacto" id="p-borrar" data-ayuda="Quitar el cable|Delete|Supr"><svg class="ico"><use href="#i-borrar"/></svg>Quitar</button></div></div>`;
@@ -997,6 +1045,12 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     props.querySelectorAll('input[data-param], input[data-global]').forEach(ent => campoConUnidad(ent));
     const pm = $('#p-modo'); if (pm) pm.addEventListener('click', ev => { const b = ev.target.closest('button'); if (b) cambiarModo(b.dataset.v); });
     const pi = $('#p-inicio'); if (pi) pi.addEventListener('click', ev => { const b = ev.target.closest('button'); if (b && b.dataset.v !== ESC.inicio) { ESC.inicio = b.dataset.v; recalcular(); registrar(); } });
+    const pc = $('#p-color'); if (pc) pc.addEventListener('change', () => {
+      const e = elSel();
+      if (!e || e.color === pc.value || !COLORES_LED[pc.value]) return;
+      e.color = pc.value; e.Vd = COLORES_LED[e.color][2];
+      recalcular(); registrar(); inspector();
+    });
     const pr = $('#p-rotar'); if (pr) pr.addEventListener('click', rotarSeleccion);
     const pb = $('#p-borrar'); if (pb) pb.addEventListener('click', borrarSeleccion);
     acciones();
@@ -1065,6 +1119,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     switch (el.tipo) {
       case 'bateria': return valorCon(el.E, 'V', 3);
       case 'fuente-ca': return `${valorCon(el.V0, 'V', 3)} ~`;
+      case 'diodo': case 'led': return valorCon(el.Vd, 'V', 3);
       case 'resistencia': case 'reostato': return valorCon(el.R, 'Ω', 3);
       case 'capacitor': return valorCon(el.C, 'F', 3);
       case 'inductor': return valorCon(el.L, 'H', 3);
@@ -1097,6 +1152,10 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         case 'bateria': filas = [L('V', 'bornes', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('W', '', s.W[k], 'J')]; if (el.r > 0) filas.push(L('Q', 'r', s.Q[k], 'J')); break;
         case 'fuente-ca': filas = [L('V', 'bornes', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('W', '', s.W[k], 'J')]; if (el.r > 0) filas.push(L('Q', 'r', s.Q[k], 'J')); break;
         case 'fuente-corriente': filas = [L('I', '', I, 'A'), L('V', '', -vv, 'V'), L('W', '', s.W[k], 'J')]; break;
+        case 'diodo': case 'led':
+          filas = [L('V', '', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('Q', '', s.Q[k], 'J'), ['estado', '', I > 1e-4 ? 'conduce' : 'no conduce', '']];
+          if (el.tipo === 'led') filas.push(['brillo', '', fmt(100 * Math.min(1, Math.max(0, I) / 0.02), 3), '%']);
+          break;
         case 'resistencia': case 'reostato': filas = [L('V', '', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('Q', '', s.Q[k], 'J')]; break;
         case 'capacitor':
           filas = [L('V', '', vv, 'V'), L('q', '', s.q[k], 'C'), L('I', '', I, 'A'), L('U', 'C', s.U[k], 'J')];
@@ -1380,7 +1439,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         filas.push([`Energía en ${n}`, 'electrico', s.U[k], 'Energía eléctrica almacenada, q²/2C|Stored electric energy']);
       }
       else if (el.tipo === 'inductor') filas.push([`Energía en ${n}`, 'magnetico', s.U[k], 'Energía magnética almacenada, ½LI²|Stored magnetic energy']);
-      else if (el.tipo === 'resistencia' || el.tipo === 'reostato' || el.tipo === 'bombilla') filas.push([`Calor en ${n}`, 'termico', s.Q[k], 'Calor de Joule acumulado|Joule heat']);
+      else if (el.tipo === 'resistencia' || el.tipo === 'reostato' || el.tipo === 'bombilla' || el.tipo === 'diodo' || el.tipo === 'led') filas.push([el.tipo === 'led' ? `Luz y calor en ${n}` : `Calor en ${n}`, 'termico', s.Q[k], 'Calor de Joule acumulado|Joule heat']);
       else if (ES_INTERRUPTOR(el.tipo) || el.tipo === 'amperimetro' || el.tipo === 'voltimetro') Qcables += s.Q[k];
     }
     for (const sg of RED.tramos) Qcables += s.Q[iDe(sg.id)];
@@ -1633,7 +1692,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       vistos.add(id);
       const el = { id, tipo: e.tipo, p: punto(e.p), rot: [0, 90, 180, 270].includes(e.rot) ? e.rot : 0, etq: ['arr', 'aba', 'izq', 'der'].includes(e.etq) ? e.etq : 'arr' };
       for (const [k, , , , def] of CAT[e.tipo].params) el[k] = numero(e[k], def, k === 'x' ? 0 : k === 'frio' ? 1 : -1e9, k === 'x' ? 1 : 1e12);
-      for (const k of ['R', 'C', 'L', 'Vn', 'Pn', 'f']) if (k in el && !(el[k] > 0)) el[k] = CAT[e.tipo].params.find(p => p[0] === k)[4];
+      if (el.tipo === 'led') el.color = COLORES_LED[e.color] ? e.color : 'rojo';
+      for (const k of ['R', 'C', 'L', 'Vn', 'Pn', 'f', 'Vd', 'n']) if (k in el && !(el[k] > 0)) el[k] = CAT[e.tipo].params.find(p => p[0] === k)[4];
       if (el.tipo === 'interruptor') el.cerrado = !!e.cerrado;
       if (el.tipo === 'interruptor-3') el.posicion = ['a', 'b', 'c'].includes(e.posicion) ? e.posicion : null;
       if (el.tipo === 'capacitor') { const pl = placaSegura(e.placa); if (pl) el.placa = pl; }

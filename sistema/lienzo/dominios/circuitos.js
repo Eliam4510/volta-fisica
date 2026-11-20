@@ -34,8 +34,9 @@
     banda: 8,                     // px: ancho de la banda de potencial
     resistencia: [0.56, 0.2],     // u: medio largo y medio alto del rectángulo
     placa: 0.45, hueco: 0.13,     // u: capacitor: media placa y media separación
-    bateria: [0.5, 0.25, 0.13],
-    fuenteCA: 0.42,   // u: media placa larga, media corta, media separación
+    bateria: [0.5, 0.25, 0.13],   // u: media placa larga, media corta, media separación
+    fuenteCA: 0.42,               // u: radio del círculo de la fuente alterna
+    diodo: [0.3, 0.26],           // u: medio largo y medio alto del triángulo
     espira: 0.14,                 // u: radio de cada espira del inductor (4 espiras)
     bombilla: 0.3, medidor: 0.3,  // u: radios
     contacto: 3.25,               // px: radio de los contactos de un interruptor
@@ -188,6 +189,30 @@
         // + en el borne a, como en la batería
         const [px, py] = S(-rr - 0.2, rr * 0.75);
         c.lineWidth = 1.5; this._circSigno(px, py, 1);
+        break;
+      }
+      case 'diodo': case 'led': {
+        // Triángulo hacia el cátodo (borne b) y la barra; el LED, con dos
+        // flechas de luz que se encienden con su color según la corriente
+        const [m, h] = GC.diodo;
+        linea([-1, 0], [-m, 0]); linea([m, 0], [1, 0]);
+        const tri = [S(-m, -h), S(-m, h), S(m, 0)];
+        const luz = el.tipo === 'led' ? Math.max(0, Math.min(1, o.brillo || 0)) : 0;
+        const colorLuz = el.tipo === 'led' && this.opticaColor ? this.opticaColor(o.lambda ?? null) : t.tinta;
+        trazar(c, tri); c.closePath(); c.fillStyle = luz > 0.02 ? colorLuz : t.lienzo; c.globalAlpha = luz > 0.02 ? 0.35 + 0.65 * luz : 1; c.fill(); c.globalAlpha = 1; c.stroke();
+        linea([m, -h], [m, h]);
+        if (el.tipo === 'led') {
+          c.save(); c.strokeStyle = luz > 0.02 ? colorLuz : t['texto-3']; c.lineWidth = 1.5;
+          for (const dx of [-0.08, 0.14]) {
+            const p0 = [dx, h + 0.08], p1 = [dx + 0.18, h + 0.3 + 0.12 * luz];
+            linea(p0, p1);
+            const [x1, y1] = S(...p1), [x0, y0] = S(...p0), ang = Math.atan2(y1 - y0, x1 - x0), L = 6, A = 3;
+            c.fillStyle = c.strokeStyle; c.beginPath(); c.moveTo(x1, y1);
+            c.lineTo(x1 - L * Math.cos(ang) + A * Math.sin(ang), y1 - L * Math.sin(ang) - A * Math.cos(ang));
+            c.lineTo(x1 - L * Math.cos(ang) - A * Math.sin(ang), y1 - L * Math.sin(ang) + A * Math.cos(ang)); c.closePath(); c.fill();
+          }
+          c.restore();
+        }
         break;
       }
       case 'bateria': {

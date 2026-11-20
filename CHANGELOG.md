@@ -7,6 +7,27 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.22.0] - 2026-11-20
+
+Diodos y LED en Circuitos.
+
+### Añadido
+
+- Diodo con la ecuación de Shockley: conduce desde unos 0.7 V y en
+  inversa solo deja pasar su corriente de saturación (nA). Se ajusta con
+  el voltaje directo y el factor de idealidad.
+- LED de cinco colores (rojo, amarillo, verde, azul y blanco) con su
+  voltaje directo típico; en el esquema brilla con su color según la
+  corriente.
+- Ejemplos «LED con su resistencia» y «Rectificador de media onda con
+  filtro» (el capacitor se conecta con un interruptor).
+- Las corrientes muy pequeñas se leen en nA.
+
+### Notas
+
+- Con diodos el circuito deja de ser lineal: el inspector ya no muestra
+  fasores y la respuesta se ve en la simulación en el tiempo.
+
 ## [0.21.0] - 2026-11-20
 
 Corriente alterna en Circuitos.
