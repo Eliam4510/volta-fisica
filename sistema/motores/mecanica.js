@@ -49,6 +49,9 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {number} [ancho]          Bloque: ancho (m)
  * @property {number} [alto]           Bloque: alto (m)
  * @property {[number, number]} [F]    Fuerza constante aplicada (N)
+ * @property {{forma: 'seno', f: number, fase?: number} | {forma: 'pulso', t0: number, t1: number}} [Fvar]
+ *   F cambia con el tiempo: F·sen(2πft + fase) (forzamiento de una resonancia) o F solo entre t0 y t1
+ *   (un empujón). Ya no es conservativa: su trabajo sale en energiaMecanica().W
  * @property {boolean} [cinematica]    Conductor de masa infinita que se mueve con velocidad constante v
  *   (una mano que sube despacio, una cinta): no siente fuerzas; su trabajo sale en energiaMecanica().W
  * @property {Array<[number, number, number]>} [perfil] Solo con cinematica: aceleración impuesta por
@@ -227,7 +230,7 @@ function preparar(e) {
       caras.push([i, 4 + q]);
     }
   });
-  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2, vert, nReales, caras, muPares: e.muCuerpos ?? 0 };
+  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), pulso: P.map(() => 0), tAhora: 0, b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2, vert, nReales, caras, muPares: e.muCuerpos ?? 0 };
   actualizarImpuestas(S, 0);
   return S;
 }
@@ -472,6 +475,8 @@ function deslizamiento(S, sup, y, i, kv = -1) {
  * @param {any} S @param {number} t
  */
 function actualizarImpuestas(S, t) {
+  // Pulsos de fuerza: constantes dentro de cada tramo, como los perfiles
+  S.P.forEach((p, i) => { if (p.Fvar && p.Fvar.forma === 'pulso') S.pulso[i] = t >= p.Fvar.t0 - 1e-12 && t < p.Fvar.t1 - 1e-12 ? 1 : 0; });
   S.perfiles.forEach((pf, i) => {
     if (!pf) return;
     const k = pf.find(f => t < f[0] - 1e-12);
@@ -482,7 +487,52 @@ function actualizarImpuestas(S, t) {
 function proximoCorte(S, t) {
   let c = Infinity;
   for (const pf of S.perfiles) if (pf) for (const f of pf) if (f[0] > t + 1e-12) { c = Math.min(c, f[0]); break; }
+  for (const p of S.P) if (p.Fvar && p.Fvar.forma === 'pulso') for (const b of [p.Fvar.t0, p.Fvar.t1]) if (b > t + 1e-12) c = Math.min(c, b);
   return c;
+}
+/**
+ * Factor de la fuerza aplicada en t: sen(2πft + fase), 1 o 0 dentro o fuera
+ * del pulso (que se decide en tPulso: el inicio del tramo, donde el motor lo
+ * fija), o 1 si es constante.
+ * @param {any} Fvar @param {number} t @param {number} [tPulso]
+ */
+export function factorFuerza(Fvar, t, tPulso = t) {
+  if (!Fvar) return 1;
+  if (Fvar.forma === 'seno') return Math.sin(2 * Math.PI * Fvar.f * t + (Fvar.fase || 0));
+  if (Fvar.forma === 'pulso') return tPulso >= Fvar.t0 - 1e-12 && tPulso < Fvar.t1 - 1e-12 ? 1 : 0;
+  return 1;
+}
+/** ¿La fuerza aplicada de p es constante (y por tanto conservativa)? */
+const fuerzaFija = (/** @type {any} */ p) => !!p.F && !p.Fvar;
+/**
+ * Fuerza aplicada a la partícula i en el instante S.tAhora (null si no tiene).
+ * La senoidal es suave y se evalúa en cada etapa; el pulso se fija por tramos.
+ * @param {any} S @param {number} i @returns {[number, number] | null}
+ */
+function fuerzaAplicada(S, i) {
+  const p = S.P[i];
+  if (!p.F) return null;
+  if (!p.Fvar) return p.F;
+  const k = p.Fvar.forma === 'seno' ? Math.sin(2 * Math.PI * p.Fvar.f * S.tAhora + (p.Fvar.fase || 0)) : p.Fvar.forma === 'pulso' ? S.pulso[i] : 1;
+  return [k * p.F[0], k * p.F[1]];
+}
+/**
+ * Potencia que entregan las fuerzas que cambian con el tiempo (en el centro y,
+ * si van en un punto del cuerpo que gira, con su par).
+ * @param {any} S @param {number[]} y
+ */
+function potenciaFuerzasVariables(S, y) {
+  let W = 0;
+  for (let i = 0; i < S.n; i++) {
+    const p = S.P[i];
+    if (!p.Fvar || p.cinematica) continue;
+    const F = fuerzaAplicada(S, i);
+    if (!F) continue;
+    W += F[0] * y[4 * i + 2] + F[1] * y[4 * i + 3];
+    const bF = brazoFuerza(S, y, i);
+    if (bF) W += y[S.base + 2 * S.rot[i] + 1] * (bF[0] * F[1] - bF[1] * F[0]);
+  }
+  return W;
 }
 
 /**
@@ -793,10 +843,10 @@ function fuerzas(S, modo, y, lambdasPrevias) {
     const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3];
     if (p.cinematica) continue;
     // Fuerza aplicada fuera del centro: par (R·b) × F sobre el giro
-    const bF = brazoFuerza(S, y, i);
-    if (bF) F[2 * (n + S.rot[i])] += bF[0] * p.F[1] - bF[1] * p.F[0];
-    F[2 * i] += p.m * S.g[0] + (p.F ? p.F[0] : 0);
-    F[2 * i + 1] += p.m * S.g[1] + (p.F ? p.F[1] : 0);
+    const bF = brazoFuerza(S, y, i), Fa = fuerzaAplicada(S, i);
+    if (bF && Fa) F[2 * (n + S.rot[i])] += bF[0] * Fa[1] - bF[1] * Fa[0];
+    F[2 * i] += p.m * S.g[0] + (Fa ? Fa[0] : 0);
+    F[2 * i + 1] += p.m * S.g[1] + (Fa ? Fa[1] : 0);
     if (S.b) { F[2 * i] -= S.b * vx; F[2 * i + 1] -= S.b * vy; }
     if (S.cAire) { const sp = Math.hypot(vx, vy); F[2 * i] -= S.cAire * sp * vx; F[2 * i + 1] -= S.cAire * sp * vy; }
   }
@@ -1110,7 +1160,8 @@ function energiaEstado(S, y) {
     const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3], x = y[4 * i], yy = y[4 * i + 1];
     if (p.cinematica) continue;
     E += 0.5 * p.m * (vx * vx + vy * vy) - p.m * (S.g[0] * x + S.g[1] * yy);
-    if (p.F) E -= p.F[0] * x + p.F[1] * yy;
+    if (!fuerzaFija(p)) continue;
+    E -= p.F[0] * x + p.F[1] * yy;
     // F fija en el mundo aplicada en un punto que gira: U_F = −F·(r + R·b)
     const bF = brazoFuerza(S, y, i);
     if (bF) E -= p.F[0] * bF[0] + p.F[1] * bF[1];
@@ -1139,14 +1190,15 @@ function potenciaDisipada(S, y, acc) {
   for (let i = 0; i < S.n; i++) {
     const p = S.P[i], vx = y[4 * i + 2], vy = y[4 * i + 3];
     if (p.cinematica) continue;
-    dE += vx * (p.m * acc[2 * i] - p.m * S.g[0] - (p.F ? p.F[0] : 0)) + vy * (p.m * acc[2 * i + 1] - p.m * S.g[1] - (p.F ? p.F[1] : 0));
+    const Ff = fuerzaFija(p) ? p.F : null;
+    dE += vx * (p.m * acc[2 * i] - p.m * S.g[0] - (Ff ? Ff[0] : 0)) + vy * (p.m * acc[2 * i + 1] - p.m * S.g[1] - (Ff ? Ff[1] : 0));
   }
   // Giro: d(½Iω²)/dt = ω·I·α (ninguna fuerza conservativa hace par)
   for (let q = 0; q < S.nr; q++) dE += y[S.base + 2 * q + 1] * S.I[q] * acc[2 * (S.n + q)];
   // y dU_F/dt de una fuerza aplicada fuera del centro: −ω·τ_F
   for (let i = 0; i < S.n; i++) {
     const bF = brazoFuerza(S, y, i);
-    if (bF) dE -= y[S.base + 2 * S.rot[i] + 1] * (bF[0] * S.P[i].F[1] - bF[1] * S.P[i].F[0]);
+    if (bF && fuerzaFija(S.P[i])) dE -= y[S.base + 2 * S.rot[i] + 1] * (bF[0] * S.P[i].F[1] - bF[1] * S.P[i].F[0]);
   }
   for (const c of S.con) {
     if (c.tipo !== 'resorte') continue;
@@ -1202,6 +1254,10 @@ function normalLibre(sup, p) {
 export function simularMecanica(escena) {
   const S = preparar(escena);
   const hayCinematicos = S.P.some(p => p.cinematica);
+  // Fuerzas senoidales: la dinámica lee S.tAhora (se fija en cada etapa y evento)
+  const hayVariables = S.P.some(p => p.F && p.Fvar && p.Fvar.forma === 'seno');
+  // Cualquier fuerza que cambia con el tiempo entrega trabajo externo (W)
+  const hayExternas = S.P.some(p => p.F && p.Fvar);
   const DUR = escena.duracion ?? 5, UMBRAL = escena.umbral ?? 1e-3, RTOL = escena.rtol ?? 1e-10;
   let y = estadoInicial(S), t = 0;
   /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean, sentido?: number, k?: number}>, pares: Record<string, any>, cuerdas: Record<string, any>}} */
@@ -1588,12 +1644,13 @@ export function simularMecanica(escena) {
     let ultD = null;
     const din = (/** @type {number[]} */ yy) => { if (yy !== ultY) { ultD = dinamica(S, m, yy, restr); ultY = yy; } return ultD; };
     const f = (tt, yy) => {
+      if (hayVariables) S.tAhora = tt;
       const { acc, fuerzaTotal } = din(yy);
       const d = new Array(yy.length);
       for (let i = 0; i < S.n; i++) { d[4 * i] = yy[4 * i + 2]; d[4 * i + 1] = yy[4 * i + 3]; d[4 * i + 2] = acc[2 * i]; d[4 * i + 3] = acc[2 * i + 1]; }
       for (let q = 0; q < S.nr; q++) { d[S.base + 2 * q] = yy[S.base + 2 * q + 1]; d[S.base + 2 * q + 1] = acc[2 * (S.n + q)]; }
       // E + Qc + Qi = E0 + W: lo que entra por los conductores menos lo que sube E
-      const W = hayCinematicos ? potenciaConductores(S, yy, fuerzaTotal) : 0;
+      const W = (hayCinematicos ? potenciaConductores(S, yy, fuerzaTotal) : 0) + (hayExternas ? potenciaFuerzasVariables(S, yy) : 0);
       d[4 * S.n] = potenciaDisipada(S, yy, acc) + W;
       d[4 * S.n + 1] = W;
       return d;
@@ -1609,12 +1666,14 @@ export function simularMecanica(escena) {
     const sol = integrar(f, t, y, tHasta, {
       rtol: RTOL, atol: RTOL * 1e-2, maxPasos: Math.max(1, PRESUPUESTO - pasosUsados), hMaxDe,
       detener: () => reloj() - inicioReloj > TIEMPO_MAX,
-      eventos: eventosDelModo(S, modo, restr, y, din).filter(e => !silenciados.has(e.nombre)),
+      // Con una fuerza senoidal, la dinámica depende de t: cada evento fija el instante antes de evaluar
+      eventos: eventosDelModo(S, modo, restr, y, din).filter(e => !silenciados.has(e.nombre))
+        .map(e => (hayVariables ? { ...e, g: (tt, yy) => { S.tAhora = tt; return e.g(tt, yy); } } : e)),
       hMax: escena.pasoMax ?? (hayClavos ? Math.max(1e-3, DUR / 400) : undefined),
     });
     const tFin = sol.t[sol.t.length - 1];
     tramos.push({ t0: t, t1: tFin, sol, modo: copiarModo(modo) });
-    t = tFin; y = sol.y[sol.y.length - 1].slice();
+    t = tFin; y = sol.y[sol.y.length - 1].slice(); S.tAhora = t;
     pasosUsados += sol.pasosAceptados + sol.pasosRechazados;
     if (t < DUR - 1e-12 && (sol.estado === 'detenido' || reloj() - inicioReloj > TIEMPO_MAX)) {
       incompleta = { t, motivo: `La simulación tardaba demasiado (más de ${Math.round(TIEMPO_MAX / 1000)} s de cálculo): la escena tiene demasiados contactos o eventos para simularla entera.` };
@@ -1875,7 +1934,7 @@ export function energiaMecanica(sim, t) {
     // Un cuerpo cinemático es un agente externo: su energía no cuenta (lo que
     // entrega va en W)
     if (e.particulas[i].cinematica) return;
-    const m = sim.S.m[i], F = e.particulas[i].F;
+    const m = sim.S.m[i], F = fuerzaFija(e.particulas[i]) ? e.particulas[i].F : null;
     if (sim.S.rot[i] >= 0) Kr += 0.5 * sim.S.I[sim.S.rot[i]] * s.w * s.w;
     K += 0.5 * m * (s.vx * s.vx + s.vy * s.vy);
     Ug -= m * (g[0] * s.x + g[1] * s.y);

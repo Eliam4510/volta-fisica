@@ -14,7 +14,7 @@
    2. Interfaz (solo si hay documento): lienzo, paleta, inspector, línea de
       tiempo, gráficas, energía, tablas, archivos e historial.
    ========================================================================== */
-import { simularMecanica, estadoMecanica, energiaMecanica } from '../motores/mecanica.js';
+import { simularMecanica, estadoMecanica, energiaMecanica, factorFuerza } from '../motores/mecanica.js';
 import { interpolar, derivadaInterpolada } from '../nucleo/integradores.js';
 import { aCSV, muestrear } from '../nucleo/csv.js';
 import { descargarTexto, descargarLienzo, nombreArchivo, avisar } from '../componentes/exportar.js';
@@ -66,8 +66,10 @@ export const NOMBRE_CLASE = {
 };
 export const CONECTORES = ['cuerda', 'resorte', 'varilla', 'polea', 'union', 'prensa'];
 /** Propiedades que una variable puede fijar y unidades que puede tener. */
-const PROPIEDADES_VARIABLE = ['m', 'x', 'y', 'v', 'ang', 'radio', 'F', 'angF', 'e', 'mu', 'muS', 'k', 'L0', 'L', 'amort', 'n', 'th', 'ancho', 'alto', 'orient', 'Fbx', 'Fby'];
-const UNIDADES_VARIABLE = ['longitud', 'masa', 'velocidad', 'aceleracion', 'tiempo', 'angulo', 'rigidez', 'adim', 'fuerza'];
+/** Gravedad en la superficie (m/s²): accesos rápidos del inspector de la escena. */
+const GRAVEDADES = [[9.8, 'Tierra'], [1.62, 'Luna'], [3.71, 'Marte'], [24.79, 'Júpiter'], [0, 'Sin gravedad']];
+const PROPIEDADES_VARIABLE = ['m', 'x', 'y', 'v', 'ang', 'radio', 'F', 'angF', 'e', 'mu', 'muS', 'k', 'L0', 'L', 'amort', 'n', 'th', 'ancho', 'alto', 'orient', 'Fbx', 'Fby', 'Ff', 'Ffase', 'Ft0', 'Ft1'];
+const UNIDADES_VARIABLE = ['longitud', 'masa', 'velocidad', 'aceleracion', 'tiempo', 'angulo', 'rigidez', 'adim', 'fuerza', 'frecuencia'];
 /** Instrumentos: no son física (no van al motor); miden sobre la simulación. */
 export const INSTRUMENTOS = ['regla', 'fotopuerta'];
 
@@ -193,6 +195,9 @@ export function normalizarEscena(d) {
         inercia: numero(o.inercia, 0, 0, 1), w: numero(o.w, 0, -1e4, 1e4),
         // Punto de aplicación de F en el marco del cuerpo (solo si gira)
         ...(o.Fbx || o.Fby ? { Fbx: numero(o.Fbx, 0, -100, 100), Fby: numero(o.Fby, 0, -100, 100) } : {}),
+        // Forma de la fuerza en el tiempo: senoidal (f en Hz, fase en °) o pulso entre t0 y t1 (s)
+        ...(o.Fforma === 'seno' ? { Fforma: 'seno', Ff: numero(o.Ff, 1, 1e-4, 1e4), Ffase: numero(o.Ffase, 0, -360, 360) } : {}),
+        ...(o.Fforma === 'pulso' ? { Fforma: 'pulso', Ft0: numero(o.Ft0, 0, 0, 1e6), Ft1: Math.max(numero(o.Ft0, 0, 0, 1e6), numero(o.Ft1, 0.5, 0, 1e6)) } : {}),
         // Bloque rígido: rectángulo de ancho × alto con orientación inicial (°)
         ...(o.forma === 'bloque' ? { forma: 'bloque', ancho: numero(o.ancho, 0.4, 1e-3, 100), alto: numero(o.alto, 0.3, 1e-3, 100), orient: numero(o.orient, 0, -360, 360) } : {}),
         // Aceleración impuesta por tramos [hasta t, ax, ay], hasta 12 tramos
@@ -368,7 +373,7 @@ export function aMotor(esc) {
     g: [esc.g * cosd(esc.gAng), esc.g * sind(esc.gAng)], b: esc.b, cAire: esc.cAire, eParticulas: esc.eParticulas, muCuerpos: esc.muCuerpos ?? 0.5, duracion: esc.duracion,
     particulas: particulas.map((p, i) => ({
       id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0,
-      ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)], ...(gira(p) && (p.Fbx || p.Fby) ? { Fpunto: [p.Fbx || 0, p.Fby || 0] } : {}) } : {}),
+      ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)], ...(gira(p) && (p.Fbx || p.Fby) ? { Fpunto: [p.Fbx || 0, p.Fby || 0] } : {}), ...fuerzaVariable(p) } : {}),
       ...(p.cinematica ? { cinematica: true, ...(p.perfil && p.perfil.length ? { perfil: p.perfil.map(f => [...f]) } : {}) } : {}),
       ...(esBloque(p) ? { forma: 'bloque', ancho: p.ancho, alto: p.alto, theta: orientacionBloque(esc, p) * DEG, w: p.w || 0, radio: 0 } : gira(p) ? { inercia: p.inercia, w: p.w || 0 } : {}),
     })),
@@ -519,7 +524,8 @@ export function fuerzasEn(sim, M, t) {
     const peso = [m * g[0], m * g[1]];
     F[2 * i] += peso[0]; F[2 * i + 1] += peso[1];
     if (largo(peso) > 0) lista[i].push({ tipo: 'peso', F: peso, valor: largo(peso) });
-    const Fa = mot.particulas[i].F;
+    const F0 = mot.particulas[i].F, kF = F0 ? factorFuerza(mot.particulas[i].Fvar, tt, tr.t0) : 0;
+    const Fa = F0 && kF !== 0 ? [kF * F0[0], kF * F0[1]] : null;
     if (Fa) {
       F[2 * i] += Fa[0]; F[2 * i + 1] += Fa[1];
       // Aplicada fuera del centro (cuerpo que gira): par (R·b) × F y el vector sale de ese punto
@@ -734,6 +740,12 @@ const g0 = 9.8;
 /** Plano que baja hacia la derecha desde `alto` con ángulo θ (°) y largo L: el sólido queda debajo. */
 function planoDesde(alto, th, L) { return [alto, [alto[0] + L * cosd(th), alto[1] - L * sind(th)]]; }
 
+/** Forma en el tiempo de la fuerza de p para el motor: { Fvar } o nada si es constante. */
+function fuerzaVariable(p) {
+  if (p.Fforma === 'seno') return { Fvar: { forma: 'seno', f: p.Ff ?? 1, fase: (p.Ffase || 0) * Math.PI / 180 } };
+  if (p.Fforma === 'pulso') return { Fvar: { forma: 'pulso', t0: p.Ft0 ?? 0, t1: p.Ft1 ?? 0.5 } };
+  return {};
+}
 /** Partícula con una fuerza constante aplicada F (N) en la dirección angF (°). */
 const PF = (id, nombre, m, x, y, F, angF, o = {}) => ({ ...P_(id, nombre, m, x, y, o), F, angF });
 /** Resorte de la partícula `a` a un punto fijo `ancla`. */
@@ -970,6 +982,19 @@ export const ESCENARIOS = [
         ],
       };
     },
+  },
+  {
+    id: 'resonancia', tipo: 'ejemplo', titulo: 'Resonancia forzada', graficas: ['x', 'v'],
+    nota: ['Un bloque de 0.5 kg en un resorte de 19.7 N/m (frecuencia propia de 1 Hz) con un amortiguador, empujado por F(t) = 1 N·sen(2πft).', 'Mueve el deslizador f: lejos de 1 Hz el bloque apenas se mueve; cerca, la amplitud llega a F/(cω) ≈ 0.4 m.', 'En la pestaña Energía, el trabajo de la fuerza entra y el amortiguador lo disipa: en régimen se igualan.'],
+    crear: () => ({
+      duracion: 20,
+      variables: [{ sim: 'f', tipo: 'frecuencia', min: 0.2, max: 2.5, paso: 0.05, val: 1, liga: [['p1', 'Ff']] }],
+      objetos: [
+        SEG('s1', 'suelo', 'Suelo', [0, 0], [2.6, 0]), SEG('s2', 'pared', 'Pared', [0, 0.8], [0, 0]),
+        { ...PF('p1', 'Bloque', 0.5, 1.3, 0.1, 1, 0, { radio: 0.1, sobre: 's1' }), Fforma: 'seno', Ff: 1, Ffase: 0 },
+        { id: 'c1', tipo: 'resorte', nombre: 'Resorte', a: 'p1', b: null, ancla: [0, 0.1], k: 2 * Math.PI ** 2, L0: 1.3, amort: 0.4 },
+      ],
+    }),
   },
   {
     id: 'mext-2007-1-1', tipo: 'mext', anio: 2007, ref: '2007 · 1-(1)', titulo: 'Bola incrustada en un bloque con resorte',
@@ -2054,6 +2079,7 @@ function iniciar() {
     adim: { u: '', dim: 'adimensional' },
     fuerza: { u: 'N', dim: 'fuerza', def: 'N' },
     angular: { u: 'rad/s', dim: 'frecuencia' },
+    frecuencia: { u: 'Hz', dim: 'frecuencia', def: 'Hz' },
   };
   /** Lee un campo: número con unidad, expresión o variable (g). Un número solo va en la unidad del campo. */
   function leerCampo(textoCampo, tipoU) {
@@ -2102,7 +2128,10 @@ function iniciar() {
     if (!o) {
       h += cab('o-gravedad', esc.titulo, 'Escena · gravedad y medio');
       h += grupo('Escena', fila('Título', `<div class="campo texto"><input data-clave="escena.titulo" data-u="texto" value="${esc.titulo.replace(/"/g, '&quot;')}"></div>`) + fila('Duración', campo('escena.duracion', esc.duracion, 'tiempo')));
-      h += grupo('Gravedad', fila('Intensidad', campo('escena.g', esc.g, 'aceleracion', 'g')) + fila('Dirección', campo('escena.gAng', esc.gAng, 'angulo', null, 'Ángulo desde el eje x; −90° apunta hacia abajo|Direction')) + ayudaFila('Con g = 0, el plano se ve desde arriba (una mesa sin fricción).'));
+      // Accesos rápidos: la gravedad en la superficie de varios cuerpos del Sistema Solar
+      const lugar = GRAVEDADES.find(([v]) => Math.abs(esc.g - v) < 1e-9);
+      const lugares = (lugar ? '' : '<option value="" selected>Otro valor</option>') + GRAVEDADES.map(([v, t]) => `<option value="${v}"${lugar && lugar[0] === v ? ' selected' : ''}>${t} · ${fmt(v, 3)} m/s²</option>`).join('');
+      h += grupo('Gravedad', fila('Intensidad', campo('escena.g', esc.g, 'aceleracion', 'g')) + fila('Lugar', `<div class="campo texto" data-ayuda="Gravedad en la superficie de varios cuerpos del Sistema Solar|Surface gravity"><select data-gravedad aria-label="Lugar">${lugares}</select></div>`) + fila('Dirección', campo('escena.gAng', esc.gAng, 'angulo', null, 'Ángulo desde el eje x; −90° apunta hacia abajo|Direction')) + ayudaFila('Con g = 0, el plano se ve desde arriba (una mesa sin fricción).'));
       h += grupo('Medio y choques', fila('Arrastre', campo('escena.b', esc.b, 'amort', 'b', 'Arrastre lineal: F = −b·v|Linear drag')) + fila('Cuadrático', campo('escena.cAire', esc.cAire, 'arrastre2', 'c', 'Arrastre cuadrático: F = −c·|v|·v|Quadratic drag')) +
         fila('Restitución', campo('escena.eParticulas', esc.eParticulas, 'adim', 'e', 'Coeficiente de restitución entre discos y contra los bloques|Restitution between bodies')) +
         (esc.objetos.some(o => esBloque(o) || gira(o)) ? fila('Fricción entre cuerpos', campo('escena.muCuerpos', esc.muCuerpos ?? 0.5, 'adim', 'μ', 'Fricción en las caras de los bloques: un bloque sobre otro, un disco contra un bloque|Friction between bodies')) : ''));
@@ -2134,6 +2163,17 @@ function iniciar() {
       const filaPunto = gira(o) && o.F > 0 ? fila('Aplicada en', doble(campo(`${o.id}.Fbx`, o.Fbx || 0, 'longitud', 'x′', 'Desde el centro, en el marco del cuerpo (gira con él)|Point of application'), campo(`${o.id}.Fby`, o.Fby || 0, 'longitud', 'y′'))) : '';
       c += fila('Fuerza aplicada', doble(campo(`${o.id}.F`, o.F || 0, 'fuerza', 'F', 'Fuerza constante sobre la partícula durante toda la simulación; 0 la quita|Applied force'), campo(`${o.id}.angF`, o.angF || 0, 'angulo', 'β', 'Dirección de la fuerza desde el eje x|Direction')));
       c += filaPunto;
+      if (o.F > 0 && !o.cinematica) {
+        const forma = o.Fforma || 'constante';
+        c += fila('Forma', segmentado(`${o.id}.Fforma`, [['constante', 'Constante'], ['seno', 'Senoidal'], ['pulso', 'Pulso']], forma));
+        if (forma === 'seno') {
+          c += fila('Frecuencia', doble(campo(`${o.id}.Ff`, o.Ff ?? 1, 'frecuencia', 'f', 'Frecuencia de la fuerza: F(t) = F·sen(2πft + φ)|Driving frequency'), campo(`${o.id}.Ffase`, o.Ffase || 0, 'angulo', 'φ', 'Fase inicial|Phase')));
+          c += ayudaFila('F(t) = F·sen(2πft + φ): con un resorte, la amplitud crece mucho cuando f se acerca a la frecuencia propia (resonancia). Haz de f una variable para barrerla. Su trabajo aparece como trabajo externo en Energía.');
+        } else if (forma === 'pulso') {
+          c += fila('Actúa', doble(campo(`${o.id}.Ft0`, o.Ft0 ?? 0, 'tiempo', 't<sub>0</sub>', 'Instante en que empieza|Start'), campo(`${o.id}.Ft1`, o.Ft1 ?? 0.5, 'tiempo', 't<sub>1</sub>', 'Instante en que acaba|End')));
+          c += ayudaFila(`Empujón: F solo entre t₀ y t₁. El impulso es F·(t₁ − t₀) = ${cantidad((o.F || 0) * Math.max(0, (o.Ft1 ?? 0.5) - (o.Ft0 ?? 0)), 'N·s', 4)}.`);
+        }
+      }
       c += fila('Movimiento', segmentado(`${o.id}.cinematica`, [['no', 'Libre'], ['si', 'Impuesto']], o.cinematica ? 'si' : 'no'));
       if (o.cinematica && !(o.perfil && o.perfil.length)) c += ayudaFila('Se mueve con su velocidad inicial pase lo que pase, como una mano, una cinta o un ascensor. Su masa no cuenta; el trabajo que hace aparece en la energía.');
       if (o.cinematica) {
@@ -2292,6 +2332,10 @@ function iniciar() {
       if (prop === 'ang') { o.ang = ((v + 180) % 360 + 360) % 360 - 180; return; }
       if (prop === 'F') { if (!(v >= 0)) return 'Escribe el módulo de la fuerza (positivo) y su dirección en β.'; o.F = v; return; }
       if (prop === 'angF') { o.angF = ((v + 180) % 360 + 360) % 360 - 180; return; }
+      if (prop === 'Ff') { if (!(v > 0 && v <= 1e4)) return 'La frecuencia va de 0 a 10 000 Hz.'; o.Ff = v; return; }
+      if (prop === 'Ffase') { o.Ffase = ((v + 180) % 360 + 360) % 360 - 180; return; }
+      if (prop === 'Ft0') { if (!(v >= 0)) return 'El pulso empieza en t ≥ 0.'; o.Ft0 = v; if ((o.Ft1 ?? 0.5) < v) o.Ft1 = v; return; }
+      if (prop === 'Ft1') { if (!(v >= (o.Ft0 ?? 0))) return 'El pulso acaba después de empezar (t₁ ≥ t₀).'; o.Ft1 = v; return; }
       if (prop === 'x' || prop === 'y') {
         const p = posicionParticula(esc, o); p[prop === 'x' ? 0 : 1] = v;
         if (o.sobre) {
@@ -2425,9 +2469,13 @@ function iniciar() {
     if (ev.key === 'Enter' && ev.target.matches('input[data-clave]')) ev.target.blur();
     if (ev.key === 'Escape' && ev.target.matches('input[data-clave]')) { construirInspector(); }
   });
+  insp.addEventListener('change', ev => {
+    const gv = ev.target.closest('select[data-gravedad]');
+    if (gv && gv.value !== '') { esc.g = Number(gv.value); if (esc.g > 0) esc.gAng = -90; registrar(); recalcular(); construirInspector(); }
+  });
   insp.addEventListener('click', ev => {
     const b = ev.target.closest('.segmentado button');
-    if (b) {
+    if (b && b.parentElement.dataset.segmento) {
       const [id, prop] = b.parentElement.dataset.segmento.split('.'), o = objeto(esc, id); if (!o) return;
       const valor = b.dataset.v;
       if (prop === 'lado' && o.forma === 'suelo') { const abajoAhora = o.a[0] <= o.b[0]; if ((valor === 'abajo') !== abajoAhora) [o.a, o.b] = [o.b, o.a]; }
@@ -2437,6 +2485,9 @@ function iniciar() {
       if (prop === 'soloTira') o.soloTira = valor === 'si';
       if (prop === 'cinematica') o.cinematica = valor === 'si';
       if (prop === 'giro') o.inercia = Number(valor) || 0;
+      if (prop === 'Fforma') {
+        if (valor === 'seno') { o.Fforma = 'seno'; o.Ff ??= 1; o.Ffase ??= 0; } else if (valor === 'pulso') { o.Fforma = 'pulso'; o.Ft0 ??= 0; o.Ft1 ??= 0.5; } else delete o.Fforma;
+      }
       if (prop === 'cuerpo') o.cuerpo = valor || null;
       seguirSuperficie(o); registrar(); recalcular(); construirInspector(); return;
     }
@@ -2655,7 +2706,7 @@ function iniciar() {
   const sinRuido = (x, escala) => (Math.abs(x) < 1e-9 * Math.max(escala, 1e-300) ? 0 : x);
   const escalaEnergia = () => (SIM ? Math.max(1e-12, ...energias().flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF)])) : 1);
   const hayFuerzaAplicada = () => !!(M && M.motor.particulas.some(p => p.F));
-  const hayImpuesto = () => !!(M && M.motor.particulas.some(p => p.cinematica));
+  const hayImpuesto = () => !!(M && M.motor.particulas.some(p => p.cinematica || p.Fvar));
   // ¿Hay algo que disipe de forma continua? (fricción, arrastre, amortiguadores)
   const hayRozamiento = () => !!(M && ((M.motor.b || 0) > 0 || (M.motor.cAire || 0) > 0
     || (M.motor.superficies || []).some(s => s.mu > 0) || (M.motor.conectores || []).some(c => c.tipo === 'resorte' && c.c > 0)));
@@ -2690,7 +2741,7 @@ function iniciar() {
     const filas = [['Cinética', 'f-movimiento', e.K], ['Potencial gravitatoria', 'f-cambio', e.Ug], ['Elástica', 'f-electrico', e.Ue],
       ...(hayFuerzaAplicada() ? [['Potencial de la fuerza aplicada', 'f-interaccion', e.UF]] : []), ...disipadas,
       // Con un cuerpo de movimiento impuesto, E + disipada = E0 + W
-      ...(hayImpuesto() ? [['Trabajo del movimiento impuesto', 'f-interaccion', e.W]] : []), ['Total inicial', 'tinta', e0.E]];
+      ...(hayImpuesto() ? [[M.motor.particulas.some(p => p.cinematica) ? 'Trabajo del movimiento impuesto' : 'Trabajo de la fuerza aplicada', 'f-interaccion', e.W]] : []), ['Total inicial', 'tinta', e0.E]];
     const d = energias(), maxAbs = Math.max(1e-12, ...d.flatMap(x => [Math.abs(x.K), Math.abs(x.Ug), Math.abs(x.Ue), Math.abs(x.UF), Math.abs(x.Q), Math.abs(x.W), Math.abs(x.E + x.Q - x.W)]));
     const conSigno = d.some(x => x.Ug < -1e-12 || x.UF < -1e-12 || x.E + x.Q - x.W < -1e-12);
     $('#barras').className = 'barras' + (conSigno ? ' con-signo' : '');
@@ -2808,7 +2859,12 @@ function iniciar() {
   }
   async function cargarEscenario(id) {
     if (hayCambios() && !(await confirmarCambios('cambiar de escena'))) return;
-    const d = escenaDeEscenario(id); if (d) { cargar(d); documentoNuevo(); }
+    const d = escenaDeEscenario(id); if (d) { graficasDelEscenario(id); cargar(d); documentoNuevo(); }
+  }
+  // Un escenario puede pedir qué graficar (la resonancia, x(t)); sin guardarlo como preferencia
+  function graficasDelEscenario(id) {
+    const g = ESCENARIOS.find(e => e.id === id)?.graficas;
+    if (Array.isArray(g) && g.length === 2 && g.every(k => MAGNITUDES[k])) { magGraf = [...g]; cabecerasGraficas(); }
   }
   async function nuevaEscena() {
     if (hayCambios() && !(await confirmarCambios('empezar una escena nueva'))) return;
@@ -3430,7 +3486,7 @@ function iniciar() {
     // que otra pantalla dejó para abrir, el autoguardado o el escenario por defecto.
     const limpioURL = !params.has('t') && !captura && !params.has('escena');
     let datos = null, origen = null;
-    if (params.has('escena')) datos = escenaDeEscenario(params.get('escena'));
+    if (params.has('escena')) { datos = escenaDeEscenario(params.get('escena')); if (datos && !params.has('graficas')) graficasDelEscenario(params.get('escena')); }
     else if (params.has('vacia')) datos = escenaVacia();
     if (!datos) {
       const pend = escenaPendiente('mecanica');

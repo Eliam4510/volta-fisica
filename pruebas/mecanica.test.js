@@ -1132,3 +1132,37 @@ describe('fricción entre discos que giran', () => {
     expect(sim.incompleta).toBeNull();
   });
 });
+
+describe('fuerzas que cambian con el tiempo', () => {
+  // Masa en un resorte horizontal (sin gravedad) con arrastre b: ω0 = 2π rad/s
+  const forzado = (f, duracion = 40) => simularMecanica({
+    g: [0, 0], b: 0.5, duracion,
+    particulas: [{ id: 'P', m: 1, p: [1, 0], v: [0, 0], F: [1, 0], Fvar: { forma: 'seno', f } }],
+    conectores: [{ id: 'R', tipo: 'resorte', a: 'P', ancla: [0, 0], k: 4 * Math.PI ** 2, L0: 1 }],
+  });
+  /** Amplitud del régimen estacionario: el máximo de |x − 1| en los dos últimos segundos. */
+  const amplitud = (sim, T) => { let a = 0; for (let t = T - 2; t <= T; t += 0.005) a = Math.max(a, Math.abs(estadoMecanica(sim, t)[0].x - 1)); return a; };
+  it('resonancia: la amplitud estacionaria es F0/√((k − mω²)² + (bω)²)', () => {
+    for (const f of [1, 2, 0.5]) {
+      const w = 2 * Math.PI * f, k = 4 * Math.PI ** 2, A = 1 / Math.hypot(k - w * w, 0.5 * w);
+      cerca(amplitud(forzado(f), 40), A, 0.01 * A);
+    }
+  });
+  it('el trabajo de la fuerza entra como W: E + Q − W se conserva', () => {
+    const sim = forzado(1, 10), e0 = energiaMecanica(sim, 0);
+    expect(e0.UF).toBe(0);
+    for (const t of [2.5, 5, 7.5, 10]) {
+      const e = energiaMecanica(sim, t);
+      cerca(e.E + e.Qc + e.Qi - e.W, e0.E, 1e-7);
+    }
+    expect(energiaMecanica(sim, 10).W).toBeGreaterThan(1);
+  });
+  it('un pulso de 2 N durante 0.5 s deja a 1 kg con 1 m/s y le entrega 0.5 J', () => {
+    const sim = simularMecanica({ g: [0, 0], duracion: 3, particulas: [{ id: 'P', m: 1, p: [0, 0], v: [0, 0], F: [2, 0], Fvar: { forma: 'pulso', t0: 1, t1: 1.5 } }] });
+    expect(estadoMecanica(sim, 0.99)[0].x).toBe(0);
+    cerca(estadoMecanica(sim, 1.25)[0].vx, 0.5, 1e-9);
+    cerca(estadoMecanica(sim, 3)[0].vx, 1, 1e-9);
+    cerca(estadoMecanica(sim, 3)[0].x, 0.25 + 1.5, 1e-9);
+    cerca(energiaMecanica(sim, 3).W, 0.5, 1e-9);
+  });
+});

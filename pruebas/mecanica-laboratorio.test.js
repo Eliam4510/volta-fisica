@@ -467,3 +467,30 @@ describe('fricción entre discos en el laboratorio', () => {
     expect(sim.eventos.map(x => describirEvento(x, M))).toContain('A y B ruedan sin deslizar');
   });
 });
+
+describe('fuerza aplicada que cambia con el tiempo', () => {
+  const amplitud = (sim, T) => { let a = 0; for (let t = T - 2; t <= T; t += 0.01) a = Math.max(a, Math.abs(estadoMecanica(sim, t)[0].x - 1.3)); return a; };
+  it('resonancia forzada: amplitud F/(cω) en 1 Hz y mucho menor lejos de ella', () => {
+    const e = escenaDeEscenario('resonancia');
+    expect(e.objetos.find(o => o.id === 'p1').Fforma).toBe('seno');
+    const { M, sim } = simular(e);
+    expect(M.motor.particulas[0].Fvar).toEqual({ forma: 'seno', f: 1, fase: 0 });
+    cerca(amplitud(sim, 20), 1 / (0.4 * 2 * Math.PI), 0.02);
+    const lejos = simular({ ...e, objetos: e.objetos.map(o => (o.id === 'p1' ? { ...o, Ff: 2 } : o)) });
+    expect(amplitud(lejos.sim, 20)).toBeLessThan(0.05);
+    // La fuerza que se dibuja es la del instante: F·sen(2πft)
+    const f = fuerzasEn(sim, M, 0.25).porParticula[0].find(x => x.tipo === 'aplicada');
+    cerca(f.valor, 1, 1e-9);
+    expect(fuerzasEn(sim, M, 0.5).porParticula[0].find(x => x.tipo === 'aplicada')?.valor ?? 0).toBeLessThan(1e-9);
+  });
+  it('el pulso se guarda, se valida y llega al motor', () => {
+    const e = normalizarEscena({ objetos: [{ id: 'p1', tipo: 'particula', m: 2, x: 0, y: 0, F: 4, angF: 0, Fforma: 'pulso', Ft0: 1, Ft1: 0.5 }], g: 0, duracion: 2 });
+    const o = e.objetos[0];
+    expect([o.Fforma, o.Ft0, o.Ft1]).toEqual(['pulso', 1, 1]);
+    const p = normalizarEscena({ objetos: [{ ...o, Ft1: 1.5 }], g: 0, duracion: 2 });
+    const { M, sim } = simular(p);
+    expect(M.motor.particulas[0].Fvar).toEqual({ forma: 'pulso', t0: 1, t1: 1.5 });
+    cerca(estadoMecanica(sim, 2)[0].vx, 1, 1e-9);
+    cerca(energiaMecanica(sim, 2).W, 1, 1e-9);
+  });
+});
