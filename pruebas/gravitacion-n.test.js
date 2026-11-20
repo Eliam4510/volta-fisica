@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { CUERPOS, G, estadoKepler, estadoKeplerUniversal, elementosOrbitales, periodoOrbital } from '../sistema/motores/gravitacion.js';
 import {
   UA, DIA, ANIO, PLANETAS, LUNA_ORBITA, estadoDesdeElementos, hohmann, baseOrbital, dvAXY, dvAOrbital, dvCircularizar, dvEscape,
-  aBaricentro, sistemaSolar, tierraLuna, primarios, simularSistema, estadoSistema, estadoMuestra, indiceEn, tramoEn,
+  aBaricentro, sistemaSolar, tierraLuna, epiciclo, primarios, simularSistema, estadoSistema, estadoMuestra, indiceEn, tramoEn,
   centroMasas, momentoLinealSistema, energiaN, momentoAngularN, elementosRelativos,
 } from '../sistema/motores/gravitacion-n.js';
 
@@ -421,5 +421,53 @@ describe('determinismo', () => {
     const sim = simularSistema({ cuerpos: [{ nombre: 'A', masa: 1e24, x: 0, y: 0, vx: 0, vy: 0 }, { nombre: 'B', masa: 1, prueba: true, x: 1e7, y: 0, vx: 0, vy: 0 }], duracion: 1, dt: 1 });
     expect(sim.cuerpos[0].mu).toBe(G * 1e24);
     expect(sim.cuerpos[1].mu).toBe(0);
+  });
+});
+
+describe('cielo geocéntrico y Ptolomeo', () => {
+  const sim = simularSistema({ cuerpos: sistemaSolar(['venus', 'tierra', 'marte']), duracion: 2.2 * ANIO, dt: DIA, apsides: false });
+  const [S, V, T, M] = sim.cuerpos;
+  /** Longitud de B vista desde A en cada muestra, sin saltos de 2π. */
+  function longitudes(A, B) {
+    const l = [];
+    for (let k = 0; k < sim.t.length; k++) {
+      let a = Math.atan2(B.y[k] - A.y[k], B.x[k] - A.x[k]);
+      if (l.length) { const d = a - l[l.length - 1]; a -= 2 * Math.PI * Math.round(d / (2 * Math.PI)); }
+      l.push(a);
+    }
+    return l;
+  }
+  it('desde la Tierra, Marte retrocede unas diez semanas cada 2.1 años; desde el Sol nunca', () => {
+    const geo = longitudes(T, M), helio = longitudes(S, M);
+    let atras = 0;
+    for (let k = 1; k < geo.length; k++) if (geo[k] < geo[k - 1]) atras += sim.t[k] - sim.t[k - 1];
+    expect(atras / DIA).toBeGreaterThan(55);
+    expect(atras / DIA).toBeLessThan(85);
+    for (let k = 1; k < helio.length; k++) expect(helio[k]).toBeGreaterThan(helio[k - 1]);
+  });
+  it('Venus nunca se aleja del Sol más de unos 47° en el cielo de la Tierra', () => {
+    let max = 0;
+    for (let k = 0; k < sim.t.length; k++) {
+      const a = Math.atan2(V.y[k] - T.y[k], V.x[k] - T.x[k]), b = Math.atan2(S.y[k] - T.y[k], S.x[k] - T.x[k]);
+      max = Math.max(max, Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))));
+    }
+    expect(max * 180 / Math.PI).toBeGreaterThan(44);
+    expect(max * 180 / Math.PI).toBeLessThan(48);
+  });
+  it('el deferente y el epiciclo suman la posición del planeta, exterior o interior', () => {
+    for (const k of [0, 200, 500, 790]) {
+      const t = [T.x[k], T.y[k]], s = [S.x[k], S.y[k]];
+      for (const [Q, exterior] of [[M, true], [V, false]]) {
+        const p = [Q.x[k], Q.y[k]], e = epiciclo(t, s, p);
+        expect(e.exterior).toBe(exterior);
+        expect(Math.hypot(e.centro[0] - t[0], e.centro[1] - t[1]) / e.rDeferente).toBeCloseTo(1, 12);
+        expect(Math.hypot(p[0] - e.centro[0], p[1] - e.centro[1]) / e.rEpiciclo).toBeCloseTo(1, 12);
+      }
+    }
+    // El epiciclo de Marte es la órbita de la Tierra (1 UA) y su deferente, la de Marte (1.52 UA)
+    const e = epiciclo([T.x[0], T.y[0]], [S.x[0], S.y[0]], [M.x[0], M.y[0]]);
+    expect(e.rEpiciclo / UA).toBeCloseTo(1, 1);
+    expect(e.rDeferente / UA).toBeGreaterThan(1.38);
+    expect(e.rDeferente / UA).toBeLessThan(1.67);
   });
 });

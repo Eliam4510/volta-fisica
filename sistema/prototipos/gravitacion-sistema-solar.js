@@ -17,7 +17,7 @@
    ========================================================================== */
 import { G, CUERPOS, puntosConica } from '../motores/gravitacion.js';
 import {
-  UA, DIA, ANIO, PLANETAS, LUNA_ORBITA, sistemaSolar, tierraLuna, aBaricentro, primarios, estadoDesdeElementos,
+  UA, DIA, ANIO, PLANETAS, LUNA_ORBITA, sistemaSolar, tierraLuna, epiciclo, aBaricentro, primarios, estadoDesdeElementos,
   simularSistema, estadoSistema, estadoMuestra, indiceEn, tramoEn, centroMasas, energiaN, momentoAngularN, elementosRelativos,
 } from '../motores/gravitacion-n.js';
 import { aCSV, muestrear } from '../nucleo/csv.js';
@@ -77,7 +77,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   const delMotor = (cs, tipos = []) => cs.map((c, i) => cuerpo(c.nombre, tipos[i] || 'planeta', c.masa ?? c.mu / G, c.radio ?? 0, [c.x, c.y], [c.vx, c.vy], { preset: c.preset, prueba: c.prueba, fijo: c.fijo }));
   const BASE = () => ({
     unidad: 'UA', escala: 'lineal', integrador: 'auto', duracion: ANIO, seg: 24, mantenerCM: false, cuerpos: [], variables: {}, regla: null,
-    capas: { trazas: true, orbitas: true, areas: false, cm: true, vectores: true, tamano: false, periodos: false, velocidades: false }, sel: 'escena', nota: null,
+    capas: { trazas: true, orbitas: true, areas: false, cm: true, vectores: true, tamano: false, periodos: false, velocidades: false, ptolomeo: false }, sel: 'escena', nota: null,
+    marco: 'inercial',
   });
   const MARTE_ANIO = 686.98 * DIA;
   const ESCENAS = [
@@ -105,6 +106,11 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     {
       clave: 'interiores', titulo: 'Planetas interiores con datos reales', tipo: 'Ejemplo', duracion: 2 * MARTE_ANIO,
       crear: () => delMotor(sistemaSolar(['mercurio', 'venus', 'tierra', 'marte'])), sel: 3, capas: { periodos: true },
+    },
+    {
+      clave: 'geocentrico', titulo: 'Cielo geocéntrico: bucles de Marte y Ptolomeo', tipo: 'Ejemplo', duracion: 2.2 * ANIO,
+      nota: 'Con la Tierra quieta en el centro, Marte hace bucles (movimiento retrógrado) cada 2.1 años, cuando la Tierra lo adelanta. La capa «Ptolomeo» muestra su deferente y su epiciclo: la misma geometría que el modelo heliocéntrico. Prueba «Centro: Sol» para comparar',
+      crear: () => delMotor(sistemaSolar(['venus', 'tierra', 'marte'])), sel: 3, marco: 'tierra', capas: { periodos: false, orbitas: false, ptolomeo: true, cm: false },
     },
     {
       clave: 'sistema-solar', titulo: 'Sistema solar completo', tipo: 'Ejemplo', duracion: 30 * ANIO, escala: 'log',
@@ -173,6 +179,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     const b = BASE(), o = { ...b, ...e, capas: { ...b.capas, ...(e.capas || {}) }, cuerpos: e.crear(), variables: copia(e.variables || {}) };
     delete o.crear;
     o.cuerpos.forEach((c, i) => { c.id = 'c' + (i + 1); });
+    if (o.marco && o.marco !== 'inercial' && !o.cuerpos.some(c => c.id === o.marco)) { const c = o.cuerpos.find(q => q.preset === o.marco); o.marco = c ? c.id : 'inercial'; }
     o.sel = typeof e.sel === 'number' ? o.cuerpos[e.sel]?.id ?? 'escena' : 'escena';
     return o;
   };
@@ -188,6 +195,17 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   let sel = 'escena', herramienta = null, presetElegido = 'tierra', vistaTocada = false, escala0 = 1, espacioPulsado = false;
   let arrastre = null, paneo = null, hover = null, POS = [];
   let autoguardar = false, historial = null, contador = 100, kV = 1, kA = 1, R0_LOG = 0.1 * UA, CENTRO = [0, 0];
+  // Marco de referencia de la vista: OFF es la posición (en el mundo) del
+  // cuerpo que queda quieto en el centro en el instante dibujado; [0, 0] en
+  // el marco inercial. Las trazas restan la del cuerpo en cada muestra
+  let OFF = [0, 0];
+  const refMarco = () => (ESC.marco && ESC.marco !== 'inercial' ? idxDe(ESC.marco) : -1);
+  function offsetEn(tt) {
+    const k = refMarco();
+    if (k < 0 || !SIM) return [0, 0];
+    const q = estado(tt)[k];
+    return q && q.activo ? [q.x, q.y] : [0, 0];
+  }
   // Recalcula como mucho una vez por cuadro mientras se arrastra o se mueve un deslizador
   let pendiente = null;
   function recalcularPronto() { if (pendiente) return; pendiente = requestAnimationFrame(() => { pendiente = null; simular(); ponerLinea(); if (!vistaTocada && !arrastre) { encuadrar(); escala0 = tz.vista.escala; zoomTexto(); } todo(); }); }
@@ -289,21 +307,21 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   // ---------------------------------------------------------------------
   // Transformación al lienzo: lineal o logarítmica alrededor del centro de masa
   // ---------------------------------------------------------------------
-  function W(p) {
-    const U = UN();
+  function W(p0) {
+    const U = UN(), p = [p0[0] - OFF[0], p0[1] - OFF[1]], C = [CENTRO[0] - OFF[0], CENTRO[1] - OFF[1]];
     if (ESC.escala !== 'log') return [p[0] / U, p[1] / U];
-    const dx = p[0] - CENTRO[0], dy = p[1] - CENTRO[1], r = Math.hypot(dx, dy);
-    if (r === 0) return [CENTRO[0] / U, CENTRO[1] / U];
+    const dx = p[0] - C[0], dy = p[1] - C[1], r = Math.hypot(dx, dy);
+    if (r === 0) return [C[0] / U, C[1] / U];
     const u = R0_LOG * Math.log1p(r / R0_LOG);
-    return [(CENTRO[0] + dx / r * u) / U, (CENTRO[1] + dy / r * u) / U];
+    return [(C[0] + dx / r * u) / U, (C[1] + dy / r * u) / U];
   }
   function Winv(q) {
-    const U = UN(), x = q[0] * U, y = q[1] * U;
-    if (ESC.escala !== 'log') return [x, y];
-    const dx = x - CENTRO[0], dy = y - CENTRO[1], u = Math.hypot(dx, dy);
+    const U = UN(), x = q[0] * U, y = q[1] * U, C = [CENTRO[0] - OFF[0], CENTRO[1] - OFF[1]];
+    if (ESC.escala !== 'log') return [x + OFF[0], y + OFF[1]];
+    const dx = x - C[0], dy = y - C[1], u = Math.hypot(dx, dy);
     if (u === 0) return [CENTRO[0], CENTRO[1]];
     const r = R0_LOG * Math.expm1(u / R0_LOG);
-    return [CENTRO[0] + dx / u * r, CENTRO[1] + dy / u * r];
+    return [C[0] + dx / u * r + OFF[0], C[1] + dy / u * r + OFF[1]];
   }
   const P = p => tz.vista.P(W(p));
   // Radio de referencia de la escala logarítmica: la cuarta parte de la órbita más interior
@@ -320,7 +338,12 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   function encuadrar() {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     const inc = p => { const [x, y] = W(p); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); };
-    if (SIM) {
+    if (SIM && refMarco() >= 0) {
+      OFF = offsetEn(t); CENTRO = OFF;
+      const m = SIM.t.length, paso = Math.max(1, Math.floor(m / 600)), rc = SIM.cuerpos[refMarco()];
+      SIM.cuerpos.forEach(c => { for (let k = 0; k < m; k += paso) inc([c.x[k] - rc.x[k] + OFF[0], c.y[k] - rc.y[k] + OFF[1]]); });
+    } else if (SIM) {
+      OFF = [0, 0];
       CENTRO = centroDe(0);
       const m = SIM.t.length, paso = Math.max(1, Math.floor(m / 600));
       SIM.cuerpos.forEach(c => { for (let k = 0; k < m; k += paso) inc([c.x[k], c.y[k]]); inc([c.x[m - 1], c.y[m - 1]]); });
@@ -353,7 +376,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
 
   function dibujar() {
     const v = tz.vista;
-    if (SIM) CENTRO = centroDe(t);
+    OFF = offsetEn(t);
+    if (SIM) CENTRO = refMarco() >= 0 ? OFF : centroDe(t);
     tz.limpiar(); tz.cuadricula();
     const s = estado(t), tr = configEn(t);
     POS = s.map((q, i) => { const [x, y] = P([q.x, q.y]); return [x, y, radioPx(ESC.cuerpos[i]), q.activo]; });
@@ -366,6 +390,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     const fichaAreas = ESC.capas.areas && i0 >= 0 ? sectores(i0) : null;
     if (ESC.capas.orbitas) ESC.cuerpos.forEach((c, i) => { if (s[i].activo && !s[i].posado) orbitaPrevista(i, s, tr); });
     if (ESC.capas.trazas && t > 0) ESC.cuerpos.forEach((c, i) => traza(i, i === i0));
+    if (ESC.capas.ptolomeo) dibujarPtolomeo(s);
     const cm = ESC.capas.cm ? dibujarCM(s) : null;
 
     // 6 · Materia: cuerpos; 7 · magnitudes del seleccionado; y los nombres, que
@@ -409,11 +434,36 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   // más (muchas vueltas superpuestas forman una banda que no se lee)
   function traza(i, destacada) {
     const c = SIM.cuerpos[i], m = MEDIDAS[i], kt = indiceEn(SIM, t);
-    const k0 = m && m.ligada && Number.isFinite(m.T) ? indiceEn(SIM, Math.max(0, t - 1.2 * m.T)) : 0;
-    const salto = Math.max(1, Math.floor((kt - k0) / 1200)), pts = [];
-    for (let k = k0; k <= kt; k += salto) pts.push(W([c.x[k], c.y[k]]));
+    const k0 = refMarco() < 0 && m && m.ligada && Number.isFinite(m.T) ? indiceEn(SIM, Math.max(0, t - 1.2 * m.T)) : 0;
+    const salto = Math.max(1, Math.floor((kt - k0) / 1200)), pts = [], kr = refMarco(), rc = kr >= 0 ? SIM.cuerpos[kr] : null;
+    // En un marco con un cuerpo quieto, cada muestra se mide desde él (así
+    // Marte dibuja sus bucles vistos desde la Tierra)
+    for (let k = k0; k <= kt; k += salto) pts.push(W(rc ? [c.x[k] - rc.x[k] + OFF[0], c.y[k] - rc.y[k] + OFF[1]] : [c.x[k], c.y[k]]));
     const s = estado(t)[i]; pts.push(W([s.x, s.y]));
     tz.linea(pts, { color: destacada ? 'texto-2' : 'texto-3', grosor: destacada ? 1.5 : 1.25 });
+  }
+  /**
+   * Modelo de Ptolomeo con la Tierra al centro: cada planeta P está en
+   * T + (S − T) + (P − S). Para un planeta exterior, el deferente es P − S
+   * (radio de su órbita) y el epiciclo S − T (radio de la de la Tierra); para
+   * uno interior, al revés. Se dibujan el deferente (centrado en la Tierra),
+   * el epiciclo con su centro y los radios que llevan al planeta: es la misma
+   * geometría que el modelo heliocéntrico, vista desde la Tierra.
+   */
+  function dibujarPtolomeo(s) {
+    const iT = ESC.cuerpos.findIndex(c => c.preset === 'tierra'), iS = ESC.cuerpos.findIndex(c => c.preset === 'sol');
+    if (iT < 0 || iS < 0 || !s[iT].activo || !s[iS].activo) return;
+    const T = [s[iT].x, s[iT].y], S = [s[iS].x, s[iS].y];
+    const circulo = (c, r) => { const pts = []; for (let k = 0; k <= 96; k++) { const a = 2 * Math.PI * k / 96; pts.push(W([c[0] + r * Math.cos(a), c[1] + r * Math.sin(a)])); } return pts; };
+    ESC.cuerpos.forEach((c, i) => {
+      if (i === iT || i === iS || !s[i].activo || c.prueba || c.tipo === 'masivo') return;
+      const Q = [s[i].x, s[i].y];
+      if (!(Math.hypot(Q[0] - S[0], Q[1] - S[1]) > 0)) return;
+      const e = epiciclo(T, S, Q);
+      tz.trayectoria(circulo(T, e.rDeferente), 'prevista');
+      tz.linea(circulo(e.centro, e.rEpiciclo), { color: 'texto-3', grosor: 1 });
+      tz.linea([W(T), W(e.centro), W(Q)], { color: 'texto-2', grosor: 1 });
+    });
   }
   function orbitaPrevista(i, s, tr) {
     const p = tr.primario[i];
@@ -469,7 +519,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   function dibujarCM(s) {
     const tr = configEn(t), cm = centroMasas(tr, s);
     if (!(cm.M > 0)) return;
-    const c0 = centroMasas(SIM.tramos[0], estado(0)), pa = P([c0.x, c0.y]), pb = P([cm.x, cm.y]);
+    // En un marco con un cuerpo quieto, la posición inicial se mide desde ese cuerpo en t = 0
+    const c0 = centroMasas(SIM.tramos[0], estado(0)), r0 = offsetEn(0), pa = P([c0.x - r0[0] + OFF[0], c0.y - r0[1] + OFF[1]]), pb = P([cm.x, cm.y]);
     if (Math.hypot(pb[0] - pa[0], pb[1] - pa[1]) > 2) tz.lineaPx([pa, pb], { color: 'texto-3', grosor: 1, patron: 'auxiliar' });
     tz.centroMasa(W([cm.x, cm.y]));
     // Encima de un cuerpo no lleva etiqueta (la del cuerpo ya está ahí)
@@ -1025,6 +1076,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     document.title = `Volta · Sistema solar · ${ESC.titulo}`;
     document.querySelectorAll('.capa-btn').forEach(b => b.setAttribute('aria-pressed', String(!!ESC.capas[b.dataset.capa])));
     document.querySelectorAll('#b-escala button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === ESC.escala)));
+    marcarMarco();
     $('#b-modo').textContent = { auto: 'Automático', adaptativo: 'Adaptativo', yoshida4: 'Simpléctico' }[ESC.integrador];
     marcarHerramienta();
   }
@@ -1098,6 +1150,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     if (sel === 'regla') { ESC.regla = null; sel = 'escena'; cambio(); avisar('Se quita la regla'); return; }
     const i = idxDe(sel); if (i < 0) return;
     const nombre = ESC.cuerpos[i].nombre;
+    if (ESC.marco === sel) ESC.marco = 'inercial';
     ESC.cuerpos.splice(i, 1); limpiarVariables(i); sel = 'escena';
     cambio(); avisar(`Se quita ${nombre}`);
   }
@@ -1162,6 +1215,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       integrador: ['auto', 'adaptativo', 'yoshida4'].includes(d.integrador) ? d.integrador : 'auto',
       duracion: numero(d.duracion, ANIO, 60, 500 * ANIO), seg: numero(d.seg, 24, 4, 120), mantenerCM: !!d.mantenerCM,
       cuerpos, variables, capas, regla,
+      marco: typeof d.marco === 'string' && cuerpos.some(c => c.id === d.marco) ? d.marco : 'inercial',
       sel: typeof d.sel === 'string' && (d.sel === 'escena' || cuerpos.some(c => c.id === d.sel)) ? d.sel : 'escena',
     };
   }
@@ -1252,6 +1306,44 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     avisar(v === 'log' ? 'Escala logarítmica: la distancia al centro de masa se comprime; los anillos marcan 0.1, 1, 10… UA' : 'Escala lineal', false);
   }
   $('#b-escala').addEventListener('click', ev => { const b = ev.target.closest('button'); if (b) ponerEscala(b.dataset.v); });
+
+  // Marco de referencia: quién queda quieto en el centro de la vista. «Sol» y
+  // «Tierra» buscan el cuerpo con ese preset; «Seleccionado», el elegido
+  const botonMarco = () => {
+    const c = ESC.marco !== 'inercial' ? cDe(ESC.marco) : null;
+    return !c ? 'inercial' : c.preset === 'sol' ? 'sol' : c.preset === 'tierra' ? 'tierra' : 'sel';
+  };
+  function marcarMarco() {
+    const v = botonMarco();
+    document.querySelectorAll('#b-marco button').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.v === v));
+      if (b.dataset.v === 'sol' || b.dataset.v === 'tierra') b.disabled = !ESC.cuerpos.some(c => c.preset === b.dataset.v);
+    });
+  }
+  function ponerMarco(v) {
+    let id = 'inercial';
+    if (v === 'sol' || v === 'tierra') {
+      const c = ESC.cuerpos.find(q => q.preset === v);
+      if (!c) { avisar(v === 'sol' ? 'No hay un Sol en la escena' : 'No hay una Tierra en la escena', false); return; }
+      id = c.id;
+    } else if (v === 'sel') {
+      if (!cDe(sel)) { avisar('Selecciona primero el cuerpo que quieres dejar quieto en el centro', false); return; }
+      id = sel;
+    }
+    if (id === ESC.marco) return;
+    ESC.marco = id; vistaTocada = false;
+    marcarMarco(); encuadrar(); escala0 = tz.vista.escala; zoomTexto(); registrar(); todo();
+    const c = cDe(id);
+    avisar(!c ? 'Marco inercial: el centro de masa no se mueve'
+      : c.preset === 'tierra' ? 'La Tierra quieta en el centro: el cielo de Ptolomeo. Los planetas hacen bucles (movimiento retrógrado)'
+        : c.preset === 'sol' ? 'El Sol quieto en el centro: el modelo de Copérnico'
+          : `${c.nombre} quieto en el centro`, false);
+  }
+  $('#b-marco').addEventListener('click', ev => { const b = ev.target.closest('button'); if (b && !b.disabled) ponerMarco(b.dataset.v); });
+  function siguienteMarco() {
+    const orden = ['inercial', 'sol', 'tierra'].filter(v => v === 'inercial' || ESC.cuerpos.some(c => c.preset === v));
+    ponerMarco(orden[(orden.indexOf(botonMarco()) + 1) % orden.length]);
+  }
   function alternarIntegrador() {
     const orden = ['auto', 'adaptativo', 'yoshida4'];
     ESC.integrador = orden[(orden.indexOf(ESC.integrador) + 1) % 3];
@@ -1449,6 +1541,11 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     ['i-encuadrar', 'Encuadrar todo', 'F', encuadrarTodo],
     ['i-tema-oscuro', 'Cambiar tema claro u oscuro', '', () => Volta.ponerTema(document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro')],
     ['i-cuadricula', 'Escala de distancias lineal o logarítmica', 'L', () => ponerEscala(ESC.escala === 'log' ? 'lineal' : 'log')],
+    ['i-encuadrar', 'Centro de la vista: inercial, Sol o Tierra (heliocéntrico o geocéntrico)', 'G', siguienteMarco],
+    ['o-planeta', 'Centro de la vista: la Tierra (cielo de Ptolomeo)', '', () => ponerMarco('tierra')],
+    ['o-planeta', 'Centro de la vista: el Sol (Copérnico)', '', () => ponerMarco('sol')],
+    ['o-satelite', 'Centro de la vista: el cuerpo seleccionado', '', () => ponerMarco('sel')],
+    ['i-capas', 'Mostrar u ocultar el deferente y el epiciclo (Ptolomeo)', 'E', () => alternarCapa('ptolomeo')],
     ['i-capas', 'Mostrar u ocultar las trazas', 'T', () => alternarCapa('trazas')],
     ['i-capas', 'Mostrar u ocultar las órbitas predichas', 'O', () => alternarCapa('orbitas')],
     ['i-energia', 'Mostrar u ocultar las áreas barridas', 'A', () => alternarCapa('areas')],
@@ -1519,6 +1616,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     else if (ev.key === 'Home') irA(0);
     else if (tecla === 'f') encuadrarTodo();
     else if (tecla === 'l') ponerEscala(ESC.escala === 'log' ? 'lineal' : 'log');
+    else if (tecla === 'g') siguienteMarco();
+    else if (tecla === 'e') alternarCapa('ptolomeo');
     else if (tecla === 't') alternarCapa('trazas');
     else if (tecla === 'o') alternarCapa('orbitas');
     else if (tecla === 'a') alternarCapa('areas');

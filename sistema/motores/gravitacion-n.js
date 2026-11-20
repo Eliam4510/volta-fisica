@@ -218,6 +218,27 @@ export function sistemaSolar(claves = Object.keys(PLANETAS), o = {}) {
 }
 
 /**
+ * Descomposición de Ptolomeo de la posición de un planeta vista desde la
+ * Tierra. Como P − T = (S − T) + (P − S), el planeta recorre un epiciclo cuyo
+ * centro gira sobre un deferente centrado en la Tierra. Para un planeta
+ * exterior (más lejos del Sol que la Tierra), el deferente es su propia órbita
+ * (radio |P − S|) y el epiciclo es la de la Tierra (|S − T|), así que el
+ * epiciclo gira con periodo de un año; para uno interior, el deferente lleva
+ * al Sol y el epiciclo es la órbita del planeta. Es la misma geometría que el
+ * modelo heliocéntrico, sumada en otro orden.
+ * @param {number[]} T posición de la Tierra
+ * @param {number[]} S posición del Sol
+ * @param {number[]} P posición del planeta
+ * @returns {{exterior: boolean, centro: number[], rDeferente: number, rEpiciclo: number}}
+ */
+export function epiciclo(T, S, P) {
+  const dTS = Math.hypot(S[0] - T[0], S[1] - T[1]), dPS = Math.hypot(P[0] - S[0], P[1] - S[1]);
+  const exterior = dPS > dTS;
+  const centro = exterior ? [T[0] + P[0] - S[0], T[1] + P[1] - S[1]] : [S[0], S[1]];
+  return { exterior, centro, rDeferente: exterior ? dPS : dTS, rEpiciclo: exterior ? dTS : dPS };
+}
+
+/**
  * La Tierra y la Luna en el sistema de su centro de masa, con la Luna en el
  * perigeo sobre el eje x (o en la anomalía media M).
  * @param {{M?: number, omega?: number}} [o]

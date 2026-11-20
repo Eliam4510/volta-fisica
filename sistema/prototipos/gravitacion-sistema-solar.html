@@ -110,11 +110,16 @@
       <span class="etq">Escala</span>
       <div class="segmentado texto" id="b-escala" data-ayuda="Escala de distancias: lineal, o logarítmica alrededor del cuerpo central (cabe todo el Sistema Solar)|Distance scale|L"><button data-v="lineal" aria-pressed="true">Lineal</button><button data-v="log" aria-pressed="false">Logarítmica</button></div>
     </div>
+    <div class="flotante ar-izq" style="top:calc(var(--e-3) + 36px)" role="group" aria-label="Centro de la vista">
+      <span class="etq">Centro</span>
+      <div class="segmentado texto" id="b-marco" data-ayuda="Marco de referencia de la vista: inercial (el centro de masa no se mueve), o con el Sol, la Tierra o el cuerpo seleccionado quieto en el centro. Con la Tierra al centro se ve el cielo de Ptolomeo|Reference frame|G"><button data-v="inercial" aria-pressed="true">Inercial</button><button data-v="sol" aria-pressed="false">Sol</button><button data-v="tierra" aria-pressed="false">Tierra</button><button data-v="sel" aria-pressed="false">Seleccionado</button></div>
+    </div>
     <div class="flotante ar-der" role="group" aria-label="Capas">
       <svg class="ico"><use href="#i-capas"/></svg>
       <button class="capa-btn" data-capa="trazas" aria-pressed="true" data-ayuda="Trayectorias recorridas|Trails|T">Trazas</button>
       <button class="capa-btn" data-capa="orbitas" aria-pressed="true" data-ayuda="Órbita predicha de cada cuerpo: la cónica que seguiría sin perturbaciones|Predicted orbits|O">Órbitas</button>
       <button class="capa-btn" data-capa="areas" aria-pressed="false" data-ayuda="Áreas barridas en intervalos iguales por el cuerpo seleccionado (segunda ley de Kepler)|Swept areas|A">Áreas</button>
+      <button class="capa-btn" data-capa="ptolomeo" aria-pressed="false" data-ayuda="Modelo de Ptolomeo con la Tierra al centro: el deferente y el epiciclo de cada planeta (la misma geometría que el modelo heliocéntrico)|Ptolemaic model|E">Ptolomeo</button>
       <button class="capa-btn" data-capa="cm" aria-pressed="true" data-ayuda="Centro de masa del sistema y su recorrido|Center of mass|C">Centro de masa</button>
       <button class="capa-btn" data-capa="vectores" aria-pressed="true" data-ayuda="Velocidad y aceleración del cuerpo seleccionado|Vectors">Vectores</button>
       <button class="capa-btn" data-capa="tamano" aria-pressed="false" data-ayuda="Tamaño real de los cuerpos a la escala de las distancias (casi siempre menor que un píxel)|True size">Tamaño real</button>
