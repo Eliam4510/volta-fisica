@@ -7,6 +7,22 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.23.0] - 2026-11-20
+
+Transformador en Circuitos.
+
+### Añadido
+
+- Transformador de cuatro bornes: dos bobinas acopladas con inductancia
+  del primario, relación de vueltas N₂/N₁ y acoplamiento k. Funciona en
+  el tiempo (con la energía mutua M·I₁·I₂ en el registro de energía) y en
+  alterna (fasores y Bode).
+- El inspector lee voltaje y corriente del primario y del secundario; las
+  gráficas pueden mostrar la corriente del secundario («Tr·s»).
+- Ejemplo «Transformador reductor» (100 V a 10 V, con n y R en
+  deslizadores): la potencia que entra por el primario sale casi entera
+  por el secundario.
+
 ## [0.22.0] - 2026-11-20
 
 Diodos y LED en Circuitos.

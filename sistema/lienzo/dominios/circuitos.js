@@ -37,6 +37,7 @@
     bateria: [0.5, 0.25, 0.13],   // u: media placa larga, media corta, media separación
     fuenteCA: 0.42,               // u: radio del círculo de la fuente alterna
     diodo: [0.3, 0.26],           // u: medio largo y medio alto del triángulo
+    trafo: [0.32, 0.6, 0.15],     // u: x de cada bobina, media altura de las bobinas, radio de cada vuelta
     espira: 0.14,                 // u: radio de cada espira del inductor (4 espiras)
     bombilla: 0.3, medidor: 0.3,  // u: radios
     contacto: 3.25,               // px: radio de los contactos de un interruptor
@@ -189,6 +190,28 @@
         // + en el borne a, como en la batería
         const [px, py] = S(-rr - 0.2, rr * 0.75);
         c.lineWidth = 1.5; this._circSigno(px, py, 1);
+        break;
+      }
+      case 'transformador': {
+        // Dos bobinas enfrentadas con el núcleo en medio; bornes en las esquinas
+        // (primario a la izquierda, secundario a la derecha) y puntos de polaridad
+        const [xb, hb, rv] = GC.trafo;
+        for (const sx of [-1, 1]) {
+          linea([sx, 1], [sx * xb, 1]); linea([sx * xb, 1], [sx * xb, hb]);
+          linea([sx, -1], [sx * xb, -1]); linea([sx * xb, -1], [sx * xb, -hb]);
+          const [cx0] = S(sx * xb, 0), vueltas = 4, paso = 2 * hb / vueltas;
+          for (let k = 0; k < vueltas; k++) {
+            const yc = hb - paso * (k + 0.5), [cx, cy] = S(sx * xb, yc), [ex, ey] = S(sx * xb, yc + rv);
+            const rr = Math.hypot(ex - cx, ey - cy);
+            // Semicírculo hacia fuera del núcleo (girado con el componente)
+            const [ox, oy] = S(sx * xb + sx * 0.3, yc), ang = Math.atan2(oy - cy, ox - cx);
+            c.beginPath(); c.arc(cx, cy, rr, ang - Math.PI / 2, ang + Math.PI / 2); c.stroke();
+            void cx0;
+          }
+        }
+        c.save(); c.lineWidth = 1.5; linea([-0.07, hb + 0.05], [-0.07, -hb - 0.05]); linea([0.07, hb + 0.05], [0.07, -hb - 0.05]); c.restore();
+        // Puntos de polaridad junto al principio de cada bobina
+        for (const sx of [-1, 1]) { const [px, py] = S(sx * (xb + 0.24), hb - 0.05); c.fillStyle = t.tinta; c.beginPath(); c.arc(px, py, 2.25, 0, 2 * Math.PI); c.fill(); }
         break;
       }
       case 'diodo': case 'led': {

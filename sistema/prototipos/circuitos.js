@@ -38,6 +38,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   const CAT = {
     bateria: { nombre: 'Batería', en: 'Battery', ico: 'o-bateria', pref: 'E', params: [['E', 'Fem', 'V', 'potencial', 6], ['r', 'Resistencia interna', 'Ω', 'resistencia', 0]] },
     'fuente-ca': { nombre: 'Fuente alterna', en: 'AC source', ico: 'o-fuente-ca', pref: 'V', params: [['V0', 'Amplitud', 'V', 'potencial', 10], ['f', 'Frecuencia', 'Hz', 'frecuencia', 50], ['fase', 'Fase', '°', 'angulo', 0], ['r', 'Resistencia interna', 'Ω', 'resistencia', 0]] },
+    transformador: { nombre: 'Transformador', en: 'Transformer', ico: 'o-transformador', pref: 'Tr', params: [['L1', 'Inductancia del primario', 'H', 'inductancia', 10], ['n', 'Relación de vueltas N₂/N₁', '', 'adimensional', 0.1], ['k', 'Acoplamiento', '', 'adimensional', 0.999]] },
     diodo: { nombre: 'Diodo', en: 'Diode', ico: 'o-diodo', pref: 'D', params: [['Vd', 'Voltaje directo (10 mA)', 'V', 'potencial', 0.7], ['n', 'Factor de idealidad', '', 'adimensional', 1.8]] },
     led: { nombre: 'LED', en: 'LED', ico: 'o-led', pref: 'LED', params: [['Vd', 'Voltaje directo (20 mA)', 'V', 'potencial', 2], ['n', 'Factor de idealidad', '', 'adimensional', 2]] },
     'fuente-corriente': { nombre: 'Fuente de corriente', en: 'Current source', ico: 'o-fuente-corriente', pref: 'J', params: [['I', 'Corriente', 'A', 'corriente', 0.01]] },
@@ -123,6 +124,25 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       },
       graficas: [{ m: 'V', series: [{ id: 'V' }, { id: 'C' }] }, { m: 'I', series: [{ id: 'R' }] }, { m: 'bode', id: 'R', mag: 'i', parte: 'amp' }],
       sel: 'R',
+    },
+    {
+      clave: 'transformador', titulo: 'Transformador reductor', tipo: 'Ejemplo', duracion: 0.2, dt: 0.0002,
+      nota: 'El primario recibe 100 V de amplitud a 50 Hz; el secundario tiene la décima parte de vueltas (n = N₂/N₁ = 0.1) y da unos 10 V a la resistencia. La corriente se multiplica por 1/n: el transformador reduce el voltaje y aumenta la corriente conservando casi toda la potencia. Mueve n y R.',
+      elementos: [
+        { id: 'V', tipo: 'fuente-ca', p: [0, 4], rot: 270, V0: 100, f: 50, fase: 0, r: 0, etq: 'izq' },
+        { id: 'Tr', tipo: 'transformador', p: [5, 4], rot: 0, L1: 10, n: 0.1, k: 0.999, etq: 'arr' },
+        { id: 'R', tipo: 'resistencia', p: [9, 4], rot: 270, R: 10, etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [2, 3], rot: 0 },
+      ],
+      cables: [[[0, 5], [4, 5]], [[0, 3], [4, 3]], [[6, 5], [9, 5]], [[9, 3], [6, 3]]],
+      nodos: {},
+      acciones: [],
+      variables: {
+        n: { sim: 'n', val: 0.1, min: 0.05, max: 2, paso: 0.05, u: '', factor: 1, liga: [['Tr', 'n']] },
+        R: { sim: 'R', val: 10, min: 1, max: 1000, paso: 1, u: 'Ω', factor: 1, liga: [['R', 'R']] },
+      },
+      graficas: [{ m: 'V', series: [{ id: 'V' }, { id: 'R' }] }, { m: 'I', series: [{ id: 'Tr' }, { id: 'Tr·s' }] }, { m: 'bode', id: 'R', mag: 'v', parte: 'amp' }],
+      sel: 'Tr',
     },
     {
       clave: 'rectificador', titulo: 'Rectificador de media onda con filtro', tipo: 'Ejemplo', duracion: 0.1, dt: 0.0001,
@@ -639,10 +659,12 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   const LOCALES = {
     tierra: [[0, 0]],
     'interruptor-3': [[-1, 0], [1, 1], [1, 0], [1, -1]],
+    // Transformador: [p+, p−, s+, s−]
+    transformador: [[-1, 1], [-1, -1], [1, 1], [1, -1]],
   };
   const bornes = el => (LOCALES[el.tipo] || [[-1, 0], [1, 0]]).map(l => { const [x, y] = rotar(l, el.rot || 0); return [el.p[0] + x, el.p[1] + y]; });
   // Tramo de patilla de cada borne (del borne al cuerpo), en coordenadas locales
-  const PATILLAS = { 'interruptor-3': [[[-1, 0], [-0.5, 0]], [[1, 1], [0.5, 1]], [[1, 0], [0.91, 0]], [[1, -1], [0.5, -1]]], tierra: [] };
+  const PATILLAS = { 'interruptor-3': [[[-1, 0], [-0.5, 0]], [[1, 1], [0.5, 1]], [[1, 0], [0.91, 0]], [[1, -1], [0.5, -1]]], transformador: [[[-1, 1], [-0.32, 1]], [[-1, -1], [-0.32, -1]], [[1, 1], [0.32, 1]], [[1, -1], [0.32, -1]]], tierra: [] };
   const CUERPO = { resistencia: 0.56, reostato: 0.56, bateria: 0.13, 'fuente-ca': 0.42, diodo: 0.3, led: 0.3, capacitor: 0.13, inductor: 0.56, bombilla: 0.3, voltimetro: 0.3, amperimetro: 0.3, 'fuente-corriente': 0.3, interruptor: 0.5 };
   function patillas(el) {
     const loc = PATILLAS[el.tipo] || [[[-1, 0], [-CUERPO[el.tipo], 0]], [[1, 0], [CUERPO[el.tipo], 0]]];
@@ -891,6 +913,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       case 'bateria': valor = valorCon(el.E, 'V'); break;
       case 'fuente-ca': valor = `${valorCon(el.V0, 'V')} · ${valorCon(el.f, 'Hz')}`; break;
       case 'diodo': case 'led': valor = k >= 0 ? `I = ${valorCon(s.I[k], 'A')}` : valorCon(el.Vd, 'V'); break;
+      case 'transformador': valor = `N₂/N₁ = ${fmt(el.n, 3)}`; break;
       case 'fuente-corriente': valor = valorCon(el.I, 'A'); break;
       case 'resistencia': case 'reostato': valor = valorCon(el.R, 'Ω'); break;
       case 'capacitor': valor = k >= 0 ? `q = ${valorCon(s.q[k], 'C')}` : valorCon(el.C, 'F'); break;
@@ -1120,6 +1143,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       case 'bateria': return valorCon(el.E, 'V', 3);
       case 'fuente-ca': return `${valorCon(el.V0, 'V', 3)} ~`;
       case 'diodo': case 'led': return valorCon(el.Vd, 'V', 3);
+      case 'transformador': return `n = ${fmt(el.n, 3)}`;
       case 'resistencia': case 'reostato': return valorCon(el.R, 'Ω', 3);
       case 'capacitor': return valorCon(el.C, 'F', 3);
       case 'inductor': return valorCon(el.L, 'H', 3);
@@ -1152,6 +1176,11 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         case 'bateria': filas = [L('V', 'bornes', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('W', '', s.W[k], 'J')]; if (el.r > 0) filas.push(L('Q', 'r', s.Q[k], 'J')); break;
         case 'fuente-ca': filas = [L('V', 'bornes', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('W', '', s.W[k], 'J')]; if (el.r > 0) filas.push(L('Q', 'r', s.Q[k], 'J')); break;
         case 'fuente-corriente': filas = [L('I', '', I, 'A'), L('V', '', -vv, 'V'), L('W', '', s.W[k], 'J')]; break;
+        case 'transformador': {
+          const ks = iDe(el.id + '·s');
+          filas = [L('V', '1', vv, 'V'), L('I', '1', I, 'A'), L('V', '2', limpio(s.v[ks], X.Vmax), 'V'), L('I', '2', limpio(s.I[ks], X.Imax), 'A'), L('U', 'B', s.U[k] + s.U[ks], 'J')];
+          break;
+        }
         case 'diodo': case 'led':
           filas = [L('V', '', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('Q', '', s.Q[k], 'J'), ['estado', '', I > 1e-4 ? 'conduce' : 'no conduce', '']];
           if (el.tipo === 'led') filas.push(['brillo', '', fmt(100 * Math.min(1, Math.max(0, I) / 0.02), 3), '%']);
@@ -1275,7 +1304,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   };
   const familiaSerie = (g, sr) => (g.m === 'U' && sr.id && elemento(sr.id)?.tipo === 'inductor' ? 'magnetico' : MAG[g.m].fam);
   const simboloSerie = (g, sr) => (sr.nodo ? ['V', sr.nodo] : [MAG[g.m].sim, sr.id]);
-  const serieValida = sr => (sr.nodo ? !!ESC.nodos[sr.nodo] : !!elemento(sr.id));
+  const serieValida = sr => (sr.nodo ? !!ESC.nodos[sr.nodo] : !!elemento(String(sr.id).replace(/·s$/, '')));
 
   function cabecera(id, g, unidad) {
     const series = (g.series || []).filter(serieValida);
@@ -1439,6 +1468,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         filas.push([`Energía en ${n}`, 'electrico', s.U[k], 'Energía eléctrica almacenada, q²/2C|Stored electric energy']);
       }
       else if (el.tipo === 'inductor') filas.push([`Energía en ${n}`, 'magnetico', s.U[k], 'Energía magnética almacenada, ½LI²|Stored magnetic energy']);
+      else if (el.tipo === 'transformador') filas.push([`Energía en ${n}`, 'magnetico', s.U[k] + s.U[iDe(el.id + '·s')], 'Energía magnética de las dos bobinas, ½L₁I₁² + ½L₂I₂² + M·I₁I₂|Stored magnetic energy']);
       else if (el.tipo === 'resistencia' || el.tipo === 'reostato' || el.tipo === 'bombilla' || el.tipo === 'diodo' || el.tipo === 'led') filas.push([el.tipo === 'led' ? `Luz y calor en ${n}` : `Calor en ${n}`, 'termico', s.Q[k], 'Calor de Joule acumulado|Joule heat']);
       else if (ES_INTERRUPTOR(el.tipo) || el.tipo === 'amperimetro' || el.tipo === 'voltimetro') Qcables += s.Q[k];
     }
@@ -1693,6 +1723,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       const el = { id, tipo: e.tipo, p: punto(e.p), rot: [0, 90, 180, 270].includes(e.rot) ? e.rot : 0, etq: ['arr', 'aba', 'izq', 'der'].includes(e.etq) ? e.etq : 'arr' };
       for (const [k, , , , def] of CAT[e.tipo].params) el[k] = numero(e[k], def, k === 'x' ? 0 : k === 'frio' ? 1 : -1e9, k === 'x' ? 1 : 1e12);
       if (el.tipo === 'led') el.color = COLORES_LED[e.color] ? e.color : 'rojo';
+      if (el.tipo === 'transformador') el.k = Math.min(0.9999, Math.max(0, el.k));
       for (const k of ['R', 'C', 'L', 'Vn', 'Pn', 'f', 'Vd', 'n']) if (k in el && !(el[k] > 0)) el[k] = CAT[e.tipo].params.find(p => p[0] === k)[4];
       if (el.tipo === 'interruptor') el.cerrado = !!e.cerrado;
       if (el.tipo === 'interruptor-3') el.posicion = ['a', 'b', 'c'].includes(e.posicion) ? e.posicion : null;
@@ -1721,7 +1752,12 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       };
     }
     // Gráficas: solo magnitudes conocidas y series de componentes o nodos que existen
-    const serie = sr => (sr && typeof sr.nodo === 'string' && nodos[sr.nodo] ? { nodo: sr.nodo } : sr && ids.has(idDe(sr.id)) ? { id: idDe(sr.id) } : null);
+    // El secundario de un transformador se nombra «Tr·s»
+    const serie = sr => {
+      if (sr && typeof sr.nodo === 'string' && nodos[sr.nodo]) return { nodo: sr.nodo };
+      if (sr && typeof sr.id === 'string' && sr.id.endsWith('·s') && elementos.some(e => e.id === idDe(sr.id.slice(0, -2)) && e.tipo === 'transformador')) return { id: idDe(sr.id.slice(0, -2)) + '·s' };
+      return sr && ids.has(idDe(sr.id)) ? { id: idDe(sr.id) } : null;
+    };
     const graf = g => {
       if (!g || typeof g !== 'object') return null;
       if (['V', 'I', 'q', 'U'].includes(g.m)) return { m: g.m, series: (Array.isArray(g.series) ? g.series : []).map(serie).filter(Boolean).slice(0, 3) };

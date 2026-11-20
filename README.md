@@ -142,7 +142,7 @@ sistema/        interfaz servida por la aplicación
   lienzo/       gramática visual (trazo.js), gráficas y símbolos por dominio
   componentes/  componentes de interfaz y comportamiento común
   tokens/       tokens de diseño (tokens.json es la fuente única)
-  iconos/       245 iconos (fuente, sprite y catálogo)
+  iconos/       246 iconos (fuente, sprite y catálogo)
   fuentes/      IBM Plex Sans, IBM Plex Mono, STIX Two Text (OFL)
   prototipos/   pantallas: inicio, mecánica, electrostática, termodinámica, guía
 src-tauri/      aplicación de Windows (Tauri 2, Rust)
