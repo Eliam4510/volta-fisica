@@ -1016,3 +1016,70 @@ describe('fuerza aplicada en un punto del cuerpo: volcar o deslizar', () => {
     cerca(s.th, 0, 1e-9);
   });
 });
+
+describe('caras de los bloques: apilar, chocar con discos', () => {
+  const suelo = (mu = 0.6) => ({ id: 'suelo', tipo: 'segmento', a: [-3, 0], b: [3, 0], e: 0, mu });
+  it('dos bloques apilados quedan quietos: el de arriba se apoya en la cara del de abajo', () => {
+    const sim = simularMecanica({
+      duracion: 1, muCuerpos: 0.5, eParticulas: 0, superficies: [suelo()],
+      particulas: [
+        { id: 'A', m: 2, forma: 'bloque', ancho: 0.6, alto: 0.3, p: [0, 0.15], v: [0, 0] },
+        { id: 'B', m: 1, forma: 'bloque', ancho: 0.3, alto: 0.2, p: [0.1, 0.4], v: [0, 0] },
+      ],
+    });
+    expect(sim.eventos).toEqual([]);
+    const claves = Object.keys(sim.tramos[0].modo.contactos).sort();
+    // B (índice 1) apoya sus vértices 0 y 1 en la cara de arriba de A (cara 2: superficie 1 + 2 = 3)
+    expect(claves).toEqual(['0.0:0', '0.1:0', '1.0:3', '1.1:3']);
+    const [A, B] = estadoMecanica(sim, 1);
+    cerca(A.y, 0.15, 1e-10); cerca(B.y, 0.4, 1e-10); cerca(B.th, 0, 1e-10);
+  });
+
+  it('un bloque que cae sobre otro: choque inelástico, quedan apilados y el balance cierra', () => {
+    const sim = simularMecanica({
+      duracion: 1, muCuerpos: 0.5, eParticulas: 0, superficies: [suelo()],
+      particulas: [
+        { id: 'A', m: 2, forma: 'bloque', ancho: 0.6, alto: 0.3, p: [0, 0.15], v: [0, 0] },
+        { id: 'B', m: 1, forma: 'bloque', ancho: 0.3, alto: 0.2, p: [0.1, 0.8], v: [0, 0] },
+      ],
+    });
+    expect(sim.incompleta).toBeNull();
+    const [A, B] = estadoMecanica(sim, 1);
+    cerca(A.y, 0.15, 1e-8); cerca(B.y, 0.4, 1e-7); cerca(B.vy, 0, 1e-8);
+    const e = energiaMecanica(sim, 1);
+    cerca(e.E + e.Qc + e.Qi, energiaMecanica(sim, 0).E, 1e-8);
+    // Toda la cinética de B al llegar (m·g·0.4) se pierde en el choque
+    cerca(e.Qi, 1 * 9.8 * 0.4, 1e-6);
+  });
+
+  it('un disco choca de frente con un bloque libre (sin fricción): se conservan el momento y la energía', () => {
+    const sim = simularMecanica({
+      g: [0, 0], duracion: 1, eParticulas: 1,
+      particulas: [
+        { id: 'D', m: 1, radio: 0.1, p: [-1, 0], v: [2, 0] },
+        { id: 'B', m: 3, forma: 'bloque', ancho: 0.4, alto: 0.4, p: [0.5, 0], v: [0, 0] },
+      ],
+    });
+    expect(ev(sim, 'Choque')).toBeTruthy();
+    const [D, B] = estadoMecanica(sim, 1);
+    // Choque central elástico 1D: v_D = (1 − 3)/4·2 = −1, v_B = 2·1/4·2 = 1; sin giro
+    cerca(D.vx, -1, 1e-9); cerca(B.vx, 1, 1e-9); cerca(B.w, 0, 1e-9);
+    cerca(energiaMecanica(sim, 1).E, energiaMecanica(sim, 0).E, 1e-9);
+  });
+
+  it('un disco que golpea un bloque fuera del centro lo hace girar y conserva el momento angular', () => {
+    const sim = simularMecanica({
+      g: [0, 0], duracion: 1, eParticulas: 1,
+      particulas: [
+        { id: 'D', m: 1, radio: 0.05, p: [-1, 0.15], v: [2, 0] },
+        { id: 'B', m: 2, forma: 'bloque', ancho: 0.4, alto: 0.4, p: [0.5, 0], v: [0, 0] },
+      ],
+    });
+    const L = est => est.reduce((s, q, k) => s + [1, 2][k] * (q.x * q.vy - q.y * q.vx), 0) + 2 * (0.16 + 0.16) / 12 * est[1].w;
+    const [D, B] = estadoMecanica(sim, 1);
+    expect(B.w).toBeLessThan(-0.1);    // empuje a la derecha por encima del centro: gira en sentido horario
+    cerca(D.vx * 1 + B.vx * 2, 2, 1e-9);
+    cerca(L(estadoMecanica(sim, 1)), L(estadoMecanica(sim, 0)), 1e-9);
+    cerca(energiaMecanica(sim, 1).E, energiaMecanica(sim, 0).E, 1e-9);
+  });
+});

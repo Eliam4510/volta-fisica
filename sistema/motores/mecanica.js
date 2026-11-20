@@ -94,7 +94,8 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {Superficie[]} [superficies]
  * @property {Conector[]} [conectores]
  * @property {number} [duracion=5]
- * @property {number} [eParticulas=1]  Restitución entre partículas
+ * @property {number} [eParticulas=1]  Restitución entre partículas (también contra las caras de un bloque)
+ * @property {number} [muCuerpos=0]    Fricción en los contactos con las caras de un bloque
  * @property {number} [umbral=1e-3]    Rapidez normal (m/s) bajo la cual un rebote se convierte en contacto
  * @property {number} [rtol=1e-10]
  * @property {number} [maxEventos=2000] Límite de eventos (regla post-Zeno cerca del límite)
@@ -165,6 +166,7 @@ function preparar(e) {
   const g = e.g ?? [0, -9.8];
   // Una superficie puede ir sobre un cuerpo (sobre: id): su geometría es
   // relativa a la posición de ese cuerpo y se traslada con él (sin girar)
+  /** @type {any[]} */
   const sup = (e.superficies || []).map(s => ({ ...s, geo: s.tipo === 'segmento' ? geoSegmento(s) : null, j: s.sobre != null ? idx[s.sobre] : -1 }));
   for (const s of sup) if (s.j == null) throw new Error(`La superficie ${s.id} va sobre un cuerpo que no existe.`);
   const con = (e.conectores || []).map(c => ({ ...c, ia: idx[c.a], ib: c.b != null ? idx[c.b] : -1 }));
@@ -200,7 +202,21 @@ function preparar(e) {
     else if (p.inercia > 0 && p.radio > 0) { rot[i] = I.length; I.push(p.inercia * p.m * p.radio ** 2); }
   });
   for (const Ik of I) im.push(1 / Ik);
-  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2, vert };
+  // Caras de los bloques: cuatro segmentos que giran con él (gira: true, en su
+  // marco). Los vértices van en sentido antihorario, así que de b a a el
+  // sólido queda a la derecha y la normal libre apunta hacia fuera. Con ellas,
+  // los vértices de otro bloque y los discos chocan con el bloque y se apoyan
+  // en él con la misma maquinaria que contra el suelo (apilar cajas)
+  const nReales = sup.length, caras = [];
+  vert.forEach((vs, i) => {
+    if (!vs) return;
+    for (let q = 0; q < 4; q++) {
+      const s0 = { id: `${P[i].id}#${q}`, tipo: 'segmento', a: vs[(q + 1) % 4], b: vs[q], e: e.eParticulas ?? 1, mu: e.muCuerpos ?? 0 };
+      sup.push({ ...s0, geo: geoSegmento(s0), j: i, gira: true });
+      caras.push([i, q]);
+    }
+  });
+  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2, vert, nReales, caras };
   actualizarImpuestas(S, 0);
   return S;
 }
@@ -242,8 +258,49 @@ function brazo(S, y, i, k) {
   const th = y[S.base + 2 * S.rot[i]], c = Math.cos(th), s = Math.sin(th), [vx, vy] = S.vert[i][k];
   return [c * vx - s * vy, s * vx + c * vy];
 }
+/**
+ * Punto de apoyo k de i en el mundo: posición P, velocidad V, la parte de su
+ * aceleración que no depende de las aceleraciones (A0, la centrípeta de un
+ * vértice) y sus entradas del gradiente para una dirección d.
+ * @param {any} S @param {number[]} y @param {number} i @param {number} k
+ */
+function datosPunto(S, y, i, k) {
+  const P = [y[4 * i], y[4 * i + 1]], V = [y[4 * i + 2], y[4 * i + 3]];
+  if (k < 0) return { P, V, A0: [0, 0], entradas: (/** @type {number[]} */ d) => [[i, d[0], d[1]]] };
+  const b = brazo(S, y, i, k), w = y[S.base + 2 * S.rot[i] + 1], q = S.n + S.rot[i];
+  return {
+    P: [P[0] + b[0], P[1] + b[1]], V: [V[0] - w * b[1], V[1] + w * b[0]], A0: [-w * w * b[0], -w * w * b[1]],
+    entradas: (/** @type {number[]} */ d) => [[i, d[0], d[1]], [q, d[1] * b[0] - d[0] * b[1], 0]],
+  };
+}
+/** Centro, velocidad, ángulo y ω del cuerpo que lleva una superficie que gira. @param {any} S @param {any} sup @param {number[]} y */
+function marcoPortador(S, sup, y) {
+  const B = sup.j, q = S.base + 2 * S.rot[B], th = y[q];
+  return { c: [y[4 * B], y[4 * B + 1]], v: [y[4 * B + 2], y[4 * B + 3]], w: y[q + 1], co: Math.cos(th), si: Math.sin(th) };
+}
+/** Vector del marco del portador llevado al mundo. */
+const alMundo = (/** @type {any} */ m, /** @type {number[]} */ u) => [m.co * u[0] - m.si * u[1], m.si * u[0] + m.co * u[1]];
+
+/**
+ * Fila de una dirección d (normal o tangente, en el mundo) para el punto pt
+ * contra un portador que gira: valor d·(Ṗ − v_B − ω_B ẑ×r) con r = P − c_B
+ * (la velocidad relativa al punto material del portador que está ahí), sus
+ * entradas del gradiente y J̇v = ω_B(ẑ×d)·rel + d·A0 − ω_B·d·(ẑ×(Ṗ − v_B)).
+ */
+function filaGirando(S, sup, m, pt, d) {
+  const r = sub(pt.P, m.c), VB = sub(pt.V, m.v), rel = [VB[0] + m.w * r[1], VB[1] - m.w * r[0]];
+  const grad = [...pt.entradas(d), [sup.j, -d[0], -d[1]], [S.n + S.rot[sup.j], d[0] * r[1] - d[1] * r[0], 0]];
+  const jdv = m.w * (-d[1] * rel[0] + d[0] * rel[1]) + dot(d, pt.A0) - m.w * (-d[0] * VB[1] + d[1] * VB[0]);
+  return { valor: dot(d, rel), grad, jdv, r };
+}
+
 /** Posición del apoyo k de i en el marco de la superficie. @param {any} S @param {any} sup @param {number[]} y @param {number} i @param {number} k */
 function puntoApoyo(S, sup, y, i, k) {
+  if (sup.gira) {
+    // En el marco del portador que gira: R_Bᵀ·(P − c_B)
+    const m = marcoPortador(S, sup, y), d = sub(datosPunto(S, y, i, k).P, m.c);
+    return [m.co * d[0] + m.si * d[1], -m.si * d[0] + m.co * d[1]];
+  }
   const p = puntoRel(sup, y, i);
   if (k < 0) return p;
   const b = brazo(S, y, i, k);
@@ -251,6 +308,10 @@ function puntoApoyo(S, sup, y, i, k) {
 }
 /** Velocidad del apoyo k de i respecto de la superficie: v + ω ẑ×(R·v_k). */
 function velocidadApoyo(S, sup, y, i, k) {
+  if (sup.gira) {
+    const m = marcoPortador(S, sup, y), pt = datosPunto(S, y, i, k), r = sub(pt.P, m.c);
+    return [pt.V[0] - m.v[0] + m.w * r[1], pt.V[1] - m.v[1] - m.w * r[0]];
+  }
   const v = velocidadRel(sup, y, i);
   if (k < 0) return v;
   const b = brazo(S, y, i, k), w = y[S.base + 2 * S.rot[i] + 1];
@@ -264,6 +325,18 @@ function velocidadApoyo(S, sup, y, i, k) {
  * @param {any} S @param {any} sup @param {number} i @param {number} k
  */
 function restriccionApoyo(S, sup, i, k) {
+  if (sup.gira) {
+    // Cara de un bloque: el hueco se mide en el marco del bloque; la velocidad
+    // y el gradiente, en el mundo (con el giro del bloque)
+    const rr = k < 0 ? radio(S, i) : 0;
+    return {
+      evaluar(y) {
+        const m = marcoPortador(S, sup, y), pt = datosPunto(S, y, i, k), n = alMundo(m, sup.geo.n), d = sub(pt.P, m.c);
+        const pb = [m.co * d[0] + m.si * d[1], -m.si * d[0] + m.co * d[1]], f = filaGirando(S, sup, m, pt, n);
+        return { C: dot(sup.geo.n, sub(pb, sup.a)) - rr, Cp: f.valor, grad: f.grad, jdv: f.jdv };
+      },
+    };
+  }
   if (k < 0) return restriccionSuperficie(sup, i, radio(S, i));
   const j = sup.j, q = S.n + S.rot[i];
   if (sup.tipo === 'segmento') {
@@ -300,6 +373,21 @@ function restriccionApoyo(S, sup, i, k) {
  *   las velocidades; jdv: la parte de dvt/dt que no depende de las aceleraciones
  */
 function deslizamiento(S, sup, y, i, kv = -1) {
+  if (sup.gira) {
+    // Contra la cara de un bloque: el punto de contacto es el vértice, o el
+    // borde del disco (c − r·n̂, que gira con el disco si gira)
+    const m = marcoPortador(S, sup, y), t = alMundo(m, sup.geo.t), n = alMundo(m, sup.geo.n);
+    let pt = datosPunto(S, y, i, kv);
+    if (kv < 0) {
+      const r = radio(S, i), q = S.rot[i], w = q >= 0 ? y[S.base + 2 * q + 1] : 0, b = [-r * n[0], -r * n[1]];
+      pt = {
+        P: [pt.P[0] + b[0], pt.P[1] + b[1]], V: [pt.V[0] - w * b[1], pt.V[1] + w * b[0]], A0: [-w * w * b[0], -w * w * b[1]],
+        entradas: (/** @type {number[]} */ d) => [[i, d[0], d[1]], ...(q >= 0 ? [[S.n + q, d[1] * b[0] - d[0] * b[1], 0]] : [])],
+      };
+    }
+    const f = filaGirando(S, sup, m, pt, t);
+    return { t, vt: f.valor, cr: 0, grad: f.grad, jdv: f.jdv };
+  }
   if (kv >= 0) {
     // Vértice de un bloque: el punto de contacto es el vértice
     const p = puntoApoyo(S, sup, y, i, kv), t = tangente(sup, p), vr = velocidadApoyo(S, sup, y, i, kv), b = brazo(S, y, i, kv);
@@ -782,6 +870,16 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
         if (modo.contactos[clave]) continue;
         const r = restriccionApoyo(S, sup, i, kv);
         const C0 = r.evaluar(y0).C, dentro0 = margenSuperficie(sup, puntoApoyo(S, sup, y0, i, kv)) >= 0;
+        // Un punto detrás de la cara de un bloque (al otro lado de su recta)
+        // no puede chocar con ella sin pasar antes al lado libre: se espera a
+        // ese paso (C → 0 creciendo) y entonces se rehacen los eventos. Con
+        // max(C, −margen), el punto de un bloque apoyado sobre otro, justo en
+        // la recta de la cara de al lado, cruzaba el borde con el ruido de cada
+        // paso y el evento descartado se repetía sin fin
+        if (sup.gira && C0 < -TOL_PENETRACION) {
+          ev.push({ nombre: `frente:${clave}`, direccion: 1, terminal: true, g: (t, y) => r.evaluar(y).C });
+          continue;
+        }
         // Un hueco inicial nulo o negativo no cambiaría de signo: se mide desde él
         const off = C0 <= TOL_HUECO && C0 > -tolContacto(Math.max(radio(S, i), 1e-3)) * 100 && dentro0 ? Math.min(C0, 0) - TOL_HUECO : 0;
         ev.push({
@@ -1462,6 +1560,8 @@ export function simularMecanica(escena) {
       const porBorde = margenSuperficie(S.sup[js], puntoApoyo(S, S.sup[js], y, i, kv)) <= TOL_HUECO && C < -TOL_PENETRACION;
       descripcion = porBorde ? '' : impacto(i, js, zeno, kv);
       if (!descripcion) silenciar(nombre);
+    } else if (partes[0] === 'frente') {
+      // Pasó al lado libre de la cara de un bloque: solo se rehacen los eventos
     } else if (partes[0] === 'despegue') {
       const clave = `${partes[1]}:${partes[2]}`;
       excluir.add('sup:' + clave);
