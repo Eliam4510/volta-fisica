@@ -52,13 +52,13 @@
 
 /** Tipos de componente que entiende el motor. */
 export const TIPOS_COMPONENTE = Object.freeze([
-  'bateria', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'capacitor', 'inductor',
+  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'capacitor', 'inductor',
   'interruptor', 'interruptor-3', 'amperimetro', 'voltimetro', 'cable', 'tierra',
 ]);
 
 /** Número de bornes admitido por cada tipo. */
 const BORNES = {
-  bateria: [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], capacitor: [2],
+  bateria: [2], 'fuente-ca': [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], capacitor: [2],
   inductor: [2], interruptor: [2], 'interruptor-3': [2, 3, 4], amperimetro: [2], voltimetro: [2], cable: [2], tierra: [1],
 };
 
@@ -78,6 +78,9 @@ const BORNES = {
  * @property {string} tipo
  * @property {Array<string|null>} nodos
  * @property {number} [E]   Batería: fuerza electromotriz (V)
+ * @property {number} [V0]  Fuente alterna: amplitud (V); su fem es V0·sen(2πft + fase)
+ * @property {number} [f]   Fuente alterna: frecuencia (Hz)
+ * @property {number} [fase] Fuente alterna: fase inicial (°)
  * @property {number} [r]   Batería: resistencia interna; amperímetro y voltímetro: resistencia propia (Ω)
  * @property {number} [I]   Fuente de corriente (A)
  * @property {number} [R]   Resistencia, reóstato (Ω)
@@ -314,6 +317,7 @@ function normalizarComponente(c, i) {
   const base = { id, tipo: c.tipo, nodos };
   switch (c.tipo) {
     case 'bateria': return { ...base, E: finito(id, 'la fem E', c.E ?? 0), r: noNegativo(id, 'la resistencia interna', c.r ?? 0) };
+    case 'fuente-ca': return { ...base, V0: finito(id, 'la amplitud V₀', c.V0 ?? 0), f: positivo(id, 'la frecuencia f', c.f ?? 50), fase: finito(id, 'la fase', c.fase ?? 0), r: noNegativo(id, 'la resistencia interna', c.r ?? 0) };
     case 'fuente-corriente': return { ...base, I: finito(id, 'la corriente I', c.I ?? 0) };
     case 'resistencia': return { ...base, R: positivo(id, 'la resistencia R', c.R) };
     case 'reostato': {
@@ -362,7 +366,7 @@ export function prepararCircuito(circuito) {
   }
   // Nodos internos (no se dibujan): batería con resistencia interna, reóstato sin cursor
   for (const c of comps) {
-    if (c.tipo === 'bateria' && c.r > 0) c.ni = nodo(`${c.id}·interno`);
+    if ((c.tipo === 'bateria' || c.tipo === 'fuente-ca') && c.r > 0) c.ni = nodo(`${c.id}·interno`);
     if (c.tipo === 'reostato') c.nc = c.n.length > 2 && c.n[2] >= 0 ? c.n[2] : nodo(`${c.id}·cursor`);
   }
   const tierras = comps.filter(c => c.tipo === 'tierra').map(c => c.n[0]);
@@ -406,6 +410,13 @@ function topologia(P, estados, o) {
         if (c.r > 0) { add('V', a, c.ni, c.E, ci, 'fem'); add('G', c.ni, b, 1 / c.r, ci, 'interna'); }
         else add('V', a, b, c.E, ci, 'fem');
         break;
+      case 'fuente-ca': {
+        // Fuente de voltaje cuya fem depende del tiempo: la rama lleva su función
+        const w = 2 * Math.PI * c.f, ph = c.fase * Math.PI / 180, fn = (/** @type {number} */ t) => c.V0 * Math.sin(w * t + ph);
+        if (c.r > 0) { add('V', a, c.ni, fn(0), ci, 'fem'); ramas[ramas.length - 1].fn = fn; add('G', c.ni, b, 1 / c.r, ci, 'interna'); }
+        else { add('V', a, b, fn(0), ci, 'fem'); ramas[ramas.length - 1].fn = fn; }
+        break;
+      }
       case 'fuente-corriente': add('J', a, b, c.I, ci); break;
       case 'resistencia': add('G', a, b, 1 / c.R, ci); break;
       case 'reostato': {
@@ -588,7 +599,7 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
     T.ramas.forEach((r, k) => {
       switch (r.tipo) {
         case 'G': conductancia(S, r.ma, r.mb, r.valor); break;
-        case 'V': ramaFuente(S, r.ma, r.mb, T.M + r.jv, r.valor); break;
+        case 'V': ramaFuente(S, r.ma, r.mb, T.M + r.jv, r.fn ? r.fn(t1) : r.valor); break;
         case 'J': corrienteFija(S, r.ma, r.mb, r.valor); break;
         case 'C': if (!dc) { const [g, ieq] = companeroC(r, st, k, h, tr); conductancia(S, r.ma, r.mb, g); corrienteFija(S, r.ma, r.mb, ieq); } break;
         case 'L':
@@ -754,7 +765,7 @@ function impulso(T, P, q, W, t) {
     conductancia(S, loc(r.ma), loc(r.mb), Ct[j]);
     corrienteFija(S, loc(r.ma), loc(r.mb), -q[r.ci]);
   });
-  fuentes.forEach((k, j) => { const r = T.ramas[k]; ramaFuente(S, loc(r.ma), loc(r.mb), n + j, r.valor); });
+  fuentes.forEach((k, j) => { const r = T.ramas[k]; ramaFuente(S, loc(r.ma), loc(r.mb), n + j, r.fn ? r.fn(t) : r.valor); });
   for (const i of refs) { filaNueva(S, i); S.A[i * S.n + i] = 1; }
   const x = resolver(S, SINGULAR);
   const vn = m => (m < 0 ? 0 : x[idx[m]]);
@@ -840,7 +851,7 @@ function construirMuestra(T, P, st, t, ctx) {
     } else v[ci] = V[c.n[0]] - V[c.n[1]];
     if (!rs.length) return;
     const k0 = rs[0];
-    I[ci] = (c.tipo === 'bateria' ? -st.i[k0] : st.i[k0]) + 0;   // + 0: nunca −0
+    I[ci] = (c.tipo === 'bateria' || c.tipo === 'fuente-ca' ? -st.i[k0] : st.i[k0]) + 0;   // + 0: nunca −0
     if (c.tipo === 'capacitor') { const C = capacidadEn(c, st.t); q[ci] = C * st.v[k0]; U[ci] = q[ci] * q[ci] / (2 * C); }
     else if (c.tipo === 'inductor') U[ci] = 0.5 * c.L * st.i[k0] * st.i[k0];
   });
@@ -1041,6 +1052,7 @@ export function simularCircuito(circuito, opciones = {}) {
   let Vref = 0, Iref = 0, Gmax = 0;
   for (const c of P.comps) {
     if (c.tipo === 'bateria') { Vref += Math.abs(c.E); if (c.r > 0) Gmax = Math.max(Gmax, 1 / c.r); }
+    if (c.tipo === 'fuente-ca') { Vref += Math.abs(c.V0); if (c.r > 0) Gmax = Math.max(Gmax, 1 / c.r); }
     if (c.tipo === 'fuente-corriente') Iref += Math.abs(c.I);
     if (c.tipo === 'resistencia' || c.tipo === 'reostato') Gmax = Math.max(Gmax, 1 / c.R);
     if (c.tipo === 'bombilla') Gmax = Math.max(Gmax, 1 / c.curvaIV.R0);
@@ -1126,4 +1138,144 @@ export function balance(sim, m) {
   for (let i = 0; i < m.W.length; i++) { W += m.W[i]; Q += m.Q[i]; U += m.U[i]; }
   const dU = U - sim.U0;
   return { W, Q, U, dU, perdidas: m.perdidas, numerico: m.numerico, residuo: W - dU - Q - m.perdidas - m.numerico };
+}
+
+// ---------------------------------------------------------------------------
+// Corriente alterna: análisis en frecuencia (fasores)
+// ---------------------------------------------------------------------------
+/**
+ * Sistema lineal complejo A·x = b (partes real e imaginaria por separado),
+ * por eliminación gaussiana con pivoteo parcial.
+ * @param {number} n @param {Float64Array} Ar @param {Float64Array} Ai @param {Float64Array} br @param {Float64Array} bi
+ */
+function resolverComplejo(n, Ar, Ai, br, bi) {
+  const ar = Float64Array.from(Ar), ai = Float64Array.from(Ai), xr = Float64Array.from(br), xi = Float64Array.from(bi);
+  for (let k = 0; k < n; k++) {
+    let p = k, mejor = Math.hypot(ar[k * n + k], ai[k * n + k]);
+    for (let i = k + 1; i < n; i++) { const m = Math.hypot(ar[i * n + k], ai[i * n + k]); if (m > mejor) { mejor = m; p = i; } }
+    if (!(mejor > 1e-300)) throw new ErrorCircuito('El circuito no tiene una respuesta en alterna bien definida (hay nodos sin camino).');
+    if (p !== k) {
+      for (let j = 0; j < n; j++) { [ar[k * n + j], ar[p * n + j]] = [ar[p * n + j], ar[k * n + j]]; [ai[k * n + j], ai[p * n + j]] = [ai[p * n + j], ai[k * n + j]]; }
+      [xr[k], xr[p]] = [xr[p], xr[k]]; [xi[k], xi[p]] = [xi[p], xi[k]];
+    }
+    const pr = ar[k * n + k], pi = ai[k * n + k], d = pr * pr + pi * pi;
+    for (let i = k + 1; i < n; i++) {
+      const cr = ar[i * n + k], ci = ai[i * n + k];
+      if (!cr && !ci) continue;
+      // f = c / pivote
+      const fr = (cr * pr + ci * pi) / d, fi = (ci * pr - cr * pi) / d;
+      for (let j = k; j < n; j++) {
+        const yr = ar[k * n + j], yi = ai[k * n + j];
+        ar[i * n + j] -= fr * yr - fi * yi; ai[i * n + j] -= fr * yi + fi * yr;
+      }
+      const yr = xr[k], yi = xi[k];
+      xr[i] -= fr * yr - fi * yi; xi[i] -= fr * yi + fi * yr;
+    }
+  }
+  for (let i = n - 1; i >= 0; i--) {
+    let sr = xr[i], si = xi[i];
+    for (let j = i + 1; j < n; j++) { const yr = ar[i * n + j], yi = ai[i * n + j]; sr -= yr * xr[j] - yi * xi[j]; si -= yr * xi[j] + yi * xr[j]; }
+    const pr = ar[i * n + i], pi = ai[i * n + i], d = pr * pr + pi * pi;
+    xr[i] = (sr * pr + si * pi) / d; xi[i] = (si * pr - sr * pi) / d;
+  }
+  return [xr, xi];
+}
+
+/**
+ * @typedef {Object} FasorComponente
+ * @property {[number, number]} v  Voltaje entre sus bornes (a − b) como fasor [re, im]
+ * @property {[number, number]|null} i  Corriente de a a b por dentro (null si no se puede saber: amperímetro ideal)
+ */
+
+/**
+ * Régimen estacionario sinusoidal a la frecuencia f: cada fuente alterna es
+ * un fasor V₀∠fase y el resto del circuito, admitancias (G, jωC, 1/jωL).
+ * Las baterías y las fuentes de corriente continua no cuentan (son el
+ * régimen de continua, aparte); una bombilla vale como su resistencia
+ * nominal en caliente. Convención: x(t) = |X|·sen(ωt + arg X), la misma de
+ * las fuentes, así que |X| es la amplitud y arg X la fase respecto del seno.
+ * @param {Circuito} circuito @param {number} f @param {OpcionesCircuito} [opciones]
+ * @returns {{f: number, w: number, comp: Map<string, FasorComponente>}}
+ */
+export function respuestaFrecuencia(circuito, f, opciones = {}) {
+  if (!(f > 0) || !Number.isFinite(f)) throw new ErrorCircuito('La frecuencia tiene que ser positiva.');
+  const P = prepararCircuito(circuito), o = { ...OPCIONES_CIRCUITO, ...opciones };
+  const T = topologia(P, estadoInterruptores(P), o);
+  const w = 2 * Math.PI * f, n = T.M + T.nV;
+  const Ar = new Float64Array(n * n), Ai = new Float64Array(n * n), br = new Float64Array(n), bi = new Float64Array(n);
+  const adm = (a, b, gr, gi) => {
+    const s = (i, j, v, u) => { if (i >= 0 && j >= 0) { Ar[i * n + j] += v; Ai[i * n + j] += u; } };
+    s(a, a, gr, gi); s(b, b, gr, gi); s(a, b, -gr, -gi); s(b, a, -gr, -gi);
+  };
+  // Conductancia mínima a tierra en cada nodo (como gmin en SPICE): nodos flotantes no dejan el sistema singular
+  for (let m = 0; m < T.M; m++) Ar[m * n + m] += 1e-12;
+  const admitancia = (r) => {
+    switch (r.tipo) {
+      case 'G': return [r.valor, 0];
+      case 'C': return [0, w * capRama(r, 0)];
+      case 'L': return [0, -1 / (w * r.valor)];
+      case 'N': { const c = r.curva; return [c.I(c.Vn) / c.Vn, 0]; }
+      default: return null;
+    }
+  };
+  T.ramas.forEach((r) => {
+    const y = admitancia(r);
+    if (y) { adm(r.ma, r.mb, y[0], y[1]); return; }
+    if (r.tipo === 'V') {
+      const c = P.comps[r.ci], fila = T.M + r.jv;
+      const s = (i, j, v) => { if (i >= 0 && j >= 0) Ar[i * n + j] += v; };
+      s(r.ma, fila, 1); s(r.mb, fila, -1); s(fila, r.ma, 1); s(fila, r.mb, -1);
+      if (c.tipo === 'fuente-ca') { const ph = c.fase * Math.PI / 180; br[fila] = c.V0 * Math.cos(ph); bi[fila] = c.V0 * Math.sin(ph); }
+    }
+  });
+  const [xr, xi] = resolverComplejo(n, Ar, Ai, br, bi);
+  const Vn = (/** @type {number} */ k) => { const m = k < 0 ? -1 : T.mDe[k]; return m < 0 ? [0, 0] : [xr[m], xi[m]]; };
+  const mul = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+  /** @type {Map<string, FasorComponente>} */
+  const comp = new Map();
+  P.comps.forEach((c, ci) => {
+    if (c.tipo === 'tierra') return;
+    let v;
+    if (c.tipo === 'interruptor-3') {
+      const p = T.estados[ci], k = p ? 'abc'.indexOf(p) + 1 : -1, a = Vn(c.n[0]), b = k > 0 && k < c.n.length && c.n[k] >= 0 ? Vn(c.n[k]) : a;
+      v = [a[0] - b[0], a[1] - b[1]];
+    } else { const a = Vn(c.n[0]), b = Vn(c.n[1]); v = [a[0] - b[0], a[1] - b[1]]; }
+    let i = null;
+    const k0 = T.ramasDe[ci][0], r = k0 != null ? T.ramas[k0] : null;
+    if (r) {
+      const vr = (() => { const a = r.ma < 0 ? [0, 0] : [xr[r.ma], xi[r.ma]], b = r.mb < 0 ? [0, 0] : [xr[r.mb], xi[r.mb]]; return [a[0] - b[0], a[1] - b[1]]; })();
+      const y = admitancia(r);
+      if (y) i = mul(y, vr);
+      else if (r.tipo === 'V') i = [-xr[T.M + r.jv], -xi[T.M + r.jv]];
+    } else if (c.tipo === 'voltimetro' || c.tipo === 'interruptor' || c.tipo === 'interruptor-3') i = [0, 0];
+    comp.set(c.id, { v, i });
+  });
+  return { f, w, comp };
+}
+
+/** Módulo y fase (°) de un fasor [re, im]. */
+export function polar(/** @type {[number, number]} */ z) { return [Math.hypot(z[0], z[1]), Math.atan2(z[1], z[0]) * 180 / Math.PI]; }
+
+/**
+ * Barrido en frecuencia de una magnitud de un componente: amplitud y fase
+ * (de su voltaje o de su corriente) en n frecuencias repartidas en escala
+ * logarítmica entre fmin y fmax.
+ * @param {Circuito} circuito
+ * @param {{id: string, magnitud?: 'v'|'i', fmin: number, fmax: number, n?: number}} o
+ * @returns {{f: number[], amp: number[], fase: number[]}}
+ */
+export function barridoFrecuencia(circuito, o) {
+  const n = Math.max(2, Math.min(2000, Math.round(o.n ?? 200)));
+  if (!(o.fmin > 0) || !(o.fmax > o.fmin)) throw new ErrorCircuito('El barrido necesita 0 < f mínima < f máxima.');
+  const f = [], amp = [], fase = [];
+  for (let k = 0; k < n; k++) {
+    const fk = o.fmin * (o.fmax / o.fmin) ** (k / (n - 1));
+    const z = respuestaFrecuencia(circuito, fk).comp.get(o.id);
+    if (!z) throw new ErrorCircuito(`No hay ningún componente «${o.id}».`);
+    const x = o.magnitud === 'i' ? z.i : z.v;
+    if (!x) throw new ErrorCircuito(`La corriente de «${o.id}» no se puede calcular en alterna.`);
+    const [m, ph] = polar(x);
+    f.push(fk); amp.push(m); fase.push(ph);
+  }
+  return { f, amp, fase };
 }
