@@ -233,8 +233,10 @@ export function lenteGruesa(n, R1, R2, e, nm = 1) {
 
 /**
  * @typedef {Object} Pieza
- * @property {'segmento'|'arco'} tipo
+ * @property {'segmento'|'arco'|'parabola'} tipo
  * @property {Vec} [a] @property {Vec} [b]          extremos del segmento
+ * @property {Vec} [v] @property {Vec} [eje] @property {Vec} [lat] @property {number} [f] @property {number} [h]
+ *           parábola: vértice, eje (hacia el foco), lateral, distancia focal y media apertura
  * @property {Vec} [c] @property {number} [r]       centro y radio del arco
  * @property {number} [a0] @property {number} [a1]  ángulos del arco (rad), de a0 a a1 en sentido antihorario (a1 > a0)
  */
@@ -279,9 +281,40 @@ export function interseccionArco(o, d, c, r, a0, a1, tmin = 0) {
   return null;
 }
 
+/**
+ * Intersección del rayo o + t·d con la parábola X = Y²/(4f) de vértice v
+ * (X a lo largo del eje, Y lateral, |Y| ≤ h), para t > tmin: la más cercana.
+ * La normal es la de la cara del eje, (1, −Y/(2f)) normalizada, en el mundo.
+ * @param {Vec} o @param {Vec} d @param {Pieza} p @param {number} [tmin=0]
+ * @returns {{t: number, normal: Vec} | null}
+ */
+export function interseccionParabola(o, d, p, tmin = 0) {
+  const ov = menos(o, /** @type {Vec} */ (p.v)), X = punto(ov, /** @type {Vec} */ (p.eje)), Y = punto(ov, /** @type {Vec} */ (p.lat));
+  const dX = punto(d, /** @type {Vec} */ (p.eje)), dY = punto(d, /** @type {Vec} */ (p.lat)), f = /** @type {number} */ (p.f), h = /** @type {number} */ (p.h);
+  // dY²·t² + (2·Y·dY − 4f·dX)·t + (Y² − 4f·X) = 0
+  const A = dY * dY, B = 2 * Y * dY - 4 * f * dX, C = Y * Y - 4 * f * X;
+  /** @type {number[]} */ let ts = [];
+  if (Math.abs(A) < 1e-14 * Math.max(1, Math.abs(B))) { if (Math.abs(B) > 0) ts = [-C / B]; }
+  else {
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) return null;
+    const q = -0.5 * (B + Math.sign(B || 1) * Math.sqrt(disc));
+    ts = [q / A, q !== 0 ? C / q : -B / (2 * A)].sort((a, b) => a - b);
+  }
+  for (const t of ts) {
+    if (!(t > tmin)) continue;
+    const y = Y + t * dY;
+    if (Math.abs(y) > h + 1e-12) continue;
+    const N = unitario(mas(/** @type {Vec} */ (p.eje), por(/** @type {Vec} */ (p.lat), -y / (2 * f))));
+    return { t, normal: /** @type {Vec} */ (N) };
+  }
+  return null;
+}
+
 /** Intersección de un rayo con una pieza. @param {Vec} o @param {Vec} d @param {Pieza} p @param {number} tmin */
 export function interseccionPieza(o, d, p, tmin) {
   if (p.tipo === 'segmento') return interseccionSegmento(o, d, p.a, p.b, tmin);
+  if (p.tipo === 'parabola') return interseccionParabola(o, d, p, tmin);
   return interseccionArco(o, d, p.c, p.r, p.a0, p.a1, tmin);
 }
 
@@ -447,7 +480,7 @@ export function verticesForma(f, porArco = 48) {
  * Elementos lineales (espejo plano, lente ideal, divisor, bloqueador, pantalla, ojo): centro, eje (giro) y largo.
  * El eje es la normal del elemento; con giro 0 el elemento queda vertical. El espejo refleja por la cara hacia la que apunta su eje.
  * @property {Vec} [centro] @property {number} [giro] @property {number} [largo]
- * @property {'plano'|'esferico'} [espejo] forma del espejo
+ * @property {'plano'|'esferico'|'parabolico'} [espejo] forma del espejo (el parabólico usa R, su radio de curvatura en el vértice)
  * @property {number} [R]  espejo esférico: radio con signo (> 0 cóncavo, centro de curvatura del lado del eje); divisor: fracción reflejada
  * @property {number} [apertura] espejo esférico: cuerda (m)
  * @property {number} [reflectividad=1]
@@ -488,7 +521,11 @@ export function prepararEscena(escena) {
   /** @param {Vec} p */
   const caja = p => { xmin = Math.min(xmin, p[0]); xmax = Math.max(xmax, p[0]); ymin = Math.min(ymin, p[1]); ymax = Math.max(ymax, p[1]); };
   /** @param {Pieza} p */
-  const cajaPieza = p => { if (p.tipo === 'segmento') { caja(p.a); caja(p.b); } else { caja(mas(p.c, [-p.r, -p.r])); caja(mas(p.c, [p.r, p.r])); } };
+  const cajaPieza = p => {
+    if (p.tipo === 'segmento') { caja(p.a); caja(p.b); }
+    else if (p.tipo === 'parabola') { const X = p.h * p.h / (4 * p.f); caja(p.v); for (const sg of [-1, 1]) caja(mas(mas(p.v, por(p.lat, sg * p.h)), por(p.eje, X))); }
+    else { caja(mas(p.c, [-p.r, -p.r])); caja(mas(p.c, [p.r, p.r])); }
+  };
   /** @param {any} m */
   const validarIndice = m => { const n = indiceDe(m); if (!(n >= 1e-3 && n < 100)) throw new RangeError('El índice de refracción debe ser positivo.'); };
   escena.elementos.forEach((el, k) => {
@@ -522,6 +559,13 @@ export function prepararEscena(escena) {
           if (!(el.largo > 0)) throw new RangeError('El espejo necesita un largo positivo.');
           const t = /** @type {Vec} */ ([-eje[1], eje[0]]), a = mas(el.centro, por(t, -el.largo / 2)), b = mas(el.centro, por(t, el.largo / 2));
           const s = { tipo: 'segmento', a, b, rol: 'espejo', elemento: k, eje };
+          piezas.push(s); cajaPieza(/** @type {Pieza} */ (s));
+        } else if (el.espejo === 'parabolico') {
+          // Parábola de vértice en el centro y radio de curvatura R en él (f = R/2):
+          // todos los rayos paralelos al eje pasan por el foco, sin aberración esférica
+          const R = el.R, h = (el.apertura ?? 0) / 2;
+          if (!(Math.abs(R) > 0) || !(h > 0)) throw new RangeError('El espejo parabólico necesita un radio en el vértice y una apertura válidos.');
+          const s = { tipo: 'parabola', v: el.centro, eje, lat: /** @type {Vec} */ ([-eje[1], eje[0]]), f: R / 2, h, rol: 'espejo', elemento: k };
           piezas.push(s); cajaPieza(/** @type {Pieza} */ (s));
         } else {
           const R = el.R, h = (el.apertura ?? 0) / 2;
@@ -680,7 +724,7 @@ export function trazar(escena) {
       }
       case 'espejo': {
         // Solo refleja por su cara: la del eje (plano), la cóncava o la convexa (esférico)
-        const frente = pz.tipo === 'segmento' ? punto(r.d, pz.eje) < 0 : (punto(r.d, menos(P, pz.c)) > 0) === pz.concavo;
+        const frente = pz.tipo === 'segmento' ? punto(r.d, pz.eje) < 0 : pz.tipo === 'parabola' ? punto(r.d, mejor.normal) < 0 : (punto(r.d, menos(P, pz.c)) > 0) === pz.concavo;
         if (!frente) { cerrar(r, { rol: 'espejo-dorso', elemento: pz.elemento }); break; }
         const rho = escena.elementos[pz.elemento].reflectividad ?? 1;
         interacciones.push({ ...base, tipo: 'espejo', theta2: theta1, n1: nSeg, n2: nSeg, R: rho, T: 0, salida: reflejado });

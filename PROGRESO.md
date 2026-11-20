@@ -12,7 +12,7 @@ física > funciones faltantes > rendimiento > pulido.
 - Circuitos (pantalla «Transitorios», 56 pruebas) integrado y enlazado.
 - Laboratorio de Mecánica integrado.
 - Óptica integrado (geométrica, interferencia y difracción, películas e
-  interferómetros; 51 pruebas, 15 escenas MEXT). Falta: espejo parabólico,
+  interferómetros; 54 pruebas, 15 escenas MEXT; espejo parabólico hecho). Falta:
   polarización, polígono y capas en la paleta, Michelson con luz blanca.
 - Electrostática ampliada e integrada (2 espacios, 95 pruebas, 18 MEXT).
   Falta: solucionador de Poisson (blindaje de un conductor en un campo
@@ -259,3 +259,4 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Fuerza aplicada en un punto del cuerpo (vuelca o desliza al empujar); 1019 pruebas. Siguiente: contactos con las aristas de los bloques (diseño arriba).
 - 2026-11-19 — Caras y esquinas de los bloques (apilar, discos contra bloques); ejemplo de cajas apiladas; 1024 pruebas; v0.14.0.
 - 2026-11-19 — Fricción entre discos; arreglo del sentido de la fricción de los vértices y caso de Painlevé; 1028 pruebas. Sin publicar.
+- 2026-11-19 — Óptica: espejo parabólico (motor, pantalla y ejemplo); 1031 pruebas. Sin publicar.

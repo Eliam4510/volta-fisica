@@ -613,3 +613,35 @@ describe('determinismo', () => {
     void caminoOptico;
   });
 });
+
+describe('espejo parabólico', () => {
+  // Rayos paralelos al eje, a h del eje, contra un espejo de R = 20 cm y 12 cm de apertura
+  const reflejados = forma => {
+    const espejo = { tipo: 'espejo', espejo: forma, centro: [0, 0], giro: Math.PI, R: 0.2, apertura: 0.12 };
+    const res = trazar({ elementos: [espejo, { tipo: 'haz', origen: [-0.3, 0], giro: 0, ancho: 0.11, rayos: 11 }] });
+    // Segmentos que salen del espejo (empiezan cerca de x = 0)
+    return res.segmentos.filter(s => s.nivel === 1);
+  };
+  /** Distancia del foco F = (−R/2, 0) a la recta de cada rayo reflejado */
+  const distFoco = s => { const d = [s.b[0] - s.a[0], s.b[1] - s.a[1]], L = Math.hypot(d[0], d[1]), F = [-0.1, 0]; return Math.abs((F[0] - s.a[0]) * d[1] - (F[1] - s.a[1]) * d[0]) / L; };
+  it('todos los rayos paralelos al eje pasan exactamente por el foco f = R/2', () => {
+    const segs = reflejados('parabolico');
+    expect(segs).toHaveLength(11);
+    for (const s of segs) expect(distFoco(s)).toBeLessThan(1e-12);
+  });
+  it('el esférico de la misma apertura no: los rayos del borde cortan el eje antes del foco (aberración esférica)', () => {
+    const peor = Math.max(...reflejados('esferico').map(distFoco));
+    expect(peor).toBeGreaterThan(1e-4);
+  });
+  it('por detrás no refleja; un convexo (R < 0) abre el haz como si saliera de su foco virtual', () => {
+    const espejo = { tipo: 'espejo', espejo: 'parabolico', centro: [0, 0], giro: Math.PI, R: -0.2, apertura: 0.12 };
+    const res = trazar({ elementos: [espejo, { tipo: 'haz', origen: [-0.3, 0], giro: 0, ancho: 0.1, rayos: 5 }] });
+    // Prolongados hacia atrás, los reflejados pasan por F' = (+0.1, 0)
+    for (const s of res.segmentos.filter(x => x.nivel === 1)) {
+      const d = [s.b[0] - s.a[0], s.b[1] - s.a[1]], L = Math.hypot(d[0], d[1]);
+      expect(Math.abs((0.1 - s.a[0]) * d[1] - (0 - s.a[1]) * d[0]) / L).toBeLessThan(1e-12);
+    }
+    const dorso = trazar({ elementos: [{ ...espejo, R: 0.2 }, { tipo: 'haz', origen: [0.3, 0], giro: Math.PI, ancho: 0.1, rayos: 5 }] });
+    expect(dorso.segmentos.filter(x => x.nivel === 1)).toHaveLength(0);
+  });
+});

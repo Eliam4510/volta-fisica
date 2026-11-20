@@ -55,10 +55,12 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   };
   const FORMAS = [['rectangulo', 'o-medio', 'Bloque rectangular'], ['prisma', 'o-poligono', 'Prisma'], ['circulo', 'o-disco', 'Círculo (gota)'], ['semicirculo', 'o-arco', 'Semicírculo']];
   const MATS = [['n', 'n fijo'], ['agua', 'Agua'], ['crown', 'Crown'], ['flint', 'Flint'], ['diamante', 'Diamante']];
-  const icoDe = el => (el.tipo === 'espejo' && el.espejo === 'esferico' ? 'o-espejo-curvo'
+  /** ¿Espejo curvo (esférico o parabólico)? Los dos usan R y apertura. */
+  const curvo = el => el.tipo === 'espejo' && (el.espejo === 'esferico' || el.espejo === 'parabolico');
+  const icoDe = el => (curvo(el) ? 'o-espejo-curvo'
     : el.tipo === 'medio' && el.forma.tipo === 'lente' ? 'o-lente-gruesa' : el.tipo === 'medio' && el.forma.tipo === 'lamina' ? 'o-capas' : TIPOS[el.tipo].ico);
   const esFuente = el => !!TIPOS[el.tipo]?.fuente;
-  const esLineal = el => ['lente', 'divisor', 'bloqueador', 'pantalla', 'ojo'].includes(el.tipo) || (el.tipo === 'espejo' && el.espejo !== 'esferico');
+  const esLineal = el => ['lente', 'divisor', 'bloqueador', 'pantalla', 'ojo'].includes(el.tipo) || (el.tipo === 'espejo' && !curvo(el));
   const indiceEl = el => (el.material ? { material: el.material } : { n: el.n ?? 1 });
 
   // ---------------------------------------------------------------------
@@ -110,6 +112,14 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       ],
       caja: [-0.34, 0.04, -0.08, 0.08], sel: 1,
       variables: { s: vari('s', 30, 4, 60, 0.5, 'cm', -0.01, ['elementos.1.origen.0']), R: vari('R', 20, 6, 60, 1, 'cm', 0.01, ['elementos.0.R']) },
+    },
+    {
+      clave: 'espejo-parabolico', titulo: 'Espejo parabólico y aberración esférica', tipo: 'Ejemplo', graficas: ['lente', 'inversas', 'aumento'],
+      elementos: [
+        { tipo: 'espejo', nombre: 'Espejo parabólico', espejo: 'parabolico', centro: [0, 0], giro: Math.PI, R: 0.2, apertura: 0.16 },
+        { tipo: 'haz', nombre: 'Haz', origen: [-0.3, 0], giro: 0, ancho: 0.15, rayos: 15, lambda: L589 },
+      ],
+      caja: [-0.32, 0.02, -0.1, 0.1], sel: 0,
     },
     {
       clave: 'prisma-blanca', titulo: 'Prisma con luz blanca', tipo: 'Ejemplo', graficas: ['desviacion', 'dispersion', 'pantalla'],
@@ -382,6 +392,16 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const al = Math.asin(Math.min(1, el.apertura / 2 / Math.abs(R))), av = Math.atan2(el.centro[1] - c[1], el.centro[0] - c[0]);
     return { c, r: Math.abs(R), a0: av - al, a1: av + al };
   }
+  /**
+   * Puntos de un espejo curvo: el arco del esférico o la parábola
+   * X = Y²/(2R) del parabólico (vértice en el centro, eje hacia su cara).
+   */
+  function curvaEspejo(el, n = 48) {
+    if (el.espejo !== 'parabolico') return puntosArco(arcoEspejo(el), n);
+    const e = dir(el.giro ?? 0), lat = [-e[1], e[0]], h = el.apertura / 2, r = [];
+    for (let i = 0; i <= n; i++) { const y = -h + 2 * h * i / n, X = y * y / (2 * el.R); r.push([el.centro[0] + lat[0] * y + e[0] * X, el.centro[1] + lat[1] * y + e[1] * X]); }
+    return r;
+  }
   function puntosArco(a, n = 48) { const r = []; for (let i = 0; i <= n; i++) { const t = a.a0 + (a.a1 - a.a0) * i / n; r.push([a.c[0] + a.r * Math.cos(t), a.c[1] + a.r * Math.sin(t)]); } return r; }
   function formaRecipiente(el) { const g = el.giro ?? 0, H = el.nivel, d = dir(g + Math.PI / 2); return { tipo: 'rectangulo', centro: [el.centro[0] + d[0] * H / 2, el.centro[1] + d[1] * H / 2], ancho: el.ancho, alto: H, giro: g }; }
   function paredesRecipiente(el) {
@@ -409,7 +429,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       const pt = p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); };
       for (const el of ESC.elementos) {
         if (el.tipo === 'medio' || el.tipo === 'recipiente') verticesMedio(el).forEach(pt);
-        else if (el.tipo === 'espejo' && el.espejo === 'esferico') puntosArco(arcoEspejo(el), 6).forEach(pt);
+        else if (curvo(el)) curvaEspejo(el, 6).forEach(pt);
         else if (esLineal(el)) extremos(el).forEach(pt);
         else { pt(el.origen); if (el.tipo === 'objeto') pt(puntaObjeto(el)); }
       }
@@ -472,6 +492,10 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         if (el.espejo === 'esferico') {
           const a = arcoEspejo(el), pts = puntosArco(a), p0 = pts[0], nf = R => [(a.c[0] - p0[0]) / a.r * Math.sign(R), (a.c[1] - p0[1]) / a.r * Math.sign(R)];
           tz.opticaEspejo(pts, nf(el.R), { grueso: g });
+        } else if (el.espejo === 'parabolico') {
+          // Normal de la cara en el primer punto (Y = −h): eje − lat·Y/(2f), con f = R/2
+          const e = dir(el.giro ?? 0), lat = [-e[1], e[0]], y = -el.apertura / 2, k = -y / el.R, L = Math.hypot(1, k);
+          tz.opticaEspejo(curvaEspejo(el), [(e[0] + lat[0] * k) / L, (e[1] + lat[1] * k) / L], { grueso: g });
         } else tz.opticaEspejo(extremos(el), dir(el.giro ?? 0), { grueso: g });
         break;
       case 'lente': { const [a, b] = extremos(el); tz.opticaLenteIdeal(a, b, el.f, { grueso: g }); break; }
@@ -515,11 +539,12 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         const e = dir(el.giro ?? 0), c = el.centro, f = el.f, R = 1.6 * Math.abs(f);
         tz.opticaEje([c[0] - e[0] * R, c[1] - e[1] * R], [c[0] + e[0] * R, c[1] + e[1] * R]);
         tz.opticaFoco([c[0] - e[0] * f, c[1] - e[1] * f], etq(false)); tz.opticaFoco([c[0] + e[0] * f, c[1] + e[1] * f], etq(true));
-      } else if (el.tipo === 'espejo' && el.espejo === 'esferico') {
+      } else if (curvo(el)) {
         const e = dir(el.giro ?? 0), c = el.centro, R = el.R;
         tz.opticaEje(c, [c[0] + e[0] * (Math.abs(R) * 1.3) * Math.sign(R || 1), c[1] + e[1] * Math.abs(R) * 1.3 * Math.sign(R || 1)]);
         tz.opticaFoco([c[0] + e[0] * R / 2, c[1] + e[1] * R / 2], etq(false));
-        tz.opticaFoco([c[0] + e[0] * R, c[1] + e[1] * R], [{ t: 'C', f: 'sim', tam: 13 }]);
+        // El parabólico no tiene centro de curvatura (solo su vértice tiene radio R)
+        if (el.espejo === 'esferico') tz.opticaFoco([c[0] + e[0] * R, c[1] + e[1] * R], [{ t: 'C', f: 'sim', tam: 13 }]);
       } else if (el.tipo === 'medio' && el.forma.tipo === 'lente') {
         const n = indiceDe(indiceEl(el), LAMBDA_D), G = lenteGruesa(n, el.forma.R1, el.forma.R2, el.forma.espesor, indiceDe(ESC.ambiente));
         if (!Number.isFinite(G.f)) continue;
@@ -585,8 +610,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         const cf = contornoForma(el.tipo === 'recipiente' ? formaRecipiente(el) : el.forma), segs = etqN(n);
         const pto = x1 - x0 > 76 && y1 - y0 > 24 && cand.find(([x, y]) => y < y1 && y > y0 && contiene(cf, [v.mx(x), v.my(y - 4)]) && contiene(cf, [v.mx(x + 60), v.my(y - 4)]) && tz.opticaReservar(segs, x, y));
         if (pto) tz.compuesto(segs, pto[0], pto[1], {});
-      } else if (el.tipo === 'lente' || (el.tipo === 'espejo' && el.espejo === 'esferico')) {
-        const pts = el.tipo === 'lente' ? extremos(el) : puntosArco(arcoEspejo(el), 4), top = pts.reduce((a, b) => (v.Y(b[1]) < v.Y(a[1]) ? b : a)), [X, Y] = v.P(top);
+      } else if (el.tipo === 'lente' || curvo(el)) {
+        const pts = el.tipo === 'lente' ? extremos(el) : curvaEspejo(el, 4), top = pts.reduce((a, b) => (v.Y(b[1]) < v.Y(a[1]) ? b : a)), [X, Y] = v.P(top);
         const segs = [{ t: el.tipo === 'lente' ? 'f' : 'R', f: 'sim', tam: 13 }, { t: ' = ' + cantidad((el.tipo === 'lente' ? el.f : el.R) / FU(), U(), 3), f: 'num', tam: 11.5, color: 'texto-2' }];
         for (const [x, y, al] of [[X + 14, Y - 4, 'left'], [X + 14, Y + 16, 'left'], [X - 14, Y - 10, 'right']]) if (tz.opticaReservar(segs, x, y, al)) { tz.compuesto(segs, x, y, { alinear: al }); break; }
       } else if (esFuente(el)) {
@@ -616,8 +641,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     if (el.tipo === 'medio' || el.tipo === 'recipiente') {
       const pts = (el.tipo === 'recipiente' ? [...verticesMedio(el), ...paredesRecipiente(el)] : verticesMedio(el)).map(p => v.P(p)), xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
       tz.seleccionCaja(Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    } else if (el.tipo === 'espejo' && el.espejo === 'esferico') {
-      const pts = puntosArco(arcoEspejo(el), 12).map(p => v.P(p)), xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    } else if (curvo(el)) {
+      const pts = curvaEspejo(el, 12).map(p => v.P(p)), xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
       tz.seleccionCaja(Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
     } else if (esLineal(el)) {
       const [a, b] = extremos(el).map(p => v.P(p));
@@ -658,7 +683,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       const el = ESC.elementos[i];
       if (el.tipo === 'ojo') { if (Math.hypot(...[0, 1].map(k => P[k] - v.P(el.centro)[k])) < 12) return { id: el.id }; continue; }
       if (esLineal(el)) { const [a, b] = extremos(el); if (distSeg(P, v.P(a), v.P(b)) < 7) return { id: el.id }; }
-      else if (el.tipo === 'espejo') { const pts = puntosArco(arcoEspejo(el), 24).map(p => v.P(p)); for (let k = 0; k < pts.length - 1; k++) if (distSeg(P, pts[k], pts[k + 1]) < 7) return { id: el.id }; }
+      else if (el.tipo === 'espejo') { const pts = curvaEspejo(el, 24).map(p => v.P(p)); for (let k = 0; k < pts.length - 1; k++) if (distSeg(P, pts[k], pts[k + 1]) < 7) return { id: el.id }; }
       else if (el.tipo === 'recipiente') { const pw = paredesRecipiente(el).map(p => v.P(p)); for (let k = 0; k < 3; k++) if (distSeg(P, pw[k], pw[k + 1]) < 7) return { id: el.id }; }
     }
     for (let i = ESC.elementos.length - 1; i >= 0; i--) {
@@ -724,8 +749,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         }
         case 'recipiente': h += pos() + campo('Ancho', `${b}.ancho`, 'longitud', u) + campo('Nivel', `${b}.nivel`, 'longitud', u, 'Altura del líquido|Liquid level') + campo('Alto', `${b}.alto`, 'longitud', u, 'Altura de las paredes|Wall height') + indice(); break;
         case 'espejo':
-          h += fila('Forma', segmentado('p-espejo', [['plano', 'Plano'], ['esferico', 'Esférico']], el.espejo || 'plano'), 'Espejo plano o esférico|Mirror shape') + pos();
-          h += el.espejo === 'esferico' ? campo('R', `${b}.R`, 'longitud', u, 'Radio de curvatura: positivo si es cóncavo hacia su cara|Radius of curvature') + campo('Apertura', `${b}.apertura`, 'longitud', u) : campo('Largo', `${b}.largo`, 'longitud', u);
+          h += fila('Forma', segmentado('p-espejo', [['plano', 'Plano'], ['esferico', 'Esférico'], ['parabolico', 'Parabólico']], el.espejo || 'plano'), 'Espejo plano, esférico o parabólico (sin aberración esférica)|Mirror shape') + pos();
+          h += curvo(el) ? campo('R', `${b}.R`, 'longitud', u, el.espejo === 'parabolico' ? 'Radio de curvatura en el vértice (f = R/2): positivo si es cóncavo hacia su cara|Vertex radius' : 'Radio de curvatura: positivo si es cóncavo hacia su cara|Radius of curvature') + campo('Apertura', `${b}.apertura`, 'longitud', u) : campo('Largo', `${b}.largo`, 'longitud', u);
           h += campo('Eje', `${b}.giro`, 'adimensional', '°', 'Dirección hacia la que mira la cara reflectante|Axis');
           break;
         case 'lente': h += pos() + campo('f', `${b}.f`, 'longitud', u, 'Distancia focal: positiva si converge|Focal length') + campo('Largo', `${b}.largo`, 'longitud', u) + campo('Eje', `${b}.giro`, 'adimensional', '°', 'Dirección del eje óptico|Optical axis'); break;
@@ -755,7 +780,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
     const bMat = $('#p-mat');
     if (bMat) bMat.addEventListener('click', ev => { ev.stopPropagation(); menuMaterial(bMat); });
     on('#p-forma', v => cambiarForma(elDe(sel), v));
-    on('#p-espejo', v => { const e = elDe(sel); if (v === (e.espejo || 'plano')) return; e.espejo = v; if (v === 'esferico') { e.R = e.R || 2 * e.largo; e.apertura = e.apertura || e.largo; } else e.largo = e.largo || e.apertura || 0.1; limpiarVariables(); cambio(); });
+    on('#p-espejo', v => { const e = elDe(sel); if (v === (e.espejo || 'plano')) return; e.espejo = v; if (v !== 'plano') { e.R = e.R || 2 * e.largo; e.apertura = e.apertura || e.largo; } else e.largo = e.largo || e.apertura || 0.1; limpiarVariables(); cambio(); });
     on('#p-luz', v => { const e = elDe(sel); e.lambda = v === 'blanca' ? null : (e.lambdaPrevia ?? LD); if (v === 'blanca') e.lambdaPrevia = undefined; limpiarVariables(); cambio(); });
     const b1 = $('#p-quitar'); if (b1) b1.addEventListener('click', quitarSeleccion);
     const b2 = $('#p-duplicar'); if (b2) b2.addEventListener('click', duplicar);
@@ -839,7 +864,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   function datoArbol(el) {
     if (el.tipo === 'medio' || el.tipo === 'recipiente') return el.material ? el.material : `n = ${fmt(el.n, 4)}`;
     if (el.tipo === 'lente') return `f = ${L(el.f, 3)}`;
-    if (el.tipo === 'espejo') return el.espejo === 'esferico' ? `R = ${L(el.R, 3)}` : 'plano';
+    if (el.tipo === 'espejo') return curvo(el) ? `${el.espejo === 'parabolico' ? 'parabólico, ' : ''}R = ${L(el.R, 3)}` : 'plano';
     if (el.tipo === 'divisor') return `${fmt(el.R * 100, 3)} %`;
     if (esFuente(el)) return el.lambda == null ? 'blanca' : cantidad(el.lambda * 1e9, 'nm', 3);
     return '';
@@ -872,7 +897,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
       f.push(Ll('f', '', el.f), ['P', '', fmt(1 / el.f, 4), 'm⁻¹', 'Potencia 1/f (dioptrías)|Power']);
       estado = el.f > 0 ? 'Convergente' : 'Divergente';
     } else if (el.tipo === 'espejo') {
-      if (el.espejo === 'esferico') { f.push(Ll('R', '', el.R), Ll('f', '', el.R / 2, 'Distancia focal R/2|Focal length')); estado = el.R > 0 ? 'Cóncavo' : 'Convexo'; }
+      if (curvo(el)) { f.push(Ll('R', '', el.R), Ll('f', '', el.R / 2, 'Distancia focal R/2|Focal length')); estado = `${el.R > 0 ? 'Cóncavo' : 'Convexo'}${el.espejo === 'parabolico' ? ' parabólico' : ''}`; }
       else estado = 'Plano';
     } else if (el.tipo === 'pantalla' || el.tipo === 'ojo') {
       const k = idxDe(sel), I = RES.impactos.filter(h => h.elemento === k), P = I.reduce((s, h) => s + h.I, 0);
@@ -890,7 +915,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         if (r.tipo === 'total') f.push(['θ', 'c', fmt(anguloCritico(r.n1, r.n2) / GR, 4), '°', 'Ángulo crítico|Critical angle']);
       }
       if (el.tipo === 'objeto') {
-        const lente = ESC.elementos.find(e => e.tipo === 'lente' || (e.tipo === 'espejo' && e.espejo === 'esferico'));
+        const lente = ESC.elementos.find(e => e.tipo === 'lente' || curvo(e));
         if (lente) {
           const ax = dir(lente.giro ?? 0), s = Math.abs((el.origen[0] - lente.centro[0]) * ax[0] + (el.origen[1] - lente.centro[1]) * ax[1]);
           const fl = lente.tipo === 'lente' ? lente.f : lente.R / 2, F = lenteDelgada(fl, s);
@@ -956,7 +981,7 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
   // Parte una curva donde deja de ser finita
   const tramosFinitos = pts => { const r = []; let t = []; for (const p of pts) { if (Number.isFinite(p[1])) t.push(p); else if (t.length) { r.push(t); t = []; } } if (t.length) r.push(t); return r; };
   function primeraLente() {
-    const e = ESC.elementos.find(q => q.tipo === 'lente' || (q.tipo === 'espejo' && q.espejo === 'esferico') || (q.tipo === 'medio' && q.forma.tipo === 'lente'));
+    const e = ESC.elementos.find(q => q.tipo === 'lente' || curvo(q) || (q.tipo === 'medio' && q.forma.tipo === 'lente'));
     if (!e) return null;
     const nAmb = indiceDe(ESC.ambiente);
     if (e.tipo === 'lente') return { el: e, f: e.f, centro: e.centro, eje: dir(e.giro ?? 0), nombre: 'lente' };
@@ -1209,8 +1234,8 @@ import { guardarEscena, abrirEscena, autoguardado, escenaPendiente } from '../co
         }
         case 'recipiente': Object.assign(e, { centro: coord(o.centro), giro: ang(o.giro), ancho: pos(o.ancho, 0.1), nivel: pos(o.nivel, 0.05), alto: pos(o.alto, 0.06) }, indice(o)); break;
         case 'espejo':
-          Object.assign(e, { espejo: o.espejo === 'esferico' ? 'esferico' : 'plano', centro: coord(o.centro), giro: ang(o.giro, Math.PI), reflectividad: numero(o.reflectividad, 1, 0, 1) });
-          if (e.espejo === 'esferico') { e.R = numero(o.R, 0.2, -1e3, 1e3) || 0.2; e.apertura = Math.min(pos(o.apertura, 0.1), 2 * Math.abs(e.R)); } else e.largo = pos(o.largo, 0.1);
+          Object.assign(e, { espejo: ['esferico', 'parabolico'].includes(o.espejo) ? o.espejo : 'plano', centro: coord(o.centro), giro: ang(o.giro, Math.PI), reflectividad: numero(o.reflectividad, 1, 0, 1) });
+          if (e.espejo !== 'plano') { e.R = numero(o.R, 0.2, -1e3, 1e3) || 0.2; e.apertura = Math.min(pos(o.apertura, 0.1), 2 * Math.abs(e.R)); } else e.largo = pos(o.largo, 0.1);
           break;
         case 'lente': Object.assign(e, { centro: coord(o.centro), giro: ang(o.giro), largo: pos(o.largo, 0.1), f: numero(o.f, 0.1, -1e3, 1e3) || 0.1 }); break;
         case 'divisor': Object.assign(e, { centro: coord(o.centro), giro: ang(o.giro), largo: pos(o.largo, 0.05), R: numero(o.R, 0.5, 0, 1) }); break;

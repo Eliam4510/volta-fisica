@@ -9,6 +9,10 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Óptica: espejo parabólico (radio de curvatura R en el vértice, f = R/2):
+  todos los rayos paralelos al eje pasan exactamente por el foco. Ejemplo
+  «Espejo parabólico y aberración esférica», para compararlo con el
+  esférico de la misma apertura.
 - Mecánica: fricción entre dos discos apoyados uno en otro si alguno gira
   (con la fricción entre cuerpos de la escena): se frenan y se hacen girar
   hasta rodar uno sobre otro, con el momento lineal y el angular
