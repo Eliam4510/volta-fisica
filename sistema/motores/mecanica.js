@@ -42,6 +42,10 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  *                                     actúa en el punto de contacto: rueda sin deslizar o desliza girando
  * @property {number} [w=0]            Velocidad angular inicial (rad/s, positiva antihoraria)
  * @property {number} [theta=0]        Ángulo inicial (rad)
+ * @property {'bloque'} [forma]        Bloque rígido: rectángulo de ancho × alto que gira (I = m(a² + h²)/12) y
+ *                                     se apoya en las superficies por sus cuatro vértices (puede volcar)
+ * @property {number} [ancho]          Bloque: ancho (m)
+ * @property {number} [alto]           Bloque: alto (m)
  * @property {[number, number]} [F]    Fuerza constante aplicada (N)
  * @property {boolean} [cinematica]    Conductor de masa infinita que se mueve con velocidad constante v
  *   (una mano que sube despacio, una cinta): no siente fuerzas; su trabajo sale en energiaMecanica().W
@@ -183,9 +187,18 @@ function preparar(e) {
   // masa inversa 1/I: una entrada [n + k, coef, 0] del gradiente es el
   // coeficiente de ω (solo se usa la primera componente)
   const rot = P.map(() => -1), I = [];
-  P.forEach((p, i) => { if (!p.cinematica && p.inercia > 0 && p.radio > 0) { rot[i] = I.length; I.push(p.inercia * p.m * p.radio ** 2); } });
+  // Un bloque (rectángulo) siempre gira: I = m(a² + h²)/12 respecto de su
+  // centro; sus vértices, en su propio marco, son los puntos de apoyo
+  /** @type {(number[][] | null)[]} */
+  const vert = P.map(p => (p.forma === 'bloque' && p.ancho > 0 && p.alto > 0
+    ? [[-p.ancho / 2, -p.alto / 2], [p.ancho / 2, -p.alto / 2], [p.ancho / 2, p.alto / 2], [-p.ancho / 2, p.alto / 2]] : null));
+  P.forEach((p, i) => {
+    if (p.cinematica) return;
+    if (vert[i]) { rot[i] = I.length; I.push(p.m * (p.ancho ** 2 + p.alto ** 2) / 12); }
+    else if (p.inercia > 0 && p.radio > 0) { rot[i] = I.length; I.push(p.inercia * p.m * p.radio ** 2); }
+  });
   for (const Ik of I) im.push(1 / Ik);
-  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2 };
+  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2, vert };
   actualizarImpuestas(S, 0);
   return S;
 }
@@ -204,15 +217,88 @@ function sumarPosicion(S, y, i, dx, dy) {
 }
 
 /**
+ * Apoyos de la partícula i: −1 es su centro (con su radio); un bloque se
+ * apoya por sus vértices 0..3. La clave de un apoyo de vértice es «i.k».
+ * @param {any} S @param {number} i @returns {number[]}
+ */
+const apoyosDe = (S, i) => (S.vert[i] ? [0, 1, 2, 3] : [-1]);
+/** Clave «i:js» o «i.k:js» del apoyo k de la partícula i en la superficie js. */
+const claveApoyo = (/** @type {number} */ i, /** @type {number} */ k, /** @type {number} */ js) => (k >= 0 ? `${i}.${k}:${js}` : `${i}:${js}`);
+/** Partícula y vértice de «i» o «i.k». @param {string} txt @returns {[number, number]} */
+function apoyoDe(txt) { const [a, b] = String(txt).split('.'); return [Number(a), b == null ? -1 : Number(b)]; }
+/** ¿Pueden chocar las partículas i y j como discos? (los bloques no chocan entre sí ni con discos) */
+const parPosible = (/** @type {any} */ S, /** @type {number} */ i, /** @type {number} */ j) => !S.vert[i] && !S.vert[j] && radio(S, i) + radio(S, j) > 0;
+/** Vector del centro del bloque i a su vértice k, girado con θ: R(θ)·v_k. */
+function brazo(S, y, i, k) {
+  const th = y[S.base + 2 * S.rot[i]], c = Math.cos(th), s = Math.sin(th), [vx, vy] = S.vert[i][k];
+  return [c * vx - s * vy, s * vx + c * vy];
+}
+/** Posición del apoyo k de i en el marco de la superficie. @param {any} S @param {any} sup @param {number[]} y @param {number} i @param {number} k */
+function puntoApoyo(S, sup, y, i, k) {
+  const p = puntoRel(sup, y, i);
+  if (k < 0) return p;
+  const b = brazo(S, y, i, k);
+  return [p[0] + b[0], p[1] + b[1]];
+}
+/** Velocidad del apoyo k de i respecto de la superficie: v + ω ẑ×(R·v_k). */
+function velocidadApoyo(S, sup, y, i, k) {
+  const v = velocidadRel(sup, y, i);
+  if (k < 0) return v;
+  const b = brazo(S, y, i, k), w = y[S.base + 2 * S.rot[i] + 1];
+  return [v[0] - w * b[1], v[1] + w * b[0]];
+}
+
+/**
+ * Hueco entre el apoyo k de la partícula i y una superficie (C ≥ 0 libre).
+ * El de un vértice de bloque tiene también una entrada de giro: ∂C/∂θ =
+ * n̂·(ẑ×R·v_k), y J̇·v = −ω²·n̂·R·v_k (más la curvatura en un arco).
+ * @param {any} S @param {any} sup @param {number} i @param {number} k
+ */
+function restriccionApoyo(S, sup, i, k) {
+  if (k < 0) return restriccionSuperficie(sup, i, radio(S, i));
+  const j = sup.j, q = S.n + S.rot[i];
+  if (sup.tipo === 'segmento') {
+    const { n } = sup.geo;
+    return {
+      evaluar(y) {
+        const p = puntoApoyo(S, sup, y, i, k), v = velocidadApoyo(S, sup, y, i, k), b = brazo(S, y, i, k), w = y[S.base + 2 * S.rot[i] + 1];
+        const grad = [[i, n[0], n[1]], [q, n[1] * b[0] - n[0] * b[1], 0]];
+        if (j >= 0) grad.push([j, -n[0], -n[1]]);
+        return { C: dot(n, sub(p, sup.a)), Cp: dot(n, v), grad, jdv: -w * w * dot(n, b) };
+      },
+    };
+  }
+  const sg = sup.cara === 'interior' ? -1 : 1;
+  return {
+    evaluar(y) {
+      const p = puntoApoyo(S, sup, y, i, k), v = velocidadApoyo(S, sup, y, i, k), b = brazo(S, y, i, k), w = y[S.base + 2 * S.rot[i] + 1];
+      const d = sub(p, sup.c), D = norm(d), u = [d[0] / D, d[1] / D], uv = dot(u, v);
+      const grad = [[i, sg * u[0], sg * u[1]], [q, sg * (u[1] * b[0] - u[0] * b[1]), 0]];
+      if (j >= 0) grad.push([j, -sg * u[0], -sg * u[1]]);
+      return { C: sg * (D - sup.r), Cp: sg * uv, grad, jdv: sg * ((dot(v, v) - uv * uv) / D - w * w * dot(u, b)) };
+    },
+  };
+}
+
+/**
  * Deslizamiento de la partícula i sobre una superficie: velocidad tangencial
  * del punto de contacto respecto de la superficie. En un disco que gira, el
  * punto de contacto está en −r·n̂ desde el centro y se mueve con v + ω ẑ×(−r n̂):
  * su componente tangencial es t̂·v + cr·ω, con cr = −r·t̂·(ẑ×n̂) (en un suelo
  * horizontal recorrido hacia +x, cr = r: rueda sin deslizar con ω = −v/r).
- * @param {any} S @param {any} sup @param {number[]} y @param {number} i
- * @returns {{t: number[], vt: number, cr: number, grad: number[][]}} grad: gradiente de vt respecto de las velocidades
+ * @param {any} S @param {any} sup @param {number[]} y @param {number} i @param {number} [kv=-1] vértice del bloque
+ * @returns {{t: number[], vt: number, cr: number, grad: number[][], jdv: number}} grad: gradiente de vt respecto de
+ *   las velocidades; jdv: la parte de dvt/dt que no depende de las aceleraciones
  */
-function deslizamiento(S, sup, y, i) {
+function deslizamiento(S, sup, y, i, kv = -1) {
+  if (kv >= 0) {
+    // Vértice de un bloque: el punto de contacto es el vértice
+    const p = puntoApoyo(S, sup, y, i, kv), t = tangente(sup, p), vr = velocidadApoyo(S, sup, y, i, kv), b = brazo(S, y, i, kv);
+    const cr = t[1] * b[0] - t[0] * b[1], grad = [[i, t[0], t[1]], [S.n + S.rot[i], cr, 0]], w = y[S.base + 2 * S.rot[i] + 1];
+    if (sup.j >= 0) grad.push([sup.j, -t[0], -t[1]]);
+    // El vértice gira alrededor del centro: su aceleración tiene la centrípeta −ω²·R·v_k
+    return { t, vt: t[0] * vr[0] + t[1] * vr[1], cr, grad, jdv: -w * w * dot(t, b) };
+  }
   const p = puntoRel(sup, y, i), t = tangente(sup, p), vr = velocidadRel(sup, y, i), k = S.rot[i];
   let vt = t[0] * vr[0] + t[1] * vr[1], cr = 0;
   const grad = [[i, t[0], t[1]]];
@@ -223,7 +309,7 @@ function deslizamiento(S, sup, y, i) {
     grad.push([S.n + k, cr, 0]);
   }
   if (sup.j >= 0) grad.push([sup.j, -t[0], -t[1]]);
-  return { t, vt, cr, grad };
+  return { t, vt, cr, grad, jdv: 0 };
 }
 
 /**
@@ -282,7 +368,7 @@ function estadoInicial(S) {
 function restriccionesDelModo(S, modo) {
   const lista = [];
   for (const [clave, s] of Object.entries(modo.contactos)) {
-    lista.push({ clave: `contacto:${clave}`, unilateral: true, ...restriccionSuperficie(S.sup[s.sup], s.i, radio(S, s.i)) });
+    lista.push({ clave: `contacto:${clave}`, unilateral: true, ...restriccionApoyo(S, S.sup[s.sup], s.i, s.k ?? -1) });
   }
   for (const par of Object.keys(modo.pares)) {
     const [i, j] = par.split(':').map(Number);
@@ -576,7 +662,7 @@ function fuerzas(S, modo, y, lambdasPrevias) {
       const sup = S.sup[s.sup], iP = s.i;
       if (!(sup.mu > 0) || s.pegado) continue;
       const N = Math.max(0, lambdasPrevias[`contacto:${clave}`] || 0);
-      const { vt, grad } = deslizamiento(S, sup, y, iP);
+      const { vt, grad } = deslizamiento(S, sup, y, iP, s.k ?? -1);
       // Sentido fijado al empezar el tramo (ver `simularMecanica`): así el
       // campo es suave dentro del tramo y el integrador no ve el salto de la
       // fricción en las etapas que pasan del cero; el cero es el evento vt0
@@ -618,8 +704,8 @@ function dinamica(S, modo, y, restr) {
       if (!s.pegado) continue;
       // Sin deslizar en el punto de contacto: en un disco que gira es la
       // rodadura (el centro avanza y el disco gira a la vez)
-      const { vt, grad } = deslizamiento(S, S.sup[s.sup], y, s.i);
-      pegadas.push({ clave: `pegado:${clave}`, evaluar: () => ({ C: 0, Cp: vt, grad, jdv: 0 }) });
+      const { vt, grad, jdv } = deslizamiento(S, S.sup[s.sup], y, s.i, s.k ?? -1);
+      pegadas.push({ clave: `pegado:${clave}`, evaluar: () => ({ C: 0, Cp: vt, grad, jdv }) });
       ev.push(pegadas[pegadas.length - 1].evaluar());
     }
     const k = ev.length;
@@ -678,19 +764,23 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
   // rueda por el suelo puede chocar con la pared)
   for (let i = 0; i < n; i++) {
     S.sup.forEach((sup, js) => {
-      if (modo.contactos[`${i}:${js}`] || ajenos(S, i, sup)) return;
-      const r = restriccionSuperficie(sup, i, radio(S, i));
-      const C0 = r.evaluar(y0).C, dentro0 = margenSuperficie(sup, puntoRel(sup, y0, i)) >= 0;
-      // Un hueco inicial nulo o negativo no cambiaría de signo: se mide desde él
-      const off = C0 <= TOL_HUECO && C0 > -tolContacto(Math.max(radio(S, i), 1e-3)) * 100 && dentro0 ? Math.min(C0, 0) - TOL_HUECO : 0;
-      ev.push({
-        nombre: `impacto:${i}:${js}`, direccion: -1, terminal: true,
-        // Solo cuenta dentro de la extensión de la superficie. max(C, −margen)
-        // es continua (no salta al cruzar el borde), así que el cambio de signo
-        // entre dos pasos es fiable; un cruce por el borde con C < 0 (desde
-        // detrás) se descarta al tratarlo.
-        g: (t, y) => Math.max(r.evaluar(y).C - off, -margenSuperficie(sup, puntoRel(sup, y, i))),
-      });
+      if (ajenos(S, i, sup)) return;
+      for (const kv of apoyosDe(S, i)) {
+        const clave = claveApoyo(i, kv, js);
+        if (modo.contactos[clave]) continue;
+        const r = restriccionApoyo(S, sup, i, kv);
+        const C0 = r.evaluar(y0).C, dentro0 = margenSuperficie(sup, puntoApoyo(S, sup, y0, i, kv)) >= 0;
+        // Un hueco inicial nulo o negativo no cambiaría de signo: se mide desde él
+        const off = C0 <= TOL_HUECO && C0 > -tolContacto(Math.max(radio(S, i), 1e-3)) * 100 && dentro0 ? Math.min(C0, 0) - TOL_HUECO : 0;
+        ev.push({
+          nombre: `impacto:${clave}`, direccion: -1, terminal: true,
+          // Solo cuenta dentro de la extensión de la superficie. max(C, −margen)
+          // es continua (no salta al cruzar el borde), así que el cambio de signo
+          // entre dos pasos es fiable; un cruce por el borde con C < 0 (desde
+          // detrás) se descarta al tratarlo.
+          g: (t, y) => Math.max(r.evaluar(y).C - off, -margenSuperficie(sup, puntoApoyo(S, sup, y, i, kv))),
+        });
+      }
     });
   }
   // Contactos activos: despegue (λ → 0), fin del segmento, fricción
@@ -701,7 +791,7 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
       g: (t, y) => (din(y).lambdas[`contacto:${clave}`] ?? 0),
     });
     if (sup.tipo === 'segmento' || sup.a0 != null) {
-      ev.push({ nombre: `fin:${clave}`, direccion: -1, terminal: true, g: (t, y) => margenSuperficie(sup, puntoRel(sup, y, iP)) });
+      ev.push({ nombre: `fin:${clave}`, direccion: -1, terminal: true, g: (t, y) => margenSuperficie(sup, puntoApoyo(S, sup, y, iP, s.k ?? -1)) });
     }
     if (sup.mu > 0) {
       if (s.pegado) {
@@ -713,7 +803,7 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
       } else {
         ev.push({
           nombre: `vt0:${clave}`, direccion: 0, terminal: true,
-          g: (t, y) => deslizamiento(S, sup, y, iP).vt,
+          g: (t, y) => deslizamiento(S, sup, y, iP, s.k ?? -1).vt,
         });
       }
     }
@@ -771,8 +861,8 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
   }
   // Choques entre partículas con radio; los pares en contacto se separan cuando λ → 0
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    if (!parPosible(S, i, j)) continue;
     const R = radio(S, i) + radio(S, j);
-    if (!(R > 0)) continue;
     if (modo.pares[`${i}:${j}`]) {
       ev.push({ nombre: `separa:${i}:${j}`, direccion: -1, terminal: true, g: (t, y) => din(y).lambdas[`par:${i}:${j}`] ?? 0 });
     } else {
@@ -915,7 +1005,7 @@ export function simularMecanica(escena) {
   const hayCinematicos = S.P.some(p => p.cinematica);
   const DUR = escena.duracion ?? 5, UMBRAL = escena.umbral ?? 1e-3, RTOL = escena.rtol ?? 1e-10;
   let y = estadoInicial(S), t = 0;
-  /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean, sentido?: number}>, pares: Record<string, boolean>, cuerdas: Record<string, any>}} */
+  /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean, sentido?: number, k?: number}>, pares: Record<string, boolean>, cuerdas: Record<string, any>}} */
   let modo = { contactos: {}, pares: {}, cuerdas: {} };
   for (const c of S.con) {
     if (c.tipo === 'cuerda' || c.tipo === 'polea') {
@@ -927,13 +1017,15 @@ export function simularMecanica(escena) {
   S.sup.forEach((sup, js) => {
     for (let i = 0; i < S.n; i++) {
       if (ajenos(S, i, sup)) continue;
-      const { C, Cp } = restriccionSuperficie(sup, i, radio(S, i)).evaluar(y);
-      if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9 && dentroDeSuperficie(sup, puntoRel(sup, y, i))) modo.contactos[`${i}:${js}`] = { i, sup: js, pegado: false };
+      for (const kv of apoyosDe(S, i)) {
+        const { C, Cp } = restriccionApoyo(S, sup, i, kv).evaluar(y);
+        if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9 && dentroDeSuperficie(sup, puntoApoyo(S, sup, y, i, kv))) modo.contactos[claveApoyo(i, kv, js)] = { i, sup: js, pegado: false, k: kv };
+      }
     }
   });
   // Discos que empiezan tocándose y en reposo relativo (una pila, una fila)
   for (let i = 0; i < S.n; i++) for (let j = i + 1; j < S.n; j++) {
-    if (!(radio(S, i) + radio(S, j) > 0)) continue;
+    if (!parPosible(S, i, j)) continue;
     const { C, Cp } = restriccionPar(S, i, j).evaluar(y);
     if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9) modo.pares[`${i}:${j}`] = true;
   }
@@ -994,7 +1086,7 @@ export function simularMecanica(escena) {
   for (const [clave, s] of Object.entries(modo.contactos)) {
     const sup = S.sup[s.sup];
     if (!(sup.mu > 0)) continue;
-    if (Math.abs(deslizamiento(S, sup, y, s.i).vt) > 1e-12) continue;
+    if (Math.abs(deslizamiento(S, sup, y, s.i, s.k ?? -1).vt) > 1e-12) continue;
     s.pegado = true;
     const L = dinamica(S, modo, y, restriccionesDelModo(S, modo)).lambdas;
     if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
@@ -1005,10 +1097,13 @@ export function simularMecanica(escena) {
   // Así un choque no puede empezar y terminar dentro de un mismo paso.
   let escalaPaso = Infinity;
   for (let i = 0; i < S.n; i++) if (radio(S, i) > 0) escalaPaso = Math.min(escalaPaso, radio(S, i));
+  // Un bloque: medio lado menor; sus vértices van a v + ω·(media diagonal)
+  const semidiag = S.P.map((p, i) => (S.vert[i] ? Math.hypot(p.ancho, p.alto) / 2 : 0));
+  S.P.forEach((p, i) => { if (S.vert[i]) escalaPaso = Math.min(escalaPaso, Math.min(p.ancho, p.alto) / 2); });
   for (const sup of S.sup) escalaPaso = Math.min(escalaPaso, sup.tipo === 'segmento' ? sup.geo.L / 2 : sup.r / 2);
   const hMaxDe = Number.isFinite(escalaPaso) ? (/** @type {number} */ tt, /** @type {number[]} */ yy) => {
     let v = 0;
-    for (let i = 0; i < S.n; i++) v = Math.max(v, Math.hypot(yy[4 * i + 2], yy[4 * i + 3]));
+    for (let i = 0; i < S.n; i++) v = Math.max(v, Math.hypot(yy[4 * i + 2], yy[4 * i + 3]) + (semidiag[i] ? semidiag[i] * Math.abs(yy[S.base + 2 * S.rot[i] + 1]) : 0));
     return v > 0 ? 0.25 * escalaPaso / v : Infinity;
   } : undefined;
 
@@ -1021,22 +1116,26 @@ export function simularMecanica(escena) {
       else sumarVelocidad(S, y, i, P * gx * S.im[i], P * gy * S.im[i]);
     }
   };
-  /** Impacto de la partícula i con la superficie js; devuelve la descripción o '' si no hay choque. */
-  const impacto = (i, js, zeno) => {
+  /**
+   * Impacto del apoyo kv de la partícula i con la superficie js; devuelve la
+   * descripción o '' si no hay choque. El impulso va a lo largo del
+   * gradiente del hueco, repartido con las masas (y la inercia, en el vértice
+   * de un bloque): J = −(1 + e)·Ċ / (∇C·M⁻¹·∇C). Si la superficie es fija o va
+   * sobre un cuerpo cinemático, solo cambia la partícula.
+   */
+  const impacto = (i, js, zeno, kv = -1) => {
     const sup = S.sup[js];
-    const n = normalLibre(sup, puntoRel(sup, y, i));
-    const v = velocidadRel(sup, y, i), vn = dot(v, n);
+    if (S.im[i] === 0) return '';
+    const { Cp: vn, grad } = restriccionApoyo(S, sup, i, kv).evaluar(y);
     const e = sup.e ?? 1, vn2 = -e * vn;
     if (vn >= 0) return '';
-    // Impulso a lo largo de la normal repartido con las masas: si la superficie
-    // es fija o va sobre un cuerpo cinemático, solo cambia la partícula
-    const j = sup.j, wi = S.im[i], wj = j >= 0 ? S.im[j] : 0;
-    if (wi === 0) return '';
+    let den = 0;
+    for (const [q, gx, gy] of grad) den += (gx * gx + gy * gy) * S.im[q];
     const contacto = vn2 < UMBRAL || zeno;
-    const J = -(1 + (contacto ? 0 : e)) * vn / (wi + wj);
-    impulsoFila(j >= 0 ? [[i, n[0], n[1]], [j, -n[0], -n[1]]] : [[i, n[0], n[1]]], J);
+    const J = -(1 + (contacto ? 0 : e)) * vn / den;
+    impulsoFila(grad, J);
     if (contacto) {
-      modo.contactos[`${i}:${js}`] = { i, sup: js, pegado: false };
+      modo.contactos[claveApoyo(i, kv, js)] = { i, sup: js, pegado: false, k: kv };
       return `Choque y contacto con ${sup.id}`;
     }
     return `Choque con ${sup.id}`;
@@ -1077,8 +1176,8 @@ export function simularMecanica(escena) {
     for (let vuelta = 0; vuelta < 4 * S.n + 10; vuelta++) {
       let hubo = false;
       for (let i = 0; i < S.n; i++) for (let j = i + 1; j < S.n; j++) {
+        if (!parPosible(S, i, j)) continue;
         const R = radio(S, i) + radio(S, j);
-        if (!(R > 0)) continue;
         const clave = `${i}:${j}`, { C, Cp } = restriccionPar(S, i, j).evaluar(y);
         if (modo.pares[clave]) {
           // Apoyados: un impulso que llega (otro choque) se transmite como choque;
@@ -1098,22 +1197,25 @@ export function simularMecanica(escena) {
         const ri = radio(S, i);
         S.sup.forEach((sup, js) => {
           if (ajenos(S, i, sup)) return;     // su propia superficie, o dos cuerpos que no pueden empujarse
-          const clave = `${i}:${js}`, actual = modo.contactos[clave], p = puntoRel(sup, y, i);
-          const { C, Cp } = restriccionSuperficie(sup, i, ri).evaluar(y);
-          if (actual) {
-            // Apoyada: un impulso hacia la superficie es un choque; uno que la
-            // aleja la despega; un resto lento lo quita la proyección del final
-            if (Cp < -UMBRAL) {
-              delete modo.contactos[clave];
-              if (anotar(`impacto:${clave}`, () => impacto(i, js, zeno))) hubo = true;
-              if (modo.contactos[clave] && actual.pegado) modo.contactos[clave].pegado = true;
-            } else if (Cp > UMBRAL) delete modo.contactos[clave];
-            return;
-          }
-          if (excluir.has('sup:' + clave)) return;
-          if (C < -TOL_PENETRACION || margenSuperficie(sup, p) < 0) return;
-          if (Cp < -1e-12 && ((C <= TOL_HUECO && Cp < -UMBRAL) || (C > TOL_HUECO && C <= tolContacto(ri) && lentos(i, -1)))) {
-            if (anotar(`impacto:${clave}`, () => impacto(i, js, zeno))) hubo = true;
+          for (const kv of apoyosDe(S, i)) {
+            const clave = claveApoyo(i, kv, js), actual = modo.contactos[clave], p = puntoApoyo(S, sup, y, i, kv);
+            const { C, Cp } = restriccionApoyo(S, sup, i, kv).evaluar(y);
+            if (actual) {
+              // Apoyada: un impulso hacia la superficie es un choque; uno que la
+              // aleja la despega; un resto lento lo quita la proyección del final
+              if (Cp < -UMBRAL) {
+                delete modo.contactos[clave];
+                if (anotar(`impacto:${clave}`, () => impacto(i, js, zeno, kv))) hubo = true;
+                if (modo.contactos[clave] && actual.pegado) modo.contactos[clave].pegado = true;
+              } else if (Cp > UMBRAL) delete modo.contactos[clave];
+              continue;
+            }
+            if (excluir.has('sup:' + clave)) continue;
+            if (C < -TOL_PENETRACION || margenSuperficie(sup, p) < 0) continue;
+            const lento = Math.hypot(...velocidadApoyo(S, sup, y, i, kv)) <= UMBRAL;
+            if (Cp < -1e-12 && ((C <= TOL_HUECO && Cp < -UMBRAL) || (C > TOL_HUECO && C <= tolContacto(ri) && lento))) {
+              if (anotar(`impacto:${clave}`, () => impacto(i, js, zeno, kv))) hubo = true;
+            }
           }
         });
       }
@@ -1131,9 +1233,9 @@ export function simularMecanica(escena) {
   const proyeccionInelastica = (excluir = new Set()) => {
     /** @type {{e: {C: number, Cp: number, grad: number[][], jdv: number}, alta: null | (() => void)}[]} */
     const cand = [];
-    for (const [clave, s] of Object.entries(modo.contactos)) cand.push({ e: restriccionSuperficie(S.sup[s.sup], s.i, radio(S, s.i)).evaluar(y), alta: null });
+    for (const s of Object.values(modo.contactos)) cand.push({ e: restriccionApoyo(S, S.sup[s.sup], s.i, s.k ?? -1).evaluar(y), alta: null });
     for (let i = 0; i < S.n; i++) for (let j = i + 1; j < S.n; j++) {
-      if (!(radio(S, i) + radio(S, j) > 0)) continue;
+      if (!parPosible(S, i, j)) continue;
       const clave = `${i}:${j}`;
       if (!modo.pares[clave] && excluir.has('par:' + clave)) continue;
       const e = restriccionPar(S, i, j).evaluar(y);
@@ -1143,10 +1245,12 @@ export function simularMecanica(escena) {
     for (let i = 0; i < S.n; i++) {
       S.sup.forEach((sup, js) => {
         if (ajenos(S, i, sup)) return;
-        const clave = `${i}:${js}`, p = puntoRel(sup, y, i);
-        if (modo.contactos[clave] || excluir.has('sup:' + clave) || margenSuperficie(sup, p) < 0) return;
-        const e = restriccionSuperficie(sup, i, radio(S, i)).evaluar(y);
-        if (e.C <= TOL_HUECO && e.C >= -TOL_PENETRACION) cand.push({ e, alta: () => { modo.contactos[clave] = { i, sup: js, pegado: false }; } });
+        for (const kv of apoyosDe(S, i)) {
+          const clave = claveApoyo(i, kv, js), p = puntoApoyo(S, sup, y, i, kv);
+          if (modo.contactos[clave] || excluir.has('sup:' + clave) || margenSuperficie(sup, p) < 0) continue;
+          const e = restriccionApoyo(S, sup, i, kv).evaluar(y);
+          if (e.C <= TOL_HUECO && e.C >= -TOL_PENETRACION) cand.push({ e, alta: () => { modo.contactos[clave] = { i, sup: js, pegado: false, k: kv }; } });
+        }
       });
     }
     if (!cand.some(c => c.e.Cp < -1e-12)) return;
@@ -1194,8 +1298,8 @@ export function simularMecanica(escena) {
       const [tipo, ...resto2] = a.split(':');
       let nombreEv = '', claveEv = '';
       if (tipo === 'contacto') {
-        const i = Number(resto2[0]), sup = S.sup[Number(resto2[1])];
-        const borde = margenSuperficie(sup, puntoRel(sup, y, i)) <= 1e-6;
+        const [i, kv] = apoyoDe(resto2[0]), sup = S.sup[Number(resto2[1])];
+        const borde = margenSuperficie(sup, puntoApoyo(S, sup, y, i, kv)) <= 1e-6;
         nombreEv = borde ? `Sale del borde (${S.P[i].id})` : `Se despega (${S.P[i].id})`;
         claveEv = `${borde ? 'fin' : 'despegue'}:${resto2.join(':')}`;
       } else if (tipo === 'par') {
@@ -1311,36 +1415,36 @@ export function simularMecanica(escena) {
     const excluir = new Set();
     let descripcion = '';
     if (partes[0] === 'impacto') {
-      const i = Number(partes[1]), js = Number(partes[2]);
-      const { C } = restriccionSuperficie(S.sup[js], i, radio(S, i)).evaluar(y);
+      const [i, kv] = apoyoDe(partes[1]), js = Number(partes[2]);
+      const { C } = restriccionApoyo(S, S.sup[js], i, kv).evaluar(y);
       // Si el evento lo disparó el borde (la partícula entra en la extensión de
       // la superficie estando detrás, C < 0), o no se acerca, no hay choque.
       // Dentro de la extensión es un impacto aunque haya un solape pequeño.
-      const porBorde = margenSuperficie(S.sup[js], puntoRel(S.sup[js], y, i)) <= TOL_HUECO && C < -TOL_PENETRACION;
-      descripcion = porBorde ? '' : impacto(i, js, zeno);
+      const porBorde = margenSuperficie(S.sup[js], puntoApoyo(S, S.sup[js], y, i, kv)) <= TOL_HUECO && C < -TOL_PENETRACION;
+      descripcion = porBorde ? '' : impacto(i, js, zeno, kv);
       if (!descripcion) silenciar(nombre);
     } else if (partes[0] === 'despegue') {
       const clave = `${partes[1]}:${partes[2]}`;
       excluir.add('sup:' + clave);
       delete modo.contactos[clave];
-      descripcion = `Se despega (${S.P[Number(partes[1])].id})`;
+      descripcion = `Se despega (${S.P[apoyoDe(partes[1])[0]].id})`;
     } else if (partes[0] === 'fin') {
       const clave = `${partes[1]}:${partes[2]}`;
       excluir.add('sup:' + clave);
       delete modo.contactos[clave];
-      descripcion = `Sale del borde (${S.P[Number(partes[1])].id})`;
+      descripcion = `Sale del borde (${S.P[apoyoDe(partes[1])[0]].id})`;
     } else if (partes[0] === 'vt0') {
-      const clave = `${partes[1]}:${partes[2]}`, i = Number(partes[1]), s = modo.contactos[clave];
+      const clave = `${partes[1]}:${partes[2]}`, i = apoyoDe(partes[1])[0], s = modo.contactos[clave];
       s.pegado = true;
       const restr2 = restriccionesDelModo(S, modo);
       const L = dinamica(S, modo, y, restr2).lambdas, sup = S.sup[s.sup];
       // ¿La fricción estática alcanza para mantenerlo quieto?
       if ((sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]) < Math.abs(L[`pegado:${clave}`])) s.pegado = false;
-      descripcion = s.pegado ? (S.rot[i] >= 0 ? `Rueda sin deslizar (${S.P[i].id})` : `Se detiene (${S.P[i].id})`) : `Invierte el deslizamiento (${S.P[i].id})`;
+      descripcion = s.pegado ? (S.vert[i] ? `Deja de deslizar (${S.P[i].id})` : S.rot[i] >= 0 ? `Rueda sin deslizar (${S.P[i].id})` : `Se detiene (${S.P[i].id})`) : `Invierte el deslizamiento (${S.P[i].id})`;
       if (!s.pegado) {
         // Empuja un poco para que el evento no se repita en el mismo instante
         // (con el sentido de la aceleración del deslizamiento, giro incluido)
-        const { t: tg, grad } = deslizamiento(S, sup, y, i), a = dinamica(S, modo, y, restr2).acc;
+        const { t: tg, grad } = deslizamiento(S, sup, y, i, s.k ?? -1), a = dinamica(S, modo, y, restr2).acc;
         let at = 0;
         for (const [q, gx, gy] of grad) at += gx * a[2 * q] + gy * a[2 * q + 1];
         const sgn = Math.sign(at) || 1;
@@ -1348,7 +1452,7 @@ export function simularMecanica(escena) {
       }
     } else if (partes[0] === 'desliza') {
       modo.contactos[`${partes[1]}:${partes[2]}`].pegado = false;
-      descripcion = `Empieza a deslizar (${S.P[Number(partes[1])].id})`;
+      descripcion = `Empieza a deslizar (${S.P[apoyoDe(partes[1])[0]].id})`;
     } else if (partes[0] === 'tensa') {
       const c = S.con.find(x => x.id === partes[1]);
       modo.cuerdas[c.id].tensa = true;

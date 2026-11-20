@@ -881,3 +881,95 @@ describe('discos que giran: rodadura y fricción en el punto de contacto', () =>
     expect(s.w).toBe(0); expect(s.th).toBe(0);
   });
 });
+
+describe('bloques rígidos: rectángulos que giran y se apoyan por sus vértices', () => {
+  const rad = Math.PI / 180;
+  /** Bloque de ancho a y alto h apoyado de plano en un plano de ángulo φ que baja hacia la derecha. */
+  const enPlano = ({ phi = 20 * rad, mu = 0.8, a = 0.4, h = 0.2, m = 2, s0 = 1, dur = 1 } = {}) => {
+    const t = [Math.cos(phi), -Math.sin(phi)], n = [Math.sin(phi), Math.cos(phi)];
+    return {
+      duracion: dur,
+      superficies: [{ id: 'S', tipo: 'segmento', a: [0, 0], b: [6 * t[0], 6 * t[1]], e: 0, mu }],
+      particulas: [{ id: 'B', m, forma: 'bloque', ancho: a, alto: h, theta: -phi, p: [s0 * t[0] + h / 2 * n[0], s0 * t[1] + h / 2 * n[1]], v: [0, 0] }],
+    };
+  };
+
+  it('quieto sobre el suelo: dos apoyos, sin eventos, y las normales suman m·g', () => {
+    const sim = simularMecanica({ duracion: 1, superficies: [{ id: 'suelo', tipo: 'segmento', a: [-2, 0], b: [2, 0], e: 0, mu: 0.5 }], particulas: [{ id: 'B', m: 3, forma: 'bloque', ancho: 0.5, alto: 0.3, p: [0.2, 0.15], v: [0, 0] }] });
+    expect(sim.eventos).toEqual([]);
+    expect(Object.keys(sim.tramos[0].modo.contactos).sort()).toEqual(['0.0:0', '0.1:0']);
+    const s = estadoMecanica(sim, 1)[0];
+    cerca(s.y, 0.15, 1e-10); cerca(s.x, 0.2, 1e-10); cerca(s.th, 0, 1e-10);
+  });
+
+  it('desliza por el plano sin girar: a = g(senφ − μ cosφ)', () => {
+    const phi = 30 * rad, mu = 0.2, sim = simularMecanica(enPlano({ phi, mu }));
+    const s0 = estadoMecanica(sim, 0)[0], s = estadoMecanica(sim, 1)[0];
+    const d = (s.x - s0.x) * Math.cos(phi) - (s.y - s0.y) * Math.sin(phi);
+    cerca(d, g * (Math.sin(phi) - mu * Math.cos(phi)) / 2, 1e-8);
+    cerca(s.th, -phi, 1e-9); cerca(s.w, 0, 1e-9);
+    cerca(energiaMecanica(sim, 1).E + energiaMecanica(sim, 1).Qc, energiaMecanica(sim, 0).E, 1e-9);
+  });
+
+  it('con fricción alta, un bloque ancho se queda quieto y uno alto vuelca (tan φ > a/h)', () => {
+    const phi = 20 * rad;    // tan 20° ≈ 0.364
+    const ancho = simularMecanica(enPlano({ phi, a: 0.4, h: 0.4 }));
+    const qa = estadoMecanica(ancho, 1)[0];
+    cerca(qa.th, -phi, 1e-9); cerca(qa.w, 0, 1e-9);
+    const alto = simularMecanica(enPlano({ phi, a: 0.2, h: 0.8, dur: 0.6 }));
+    const qb = estadoMecanica(alto, 0.6)[0];
+    expect(qb.th).toBeLessThan(-phi - 0.05);      // gira hacia abajo del plano
+    // Desde el principio solo se apoya en el vértice de abajo: el de arriba se suelta (λ < 0 en el LCP)
+    const tr = alto.tramos.find(x => x.t0 <= 0.3 && 0.3 <= x.t1);
+    expect(Object.keys(tr.modo.contactos)).toEqual(['0.1:0']);
+  });
+
+  it('vuelco sobre una arista: el vértice no se mueve y ½·I_p·ω² = m·g·(h₀ − h)', () => {
+    // Bloque de 0.2 × 0.6 apoyado en su vértice derecho (0, 0), inclinado 25°: el centro pasa del pivote
+    const a = 0.2, h = 0.6, m = 1, th0 = -25 * rad, Ip = m * (a * a + h * h) / 12 + m * (a * a + h * h) / 4;
+    const c = Math.cos(th0), sn = Math.sin(th0), pc = [-(c * a / 2 - sn * -h / 2), -(sn * a / 2 + c * -h / 2)];
+    const sim = simularMecanica({
+      duracion: 0.4,
+      superficies: [{ id: 'suelo', tipo: 'segmento', a: [-3, 0], b: [3, 0], e: 0, mu: 2 }],
+      particulas: [{ id: 'B', m, forma: 'bloque', ancho: a, alto: h, theta: th0, p: pc, v: [0, 0] }],
+    });
+    expect(Object.keys(sim.tramos[0].modo.contactos)).toEqual(['0.1:0']);
+    for (const t of [0.1, 0.2, 0.3]) {
+      const s = estadoMecanica(sim, t)[0];
+      // Vértice 1 (abajo a la derecha) sigue en el origen
+      const vx = s.x + Math.cos(s.th) * a / 2 - Math.sin(s.th) * -h / 2, vy = s.y + Math.sin(s.th) * a / 2 + Math.cos(s.th) * -h / 2;
+      cerca(vx, 0, 1e-8); cerca(vy, 0, 1e-8);
+      cerca(0.5 * Ip * s.w * s.w, m * g * (pc[1] - s.y), 1e-8);
+    }
+  });
+
+  it('cae de plano sobre el suelo: choque inelástico de los dos vértices, queda en reposo y el balance cierra', () => {
+    const sim = simularMecanica({
+      duracion: 1, superficies: [{ id: 'suelo', tipo: 'segmento', a: [-2, 0], b: [2, 0], e: 0, mu: 0.5 }],
+      particulas: [{ id: 'B', m: 2, forma: 'bloque', ancho: 0.4, alto: 0.2, p: [0, 0.6], v: [0, 0] }],
+    });
+    expect(sim.incompleta).toBeNull();
+    const s = estadoMecanica(sim, 1)[0];
+    cerca(s.y, 0.1, 1e-8); cerca(s.vy, 0, 1e-9); cerca(s.th, 0, 1e-9);
+    const e = energiaMecanica(sim, 1);
+    cerca(e.Qi, 2 * g * 0.5, 1e-8);
+    cerca(e.E + e.Qc + e.Qi, energiaMecanica(sim, 0).E, 1e-9);
+  });
+
+  it('cae girando sobre una esquina y rebota: el balance de energía cierra', () => {
+    const sim = simularMecanica({
+      duracion: 1.5, superficies: [{ id: 'suelo', tipo: 'segmento', a: [-3, 0], b: [3, 0], e: 0.5, mu: 0.4 }],
+      particulas: [{ id: 'B', m: 1, forma: 'bloque', ancho: 0.3, alto: 0.2, theta: 0.4, w: 3, p: [0, 0.8], v: [0.5, 0] }],
+    });
+    expect(sim.incompleta).toBeNull();
+    for (const t of [0.5, 1, 1.5]) {
+      const e = energiaMecanica(sim, t);
+      cerca(e.E + e.Qc + e.Qi, energiaMecanica(sim, 0).E, 1e-7);
+    }
+    // Nunca atraviesa el suelo
+    for (let k = 0; k <= 60; k++) {
+      const s = estadoMecanica(sim, k * 0.025)[0];
+      for (const [vx, vy] of [[-0.15, -0.1], [0.15, -0.1], [0.15, 0.1], [-0.15, 0.1]]) expect(s.y + Math.sin(s.th) * vx + Math.cos(s.th) * vy).toBeGreaterThan(-1e-5);
+    }
+  });
+});
