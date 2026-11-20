@@ -143,6 +143,13 @@
     ctx.save(); ctx.setLineDash([]);
     ctx.fillStyle = this.t.campo; ctx.strokeStyle = this.t.tinta; ctx.lineWidth = G.materia + (o.grueso ? 0.5 : 0);
     ctx.beginPath(); ctx.arc(x, y, R, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    // Disco que gira: un radio marcado con su ángulo (o.giro, rad, antihorario)
+    // deja ver la rodadura; el lienzo tiene el eje y hacia abajo
+    if (o.giro != null && Number.isFinite(o.giro)) {
+      const c = Math.cos(o.giro), s = Math.sin(o.giro), r0 = R >= 10 ? 6 : 2;
+      ctx.lineWidth = G.materia; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x + r0 * c, y - r0 * s); ctx.lineTo(x + R * c, y - R * s); ctx.stroke();
+    }
     ctx.restore();
     if (R >= 10) this.centroMasa(p);
     else { ctx.save(); ctx.fillStyle = this.t.tinta; ctx.beginPath(); ctx.arc(x, y, 1.75, 0, 2 * Math.PI); ctx.fill(); ctx.restore(); }

@@ -91,3 +91,18 @@ vieja.
     Bulirsch–Stoer adaptativo hasta orden 16, como MERCURY y SWIFT. La
     especificación proponía IAS15 o Dormand–Prince 8; Bulirsch–Stoer da la
     misma exactitud en los encuentros con menos código.
+18. **Discos que giran: el giro es un grado de libertad más en las mismas
+    filas (2026-11-19).** Un disco con inercia (I = k·m·r²) suma θ y ω al
+    final del estado. En los gradientes de las restricciones su giro tiene
+    el índice n + q y masa inversa 1/I, de modo que J M⁻¹ Jᵀ, el LCP, los
+    impulsos y las proyecciones no cambian. La fricción (cinética y
+    adherencia) actúa sobre el deslizamiento del punto de contacto,
+    t̂·v + cr·ω con cr = −r·t̂·(ẑ×n̂): la adherencia es la rodadura sin
+    deslizar y la fricción cinética hace par. El sentido de la fricción
+    cinética queda fijo en cada tramo (antes se evaluaba signo(v_t) en cada
+    etapa del integrador: el paso que contenía el cero mezclaba los dos
+    sentidos y el instante en que una bola empieza a rodar salía 10⁻⁸ s
+    tarde); el cero es el evento vt0. Los choques siguen sin fricción
+    (impulso normal, que no cambia ω) y el contacto entre discos sigue sin
+    fricción; los bloques que vuelcan (polígonos con vértices) quedan para
+    después: encajan en el mismo esquema, con filas por vértice.

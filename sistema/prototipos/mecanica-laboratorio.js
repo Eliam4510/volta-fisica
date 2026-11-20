@@ -186,6 +186,8 @@ export function normalizarEscena(d) {
       n = { id: o.id, tipo: 'particula', nombre, m: numero(o.m, 1, 1e-6, 1e6), x: numero(o.x, 0, -1e6, 1e6), y: numero(o.y, 0, -1e6, 1e6),
         v: numero(o.v, 0, 0, 1e5), ang: numero(o.ang, 0, -360, 360), radio: numero(o.radio, 0, 0, 100), sobre: typeof o.sobre === 'string' ? o.sobre : null,
         F: numero(o.F, 0, 0, 1e9), angF: numero(o.angF, 0, -360, 360), cinematica: o.cinematica === true,
+        // Giro de un disco: I = inercia·m·r² (0, no gira) y ω inicial (rad/s)
+        inercia: numero(o.inercia, 0, 0, 1), w: numero(o.w, 0, -1e4, 1e4),
         // Aceleración impuesta por tramos [hasta t, ax, ay], hasta 12 tramos
         perfil: o.cinematica === true && Array.isArray(o.perfil) && o.perfil.length
           ? o.perfil.filter(f => Array.isArray(f) && f.length === 3).slice(0, 12).map(f => [numero(f[0], 0, 0, 1e6), numero(f[1], 0, -1e4, 1e4), numero(f[2], 0, -1e4, 1e4)])
@@ -248,6 +250,10 @@ export function posicionParticula(esc, p) {
 }
 /** Velocidad inicial [vx, vy] de una partícula (ángulos de 90° exactos). */
 export function velocidadParticula(p) { return [p.v * cosd(p.ang), p.v * sind(p.ang)]; }
+/** ¿La partícula es un disco que gira? (con radio e inercia, y no de movimiento impuesto) */
+export const gira = p => p.tipo === 'particula' && p.radio > 0 && p.inercia > 0 && !p.cinematica;
+/** Formas de giro: factor k de I = k·m·r². */
+export const FORMAS_GIRO = [['0', 'No gira'], ['0.5', 'Disco'], ['0.4', 'Esfera'], ['1', 'Aro']];
 
 /** Id libre con un prefijo: p1, p2… */
 export function nuevoId(esc, prefijo) {
@@ -337,6 +343,7 @@ export function aMotor(esc) {
       id: p.id, m: p.m, p: posiciones[i], v: velocidadParticula(p), radio: p.radio || 0,
       ...(p.F > 0 && !p.cinematica ? { F: [p.F * cosd(p.angF || 0), p.F * sind(p.angF || 0)] } : {}),
       ...(p.cinematica ? { cinematica: true, ...(p.perfil && p.perfil.length ? { perfil: p.perfil.map(f => [...f]) } : {}) } : {}),
+      ...(gira(p) ? { inercia: p.inercia, w: p.w || 0 } : {}),
     })),
     // Una superficie llevada por un cuerpo se da relativa a su posición inicial
     superficies: superficies.map(s => {
@@ -363,7 +370,7 @@ export function tramoEn(sim, t) {
 }
 /** Contactos de un modo como lista {i, sup, pegado}, en el formato nuevo («i:js») o en el anterior («i»). */
 export function contactosDe(modo) {
-  return Object.entries(modo?.contactos || {}).map(([k, v]) => ({ i: v.i ?? Number(k.split(':')[0]), sup: v.sup, pegado: !!v.pegado }));
+  return Object.entries(modo?.contactos || {}).map(([k, v]) => ({ i: v.i ?? Number(k.split(':')[0]), sup: v.sup, pegado: !!v.pegado, ...(v.sentido ? { sentido: v.sentido } : {}) }));
 }
 
 /**
@@ -384,7 +391,7 @@ export function describirEvento(ev, M) {
     case 'impacto': d = `${P(partes[1])} choca con ${S(partes[2])}${contacto ? ' y queda en contacto' : ''}`; break;
     case 'despegue': d = partes[2] != null ? `${P(partes[1])} se despega de ${S(partes[2])}` : `${P(partes[1])} se despega`; break;
     case 'fin': d = partes[2] != null ? `${P(partes[1])} sale por el borde de ${S(partes[2])}` : `${P(partes[1])} sale por el borde`; break;
-    case 'vt0': d = /detiene/.test(ev.nombre || '') ? `${P(partes[1])} se detiene` : `${P(partes[1])} invierte el deslizamiento`; break;
+    case 'vt0': d = /detiene/.test(ev.nombre || '') ? `${P(partes[1])} se detiene` : /Rueda/.test(ev.nombre || '') ? `${P(partes[1])} rueda sin deslizar` : `${P(partes[1])} invierte el deslizamiento`; break;
     case 'desliza': d = `${P(partes[1])} empieza a deslizar`; break;
     case 'tensa':
       if (con?.tipo === 'union') d = `Se unen ${P(M.indice[con.a])} y ${P(M.indice[con.b])}`;
@@ -448,8 +455,9 @@ function resolverLineal(A, b) {
  * aplicadas conocidas (peso, arrastre, resortes), las reacciones de las
  * restricciones activas salen de m·a − F = Σ λ·∇C por mínimos cuadrados
  * (el sistema es compatible: el motor lo resolvió con esas mismas
- * direcciones). Devuelve por partícula una lista de fuerzas {tipo, F, valor,
- * id} y las tensiones de cada conector.
+ * direcciones). Los discos que giran suman su ecuación I·α = Σ λ·∂C/∂θ: la
+ * fricción en su punto de contacto hace par. Devuelve por partícula una
+ * lista de fuerzas {tipo, F, valor, id} y las tensiones de cada conector.
  * @param {any} sim @param {ReturnType<typeof aMotor>} M @param {number} t
  */
 export function fuerzasEn(sim, M, t) {
@@ -457,6 +465,9 @@ export function fuerzasEn(sim, M, t) {
   const tt = Math.max(tr.t0, Math.min(t, tr.t1));
   const y = interpolar(tr.sol, tt), dy = derivadaInterpolada(tr.sol, tt);
   const pos = i => [y[4 * i], y[4 * i + 1]], vel = i => [y[4 * i + 2], y[4 * i + 3]];
+  // Giro: índice del grado de libertad de rotación de cada partícula (−1 si no gira)
+  const rot = sim.S.rot || [], nr = (sim.S.I || []).length, base = sim.S.base ?? 4 * n + 2;
+  const omega = i => (rot[i] >= 0 ? y[base + 2 * rot[i] + 1] : 0);
   const lista = Array.from({ length: n }, () => []), tensiones = {};
   const g = mot.g;
   // Fuerzas aplicadas
@@ -493,16 +504,21 @@ export function fuerzasEn(sim, M, t) {
     let nrm, tg;
     if (sup.tipo === 'segmento') { const geo = geoSegmento(sup.a, sup.b); nrm = geo.n; tg = geo.t; }
     else { const d = resta(p, sup.c), D = largo(d) || 1e-300, sg = sup.cara === 'interior' ? -1 : 1; nrm = [sg * d[0] / D, sg * d[1] / D]; tg = [-d[1] / D, d[0] / D]; }
-    const vt = punto(tg, v), desliza = sup.mu > 0 && !k.pegado && Math.abs(vt) > 1e-15, sgn = Math.sign(vt);
-    const dir = desliza ? [nrm[0] - sup.mu * sgn * tg[0], nrm[1] - sup.mu * sgn * tg[1]] : nrm;
-    // Si la superficie va sobre un cuerpo j, la reacción lo empuja al revés
+    // Deslizamiento del punto de contacto: t̂·v + cr·ω en un disco que gira
+    // (cr = −r·t̂·(ẑ×n̂), como en el motor), relativo a la superficie
     const j = sup.sobre != null ? idx[sup.sobre] : -1;
-    const conJ = (gx, gy) => (j >= 0 ? [[i, gx, gy], [j, -gx, -gy]] : [[i, gx, gy]]);
-    cols.push({ grad: conJ(dir[0], dir[1]), usar: L => {
+    const cr = rot[i] >= 0 ? -(mot.particulas[i].radio || 0) * (tg[1] * nrm[0] - tg[0] * nrm[1]) : 0;
+    const vt = punto(tg, j >= 0 ? resta(v, vel(j)) : v) + cr * omega(i);
+    const desliza = sup.mu > 0 && !k.pegado && (!!k.sentido || Math.abs(vt) > 1e-15), sgn = k.sentido || Math.sign(vt);
+    const dir = desliza ? [nrm[0] - sup.mu * sgn * tg[0], nrm[1] - sup.mu * sgn * tg[1]] : nrm;
+    // Si la superficie va sobre un cuerpo j, la reacción lo empuja al revés;
+    // la fricción hace par sobre el disco que gira (entrada n + q del giro)
+    const conJ = (gx, gy, gr = 0) => [[i, gx, gy], ...(gr && rot[i] >= 0 ? [[n + rot[i], gr, 0]] : []), ...(j >= 0 ? [[j, -gx, -gy]] : [])];
+    cols.push({ grad: conJ(dir[0], dir[1], desliza ? -sup.mu * sgn * cr : 0), usar: L => {
       lista[i].push({ tipo: 'normal', F: [L * nrm[0], L * nrm[1]], valor: L, id: sup.id });
       if (desliza) lista[i].push({ tipo: 'friccion', F: [-sup.mu * sgn * L * tg[0], -sup.mu * sgn * L * tg[1]], valor: Math.abs(sup.mu * L), id: sup.id });
     } });
-    if (k.pegado && sup.mu > 0) cols.push({ grad: conJ(tg[0], tg[1]), usar: L => lista[i].push({ tipo: 'friccion', F: [L * tg[0], L * tg[1]], valor: Math.abs(L), id: sup.id }) });
+    if (k.pegado && sup.mu > 0) cols.push({ grad: conJ(tg[0], tg[1], cr), usar: L => lista[i].push({ tipo: 'friccion', F: [L * tg[0], L * tg[1]], valor: Math.abs(L), id: sup.id }) });
   }
   for (const par of Object.keys(modo.pares || {})) {
     const [i, j] = par.split(':').map(Number), u = unitario(resta(pos(i), pos(j)));
@@ -550,11 +566,13 @@ export function fuerzasEn(sim, M, t) {
   }
   if (cols.length) {
     // r = m·a − F
-    const r = new Array(2 * n);
+    const r = new Array(2 * (n + nr)).fill(0);
     for (let i = 0; i < n; i++) { const m = mot.particulas[i].m; r[2 * i] = m * dy[4 * i + 2] - F[2 * i]; r[2 * i + 1] = m * dy[4 * i + 3] - F[2 * i + 1]; }
+    // I·α de cada giro (ninguna fuerza aplicada hace par: pasan por el centro)
+    for (let q = 0; q < nr; q++) r[2 * (n + q)] = sim.S.I[q] * dy[base + 2 * q + 1];
     const k = cols.length, A = Array.from({ length: k }, () => new Array(k).fill(0)), bb = new Array(k).fill(0);
     // Un cuerpo cinemático (masa infinita) no da ecuación: su m·a − F no dice nada
-    const w = i => (mot.particulas[i].cinematica ? 0 : 1);
+    const w = i => (i < n && mot.particulas[i].cinematica ? 0 : 1);
     for (let a = 0; a < k; a++) {
       for (const [i, gx, gy] of cols[a].grad) bb[a] += w(i) * (gx * r[2 * i] + gy * r[2 * i + 1]);
       for (let b = 0; b < k; b++) for (const [i, gx, gy] of cols[a].grad) for (const [j, hx, hy] of cols[b].grad) if (i === j) A[a][b] += w(i) * (gx * hx + gy * hy);
@@ -603,7 +621,7 @@ export function pasosFotopuerta(sim, M, f) {
 // ---------------------------------------------------------------------------
 // Escenarios incluidos: tutoriales, ejemplos y MEXT
 // ---------------------------------------------------------------------------
-const P_ = (id, nombre, m, x, y, o = {}) => ({ id, tipo: 'particula', nombre, m, x, y, v: o.v || 0, ang: o.ang || 0, radio: o.radio || 0, sobre: o.sobre || null });
+const P_ = (id, nombre, m, x, y, o = {}) => ({ id, tipo: 'particula', nombre, m, x, y, v: o.v || 0, ang: o.ang || 0, radio: o.radio || 0, sobre: o.sobre || null, ...(o.inercia ? { inercia: o.inercia, w: o.w || 0 } : {}) });
 const SEG = (id, forma, nombre, a, b, o = {}) => ({ id, tipo: 'superficie', forma, nombre, a, b, e: o.e ?? 1, mu: o.mu || 0, muS: o.muS ?? null });
 const ARCO = (id, nombre, c, r, a0, a1, cara, o = {}) => ({ id, tipo: 'superficie', forma: 'arco', nombre, c, r, a0, a1, cara, e: o.e ?? 1, mu: o.mu || 0, muS: o.muS ?? null });
 const g0 = 9.8;
@@ -739,6 +757,31 @@ export const ESCENARIOS = [
   // MEXT, por año. Cada escena reconstruye la situación del problema; la
   // fórmula de la respuesta va en el comentario y se comprueba en
   // pruebas/mecanica-laboratorio-mext.test.js.
+  {
+    id: 'rodadura', tipo: 'ejemplo', titulo: 'Aro, disco y esfera ruedan por un plano',
+    nota: ['Los tres tienen la misma masa y el mismo radio, y ruedan sin deslizar por planos de 20°.', 'Llega antes la esfera (I = ⅖mr²), después el disco (½mr²) y al final el aro (mr²): a = g·sen θ/(1 + I/mr²).', 'Las fotopuertas dan los instantes; en el inspector de cada uno, E_rot es la parte de la cinética que se va en girar.'],
+    // t = √(2d(1 + k)/(g·sen θ)) con d el recorrido hasta la fotopuerta (se comprueba en las pruebas)
+    crear: () => {
+      const th = 20, r = 0.15, s0 = 0.25, L = 3, t = [cosd(th), -sind(th)], n = [sind(th), cosd(th)];
+      const objetos = [];
+      [['Aro', 1, 3], ['Disco', 0.5, 1.6], ['Esfera', 0.4, 0.2]].forEach(([nombre, k, h], j) => {
+        const alto = [0, h], [a, b] = planoDesde(alto, th, L), q = j + 1;
+        objetos.push(SEG(`s${q}`, 'plano', `Plano ${q}`, a, b, { e: 0, mu: 0.5 }), SEG(`m${q}`, 'segmento', `Llano ${q}`, b, [6.4, b[1]], { e: 0, mu: 0.5 }));
+        objetos.push({ ...P_(`p${q}`, nombre, 1, alto[0] + s0 * t[0] + r * n[0], alto[1] + s0 * t[1] + r * n[1], { radio: r, sobre: `s${q}` }), inercia: k, w: 0 });
+        const yq = h - 2.4 * Math.tan(th * DEG);
+        objetos.push({ id: `f${q}`, tipo: 'fotopuerta', nombre: `Meta ${q}`, a: [2.4, yq], b: [2.4, yq + 0.5] });
+      });
+      return { duracion: 2.2, objetos };
+    },
+  },
+  {
+    id: 'bolos', tipo: 'ejemplo', titulo: 'Bola que desliza y acaba rodando',
+    nota: ['La bola sale sin girar a 5 m/s: la fricción la frena y a la vez la hace girar.', 'Cuando el punto de contacto deja de deslizar (t = 2v₀/(7μg)), rueda a 5/7 de v₀ y ya no pierde energía.', 'Elige ω en una gráfica para ver cómo crece el giro hasta ese instante.'],
+    crear: () => ({
+      duracion: 1.6,
+      objetos: [SEG('s1', 'suelo', 'Pista', [-0.6, 0], [7, 0], { e: 0, mu: 0.2 }), { ...P_('p1', 'Bola', 6, 0, 0.11, { v: 5, radio: 0.11, sobre: 's1' }), inercia: 0.4, w: 0 }],
+    }),
+  },
   {
     id: 'ascensor', tipo: 'ejemplo', titulo: 'Ascensor que arranca y frena',
     nota: ['La cabina tiene movimiento impuesto: acelera 2 s a 2 m/s², sube 3 s a velocidad constante y frena 2 s.', 'Activa Normal y fricción en el inspector del paquete: la normal es m(g + a) al arrancar, mg a velocidad constante y m(g − a) al frenar.', 'En el panel de energía, el trabajo de la cabina es lo que sube la potencial del paquete.'],
@@ -1527,7 +1570,7 @@ function iniciar() {
     dibujarConectores(s, pd, tr);
     for (const o of esc.objetos) if (o.tipo === 'clavo') tz.mecClavo([o.x, o.y], { grueso: hover === o.id });
     M.particulas.forEach((o, i) => {
-      tz.mecDisco(pd[i], o.radio || 0, { etiqueta: o.nombre, grueso: hover === o.id, lado: ladoRotulo(i, s[i]) });
+      tz.mecDisco(pd[i], o.radio || 0, { etiqueta: o.nombre, grueso: hover === o.id, lado: ladoRotulo(i, s[i]), ...(gira(o) ? { giro: s[i]?.th ?? 0 } : {}) });
     });
 
     // 7. Magnitudes
@@ -1858,6 +1901,7 @@ function iniciar() {
     rigidez: { u: 'N/m', dim: [0, 1, -2, 0, 0, 0] }, amort: { u: 'N·s/m', dim: [0, 1, -1, 0, 0, 0] }, arrastre2: { u: 'N·s²/m²', dim: [-1, 1, 0, 0, 0, 0] },
     adim: { u: '', dim: 'adimensional' },
     fuerza: { u: 'N', dim: 'fuerza', def: 'N' },
+    angular: { u: 'rad/s', dim: 'frecuencia' },
   };
   /** Lee un campo: número con unidad, expresión o variable (g). Un número solo va en la unidad del campo. */
   function leerCampo(textoCampo, tipoU) {
@@ -1918,6 +1962,14 @@ function iniciar() {
       c += fila('Posición', doble(campo(`${o.id}.x`, p[0], 'longitud', 'x'), campo(`${o.id}.y`, p[1], 'longitud', 'y')));
       c += fila('Velocidad', doble(campo(`${o.id}.v`, o.v, 'velocidad', 'v'), campo(`${o.id}.ang`, o.ang, 'angulo', 'α', 'Ángulo desde el eje x|Direction')));
       c += fila('Radio', campo(`${o.id}.radio`, o.radio, 'longitud', 'r', 'Con radio, choca con otros discos y apoya su borde en las superficies; 0 es una partícula puntual|Radius'));
+      if (o.radio > 0 && !o.cinematica) {
+        const k = FORMAS_GIRO.find(([v]) => Math.abs(Number(v) - (o.inercia || 0)) < 1e-9)?.[0] ?? '';
+        c += fila('Giro', segmentado(`${o.id}.giro`, FORMAS_GIRO.map(([v, t]) => [v, t === 'No gira' ? 'No' : t]), k));
+        if (gira(o)) {
+          c += fila('Velocidad angular', campo(`${o.id}.w`, o.w || 0, 'angular', 'ω', 'Positiva en sentido antihorario|Angular velocity'));
+          c += ayudaFila(`Gira con I = ${({ 0.5: '½', 0.4: '⅖', 1: '1' })[o.inercia] ?? fmt(o.inercia, 3)}·m·r². Con fricción en el apoyo rueda sin deslizar si la fricción estática alcanza; si no, desliza girando.`);
+        }
+      }
       c += fila('Fuerza aplicada', doble(campo(`${o.id}.F`, o.F || 0, 'fuerza', 'F', 'Fuerza constante sobre la partícula durante toda la simulación; 0 la quita|Applied force'), campo(`${o.id}.angF`, o.angF || 0, 'angulo', 'β', 'Dirección de la fuerza desde el eje x|Direction')));
       c += fila('Movimiento', segmentado(`${o.id}.cinematica`, [['no', 'Libre'], ['si', 'Impuesto']], o.cinematica ? 'si' : 'no'));
       if (o.cinematica && !(o.perfil && o.perfil.length)) c += ayudaFila('Se mueve con su velocidad inicial pase lo que pase, como una mano, una cinta o un ascensor. Su masa no cuenta; el trabajo que hace aparece en la energía.');
@@ -2062,6 +2114,7 @@ function iniciar() {
     if (o.tipo === 'particula') {
       if (prop === 'm') { if (!(v > 0)) return 'La masa tiene que ser positiva.'; o.m = v; return; }
       if (prop === 'radio') { if (!(v >= 0)) return 'El radio no puede ser negativo.'; o.radio = v; return; }
+      if (prop === 'w') { if (!(Math.abs(v) <= 1e4)) return 'La velocidad angular va de −10 000 a 10 000 rad/s.'; o.w = v; return; }
       if (prop === 'v') { if (!(v >= 0)) return 'Escribe la rapidez (positiva) y la dirección en α.'; o.v = v; return; }
       if (prop === 'ang') { o.ang = ((v + 180) % 360 + 360) % 360 - 180; return; }
       if (prop === 'F') { if (!(v >= 0)) return 'Escribe el módulo de la fuerza (positivo) y su dirección en β.'; o.F = v; return; }
@@ -2210,6 +2263,7 @@ function iniciar() {
       if (prop === 'cara') o.cara = valor;
       if (prop === 'soloTira') o.soloTira = valor === 'si';
       if (prop === 'cinematica') o.cinematica = valor === 'si';
+      if (prop === 'giro') o.inercia = Number(valor) || 0;
       if (prop === 'cuerpo') o.cuerpo = valor || null;
       seguirSuperficie(o); registrar(); recalcular(); construirInspector(); return;
     }
@@ -2253,7 +2307,11 @@ function iniciar() {
       const i = M.indice[o.id], s = estadoEn(t)[i];
       if (s) {
         h += filaL('x', '', s.x, 'm') + filaL('y', '', s.y, 'm') + filaL('v', 'x', s.vx, 'm/s', false) + filaL('v', 'y', s.vy, 'm/s', false) + `${simHTML('|v|')}<span class="v">${fmt(Math.hypot(s.vx, s.vy), 4)}</span><span class="u">m/s</span>`;
-        h += filaL('E', 'k', 0.5 * o.m * (s.vx * s.vx + s.vy * s.vy), 'J');
+        // Con giro, E_k suma la de rotación ½Iω²
+        const Erot = gira(o) ? 0.5 * o.inercia * o.m * o.radio * o.radio * s.w * s.w : 0;
+        if (gira(o)) h += filaL('ω', '', s.w, 'rad/s', false);
+        h += filaL('E', 'k', 0.5 * o.m * (s.vx * s.vx + s.vy * s.vy) + Erot, 'J');
+        if (gira(o)) h += filaL('E', 'rot', Erot, 'J');
         if (f) for (const x of f.porParticula[i]) if (['normal', 'friccion', 'tension', 'elastica'].includes(x.tipo)) { const [a, b] = SIMBOLO_F[x.tipo]; h += filaL(a, b, x.valor, 'N'); }
       }
       const est = $('#insp-estado'); if (est) est.textContent = `${o.radio > 0 ? 'Disco' : 'Partícula'} · ${estadoParticula(i)}`;
@@ -2295,7 +2353,11 @@ function iniciar() {
     if (M.particulas[i]?.cinematica) return 'movimiento impuesto';
     if (!SIM) return 'en reposo';
     const tr = tramoEn(SIM, Math.min(t, tFinal())), k = contactosDe(tr.modo).find(c => c.i === i);
-    if (k) return `${k.pegado ? 'quieta sobre' : 'sobre'} ${conArticulo(M.superficies[k.sup]?.nombre ?? '')}`;
+    if (k) {
+      const giro = gira(M.particulas[i] ?? {}), sobreQue = conArticulo(M.superficies[k.sup]?.nombre ?? '');
+      if (giro && (M.superficies[k.sup]?.mu ?? 0) > 0) return `${k.pegado ? 'rueda sin deslizar sobre' : 'desliza girando sobre'} ${sobreQue}`;
+      return `${k.pegado ? 'quieta sobre' : 'sobre'} ${sobreQue}`;
+    }
     for (const c of M.conectores) if ((c.tipo === 'cuerda' || c.tipo === 'polea') && tr.modo?.cuerdas?.[c.id]?.tensa && (M.indice[c.a] === i || M.indice[c.b] === i)) return `sujeta por ${conArticulo(c.nombre)}`;
     for (const c of M.conectores) if (c.tipo === 'varilla' && (M.indice[c.a] === i || M.indice[c.b] === i)) return `sujeta por ${conArticulo(c.nombre)}`;
     return 'en vuelo';
@@ -2345,6 +2407,7 @@ function iniciar() {
     ax: { sim: 'a', sub: 'x', u: 'm/s²', f: q => q.ax, familia: 'cambio', nombre: 'Componente x de la aceleración', acel: true },
     ay: { sim: 'a', sub: 'y', u: 'm/s²', f: q => q.ay, familia: 'cambio', nombre: 'Componente y de la aceleración', acel: true },
     a: { sim: '|a|', u: 'm/s²', f: q => Math.hypot(q.ax, q.ay), familia: 'cambio', nombre: 'Módulo de la aceleración |a|', positiva: true, acel: true },
+    w: { sim: 'ω', u: 'rad/s', f: q => q.w || 0, familia: 'movimiento', nombre: 'Velocidad angular ω (discos que giran)' },
     tray: { sim: 'y', contra: 'x', u: 'm', familia: 'tinta', nombre: 'Trayectoria y contra x' },
   };
   let magGraf = ['y', 'v'];

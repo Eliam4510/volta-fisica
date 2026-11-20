@@ -312,3 +312,57 @@ describe('variables de la escena', () => {
     }
   });
 });
+
+describe('discos que giran en el laboratorio', () => {
+  it('inercia y ω se sanean al abrir y solo llegan al motor en un disco libre', () => {
+    const e = normalizarEscena({
+      ...escenaVacia(),
+      objetos: [
+        { id: 'p1', tipo: 'particula', nombre: 'Disco', m: 1, x: 0, y: 1, radio: 0.1, inercia: 0.5, w: 7 },
+        { id: 'p2', tipo: 'particula', nombre: 'Punto', m: 1, x: 1, y: 1, radio: 0, inercia: 0.5 },
+        { id: 'p3', tipo: 'particula', nombre: 'Raro', m: 1, x: 2, y: 1, radio: 0.1, inercia: 9, w: 1e9 },
+        { id: 'p4', tipo: 'particula', nombre: 'Mano', m: 1, x: 3, y: 1, radio: 0.1, inercia: 0.5, cinematica: true },
+      ],
+    });
+    expect(e.objetos.map(o => [o.inercia, o.w])).toEqual([[0.5, 7], [0.5, 0], [1, 1e4], [0.5, 0]]);
+    expect(normalizarEscena(JSON.parse(JSON.stringify(e)))).toEqual(e);
+    const P = aMotor(e).motor.particulas;
+    expect(P.map(p => p.inercia ?? 0)).toEqual([0.5, 0, 1, 0]);
+    expect(P[0].w).toBe(7);
+  });
+
+  it('carrera de rodadura: llegan esfera, disco y aro, cada uno en t = √(2d(1 + k)/(g·sen θ))', () => {
+    const e = escenaDeEscenario('rodadura'), M = aMotor(e), sim = simularMecanica(M.motor);
+    expect(sim.incompleta).toBeNull();
+    const th = 20 * Math.PI / 180, tiempos = {};
+    for (const [q, k] of [[1, 1], [2, 0.5], [3, 0.4]]) {
+      const p = e.objetos.find(o => o.id === `p${q}`), gate = e.objetos.find(o => o.id === `f${q}`);
+      const pasos = pasosFotopuerta(sim, M, gate);
+      expect(pasos).toHaveLength(1);
+      const d = (2.4 - M.motor.particulas[M.indice[p.id]].p[0]) / Math.cos(th);
+      cerca(pasos[0].t, Math.sqrt(2 * d * (1 + k) / (g * Math.sin(th))), 1e-7);
+      tiempos[p.nombre] = pasos[0].t;
+    }
+    expect(tiempos.Esfera).toBeLessThan(tiempos.Disco);
+    expect(tiempos.Disco).toBeLessThan(tiempos.Aro);
+  });
+
+  it('fuerzasEn: un disco que rueda por el plano tiene fricción m·g·sen θ·k/(1 + k) y normal m·g·cos θ', () => {
+    const e = escenaDeEscenario('rodadura'), M = aMotor(e), sim = simularMecanica(M.motor);
+    const th = 20 * Math.PI / 180, i = M.indice.p2, f = fuerzasEn(sim, M, 0.5).porParticula[i];
+    const N = f.find(x => x.tipo === 'normal'), fr = f.find(x => x.tipo === 'friccion');
+    cerca(N.valor, g * Math.cos(th), 1e-7);
+    cerca(fr.valor, g * Math.sin(th) * 0.5 / 1.5, 1e-7);
+  });
+
+  it('bola que desliza: el evento dice que rueda sin deslizar y fuerzasEn da μ·N mientras desliza', () => {
+    const e = escenaDeEscenario('bolos'), M = aMotor(e), sim = simularMecanica(M.motor);
+    const ev = evento(sim, M, 'rueda sin deslizar');
+    expect(ev).toBeTruthy();
+    cerca(ev.t, 2 * 5 / (7 * 0.2 * g), 1e-8);
+    const fr = fuerzasEn(sim, M, 0.3).porParticula[0].find(x => x.tipo === 'friccion');
+    cerca(fr.valor, 0.2 * 6 * g, 1e-7);
+    expect(fr.F[0]).toBeLessThan(0);
+    cerca(estadoMecanica(sim, 1.5)[0].vx, 25 / 7, 1e-8);
+  });
+});
