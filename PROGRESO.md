@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.14.0 (publicada el 2026-11-19 con instalador de 3 003 674 B y portátil de 5 406 208 B; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.15.0 (publicada el 2026-11-19; ejecutables compilándose; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -258,5 +258,5 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Bloques rígidos que vuelcan (motor y Laboratorio); adherencia conjunta de los apoyos; v0.13.0 (1013 pruebas). Autocrítica 7. Siguiente: fuerza aplicada en un punto del cuerpo.
 - 2026-11-19 — Fuerza aplicada en un punto del cuerpo (vuelca o desliza al empujar); 1019 pruebas. Siguiente: contactos con las aristas de los bloques (diseño arriba).
 - 2026-11-19 — Caras y esquinas de los bloques (apilar, discos contra bloques); ejemplo de cajas apiladas; 1024 pruebas; v0.14.0.
-- 2026-11-19 — Fricción entre discos; arreglo del sentido de la fricción de los vértices y caso de Painlevé; 1028 pruebas. Sin publicar.
-- 2026-11-19 — Óptica: espejo parabólico (motor, pantalla y ejemplo); 1031 pruebas. Sin publicar.
+- 2026-11-19 — Fricción entre discos; arreglo del sentido de la fricción de los vértices y caso de Painlevé; 1028 pruebas.
+- 2026-11-19 — Óptica: espejo parabólico (motor, pantalla y ejemplo); 1031 pruebas; v0.15.0.

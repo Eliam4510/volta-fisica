@@ -7,6 +7,10 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.15.0] - 2026-11-19
+
+Fricción entre discos que giran y espejo parabólico en Óptica.
+
 ### Añadido
 
 - Óptica: espejo parabólico (radio de curvatura R en el vértice, f = R/2):
