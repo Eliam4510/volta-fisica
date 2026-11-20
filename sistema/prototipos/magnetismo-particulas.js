@@ -872,7 +872,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         if (soloNumero && (u === 'e' || u === 'u' || u === 'm⁻³' || u === '')) valor = parseFloat(txt) * (FAC[u] ?? 1);
         else {
           if (soloNumero && u && u !== '°') txt = `${txt} ${u}`;
-          valor = evaluar(txt, { esperada: dim, unidadPorDefecto: u === '°' ? '°' : undefined }).valor;
+          valor = evaluar(txt, { esperada: dim, unidadPorDefecto: u || undefined }).valor;
         }
         const ruta = ent.dataset.ruta, x = validar(ruta, valor);
         escribir(ruta, x);

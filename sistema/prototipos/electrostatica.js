@@ -828,7 +828,7 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
       // Unidad compuesta (µC/m, nC/m², N/m…): un número solo se lee en la unidad del campo
       const r = evaluar(txt, { variables });
       if (r.dim.every(e => Math.abs(e) < 1e-9)) return { valor: r.valor * D.si };
-      return { valor: evaluar(txt, { variables, esperada: D.dim }).valor };
+      return { valor: evaluar(txt, { variables, esperada: D.dim, factorPorDefecto: D.si }).valor };
     } catch (e) { return { error: e.message }; }
   }
 

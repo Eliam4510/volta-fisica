@@ -416,7 +416,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         const dim = ent.dataset.dim.includes(',') ? ent.dataset.dim.split(',').map(Number) : ent.dataset.dim, u = ent.dataset.u;
         let txt = ent.value.trim().replace(/−/g, '-');
         if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) && u) txt = u === '1/mm' ? `${txt} / mm` : `${txt} ${u}`;
-        const r = evaluar(txt, { esperada: dim }), ruta = ent.dataset.ruta, x = validar(ruta, r.valor);
+        const r = evaluar(txt, { esperada: dim, unidadPorDefecto: u || undefined }), ruta = ent.dataset.ruta, x = validar(ruta, r.valor);
         if (ruta.startsWith('regla.')) ESC.regla[+ruta.slice(6)] = x; else ESC[ruta] = x;
         if (nRend() > 1 && !(dEf() > ESC.a)) { mostrarError('Las rendijas se tocan: la separación d debe ser mayor que el ancho a.'); return; }
         mostrarError(null); cambio();

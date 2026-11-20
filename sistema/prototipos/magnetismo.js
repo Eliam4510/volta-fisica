@@ -604,7 +604,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         const dim = ent.dataset.dim === 'momento' ? DIM_MOMENTO : ent.dataset.dim, u = ent.dataset.u;
         let txt = ent.value.trim().replace(/−/g, '-');
         if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) && u && u !== '°') txt = `${txt} ${u}`;
-        const r = evaluar(txt, { esperada: dim, unidadPorDefecto: u === '°' ? '°' : undefined });
+        const r = evaluar(txt, { esperada: dim, unidadPorDefecto: u || undefined });
         const ruta = ent.dataset.ruta, x = validar(ruta, r.valor);
         escribir(ruta, x);
         mostrarError(null); cambio();

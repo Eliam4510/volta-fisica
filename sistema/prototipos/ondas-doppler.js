@@ -404,7 +404,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       try {
         let txt = ent.value.trim().replace(/−/g, '-');
         if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt)) txt += ' ' + ent.dataset.u;
-        const x = evaluar(txt, { esperada: ent.dataset.dim }).valor, r = ent.dataset.ruta;
+        const x = evaluar(txt, { esperada: ent.dataset.dim, unidadPorDefecto: ent.dataset.u || undefined }).valor, r = ent.dataset.ruta;
         if ((r === 'c' || r.endsWith('.f') || r === 'duracion' || r.endsWith('.radio')) && !(x > 0)) throw new Error('Este valor tiene que ser positivo.');
         if (r.endsWith('.omegaMax') && !(x >= 0)) throw new Error('La velocidad angular no puede ser negativa.');
         if (r.endsWith('.omegaMax') || r.endsWith('.radio')) {

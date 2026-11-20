@@ -434,7 +434,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         const dim = ent.dataset.dim, u = ent.dataset.u;
         let txt = ent.value.trim().replace(/−/g, '-');
         if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) && u && u !== '°') txt = u === 'mrad' ? `${txt}e-3` : u === '°/s' ? `${txt} ° / s` : `${txt} ${u}`;
-        const r = evaluar(txt, { esperada: dim, unidadPorDefecto: u === '°' ? '°' : undefined });
+        const r = evaluar(txt, { esperada: dim, unidadPorDefecto: u || undefined });
         escribir(ent.dataset.ruta, validar(ent.dataset.ruta, r.valor)); mostrarError(null); cambio();
       } catch (e) { mostrarError(e.message); }
     });

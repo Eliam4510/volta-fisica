@@ -122,3 +122,19 @@ describe('ángulos con unidad por defecto', () => {
     expect(() => evaluar('2 m', o)).toThrow(/longitud/);
   });
 });
+
+describe('un número sin unidad se lee en la unidad del campo', () => {
+  it('con potencias de diez escritas de cualquier forma (la masa del Sol)', () => {
+    for (const t of ['2e30', '2*10^30', '2×10^30', '2·10³⁰', '2 × 10³⁰']) expect(evaluar(t, { esperada: 'masa', unidadPorDefecto: 'kg' }).valor).toBeCloseTo(2e30, -20);
+  });
+  it('con el factor del campo (masas en masas solares) o con una unidad compuesta', () => {
+    expect(evaluar('2', { esperada: 'masa', factorPorDefecto: 1.989e30 }).valor).toBeCloseTo(3.978e30, -20);
+    expect(evaluar('1.5*2', { esperada: 'masa', factorPorDefecto: 1.989e30 }).valor).toBeCloseTo(5.967e30, -20);
+    expect(evaluar('3*4', { esperada: 'velocidad', unidadPorDefecto: 'km/s' }).valor).toBeCloseTo(12000, 9);
+    expect(evaluar('0.5', { esperada: [-1, 0, 0, 0, 0, 0], unidadPorDefecto: '1/mm' }).valor).toBeCloseTo(500, 9);
+  });
+  it('una unidad escrita manda, y una dimensión equivocada sigue siendo un error', () => {
+    expect(evaluar('500 g', { esperada: 'masa', unidadPorDefecto: 'kg' }).valor).toBeCloseTo(0.5, 12);
+    expect(() => evaluar('3 m', { esperada: 'masa', unidadPorDefecto: 'kg' })).toThrow(/masa/);
+  });
+});

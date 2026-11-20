@@ -793,7 +793,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         let txt = ent.value.trim().replace(/−/g, '-');
         // Un número solo se lee en la unidad del campo (también las compuestas: g/m, 1/s)
         if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) && u && u !== '°') txt = `${txt} ${u}`;
-        const r = evaluar(txt, { esperada: dim, unidadPorDefecto: u === '°' ? '°' : undefined });
+        const r = evaluar(txt, { esperada: dim, unidadPorDefecto: u || undefined });
         const ruta = ent.dataset.ruta, x = validar(ruta, r.valor);
         escribir(ruta, x);
         mostrarError(null); cambio();

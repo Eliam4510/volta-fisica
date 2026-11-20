@@ -475,7 +475,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         const dim = ent.dataset.dim, u = ent.dataset.u;
         let txt = ent.value.trim().replace(/−/g, '-');
         if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) && u) txt = `${txt} ${u}`;
-        const r = evaluar(txt, { esperada: dim });
+        const r = evaluar(txt, { esperada: dim, unidadPorDefecto: u || undefined });
         const ruta = ent.dataset.ruta, x = validar(ruta, r.valor);
         escribir(ruta, x);
         if (ruta === 'placa.W') ESC.placa.metal = Object.keys(METALES).find(k => Math.abs(METALES[k].W * EV - x) < 1e-6 * EV) || 'propio';

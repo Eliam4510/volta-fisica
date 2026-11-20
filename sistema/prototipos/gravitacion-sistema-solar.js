@@ -694,7 +694,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         const dim = ent.dataset.dim, fac = parseFloat(ent.dataset.f);
         const txt = ent.value.trim().replace(/−/g, '-');
         // Un número solo se lee en la unidad del campo; con unidad o expresión, la evalúa el núcleo
-        const valor = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) ? parseFloat(txt) * fac : evaluar(txt, { esperada: dim, variables: VARS_U }).valor;
+        const valor = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) ? parseFloat(txt) * fac : evaluar(txt, { esperada: dim, variables: VARS_U, factorPorDefecto: fac }).valor;
         escribir(ent.dataset.ruta, validar(ent.dataset.ruta, valor));
         mostrarError(null); cambio();
       } catch (e) { mostrarError(e.message); }

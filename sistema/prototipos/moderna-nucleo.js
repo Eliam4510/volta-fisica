@@ -608,8 +608,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         // Días y años no son unidades del analizador: se convierten aquí
         const dA = /^(.*?)\s*(d|a)$/.exec(txt);
         if (dim === 'tiempo' && dA && UNI[dA[2]]) valor = evaluar(dA[1], { esperada: 'adimensional' }).valor * UNI[dA[2]];
-        else if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) && u) valor = (UNI[u] && dim === 'tiempo') ? parseFloat(txt) * UNI[u] : evaluar(`${txt} ${u}`, { esperada: dim, unidadPorDefecto: u === '°' ? '°' : undefined }).valor;
-        else valor = evaluar(txt, { esperada: dim, unidadPorDefecto: u === '°' ? '°' : undefined }).valor;
+        else if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt) && u) valor = (UNI[u] && dim === 'tiempo') ? parseFloat(txt) * UNI[u] : evaluar(`${txt} ${u}`, { esperada: dim, unidadPorDefecto: u || undefined }).valor;
+        else valor = evaluar(txt, { esperada: dim, unidadPorDefecto: u || undefined }).valor;
         const ruta = ent.dataset.ruta, x = validar(ruta, valor);
         escribir(ruta, x);
         mostrarError(null); cambio();

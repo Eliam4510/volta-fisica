@@ -640,7 +640,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         let txt = ent.value.trim().replace(/−/g, '-');
         const dim = ent.dataset.dim, u = ent.dataset.u;
         if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(txt)) txt += ' ' + (u === 'cm/s' ? 'cm/s' : u);
-        const x = dim === 'angulo' ? evaluar(txt, { esperada: 'adimensional', unidadPorDefecto: '°' }).valor : evaluar(txt, { esperada: dim }).valor;
+        const x = dim === 'angulo' ? evaluar(txt, { esperada: 'adimensional', unidadPorDefecto: '°' }).valor : evaluar(txt, { esperada: dim, unidadPorDefecto: u || undefined }).valor;
         validar(ent.dataset.ruta, x);
         escribir(ent.dataset.ruta, x); error(null); cambio();
       } catch (e) { error(e.message); }

@@ -117,7 +117,10 @@ function lexer(texto) {
 /**
  * Evalúa una expresión con unidades.
  * @param {string} texto
- * @param {{variables?: Record<string, {valor: number, dim: number[]}>, esperada?: number[] | string, unidadPorDefecto?: string}} [o]
+ * Con dimensión esperada, un resultado sin unidad («2», «2×10^30», «3*4») se
+ * lee en la unidad del campo: `unidadPorDefecto` (un símbolo o una unidad
+ * compuesta, «km/s», «1/mm») o `factorPorDefecto` (cuánto vale 1 en SI).
+ * @param {{variables?: Record<string, {valor: number, dim: number[]}>, esperada?: number[] | string, unidadPorDefecto?: string, factorPorDefecto?: number}} [o]
  * @returns {{valor: number, dim: number[]}}  valor en SI
  */
 export function evaluar(texto, o = {}) {
@@ -146,13 +149,30 @@ export function evaluar(texto, o = {}) {
 /** Comprueba (y completa con la unidad por defecto) la dimensión esperada. */
 function comprobar(r, o) {
   const esperada = typeof o.esperada === 'string' ? DIM[o.esperada] : o.esperada;
-  if (esAdim(r.dim) && !esAdim(esperada) && o.unidadPorDefecto && U[o.unidadPorDefecto]) {
-    return { valor: r.valor * U[o.unidadPorDefecto][0], dim: esperada };
+  if (esAdim(r.dim) && !esAdim(esperada)) {
+    const f = factorDelCampo(o, esperada);
+    if (f != null) return { valor: r.valor * f, dim: esperada };
   }
   if (!igual(r.dim, esperada)) {
     throw new Error(`La expresión da ${nombreDimension(r.dim)} y este campo espera ${nombreDimension(esperada)}.`);
   }
   return r;
+}
+
+/**
+ * Cuánto vale en SI la unidad del campo (para leer un número sin unidad), o
+ * null si no se conoce o no tiene la dimensión esperada.
+ * @param {{unidadPorDefecto?: string, factorPorDefecto?: number, variables?: any}} o @param {number[]} esperada
+ */
+function factorDelCampo(o, esperada) {
+  if (Number.isFinite(o.factorPorDefecto) && /** @type {number} */ (o.factorPorDefecto) > 0) return /** @type {number} */ (o.factorPorDefecto);
+  const u = o.unidadPorDefecto;
+  if (!u) return null;
+  if (U[u] && igual(U[u][1], esperada)) return U[u][0];
+  for (const intento of [u, '1 ' + u]) {
+    try { const q = evaluar(intento, { variables: o.variables }); if (igual(q.dim, esperada) && q.valor > 0) return q.valor; } catch { /* sigue */ }
+  }
+  return null;
 }
 
 /**

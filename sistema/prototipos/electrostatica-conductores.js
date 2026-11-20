@@ -636,7 +636,7 @@ import { descargarTexto, descargarLienzo } from '../componentes/exportar.js';
       if (D.simple) return { valor: evaluar(txt, { variables, esperada: D.dim, unidadPorDefecto: D.simple }).valor };
       const r = evaluar(txt, { variables });
       if (r.dim.every(e => Math.abs(e) < 1e-9)) return { valor: r.valor * D.si };
-      return { valor: evaluar(txt, { variables, esperada: D.dim }).valor };
+      return { valor: evaluar(txt, { variables, esperada: D.dim, factorPorDefecto: D.si }).valor };
     } catch (e) { return { error: e.message }; }
   }
   const insp = $('#inspector');
