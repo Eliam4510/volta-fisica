@@ -39,6 +39,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     bateria: { nombre: 'Batería', en: 'Battery', ico: 'o-bateria', pref: 'E', params: [['E', 'Fem', 'V', 'potencial', 6], ['r', 'Resistencia interna', 'Ω', 'resistencia', 0]] },
     'fuente-ca': { nombre: 'Fuente alterna', en: 'AC source', ico: 'o-fuente-ca', pref: 'V', params: [['V0', 'Amplitud', 'V', 'potencial', 10], ['f', 'Frecuencia', 'Hz', 'frecuencia', 50], ['fase', 'Fase', '°', 'angulo', 0], ['r', 'Resistencia interna', 'Ω', 'resistencia', 0]] },
     transformador: { nombre: 'Transformador', en: 'Transformer', ico: 'o-transformador', pref: 'Tr', params: [['L1', 'Inductancia del primario', 'H', 'inductancia', 10], ['n', 'Relación de vueltas N₂/N₁', '', 'adimensional', 0.1], ['k', 'Acoplamiento', '', 'adimensional', 0.999]] },
+    zener: { nombre: 'Diodo Zener', en: 'Zener diode', ico: 'o-zener', pref: 'Z', params: [['Vz', 'Voltaje Zener', 'V', 'potencial', 5.1], ['Vd', 'Voltaje directo (10 mA)', 'V', 'potencial', 0.7]] },
+    opamp: { nombre: 'Amplificador operacional', en: 'Op amp', ico: 'o-opamp', pref: 'U', params: [['A', 'Ganancia en lazo abierto', '', 'adimensional', 1e5], ['Vsat', 'Saturación (±)', 'V', 'potencial', 12]] },
     diodo: { nombre: 'Diodo', en: 'Diode', ico: 'o-diodo', pref: 'D', params: [['Vd', 'Voltaje directo (10 mA)', 'V', 'potencial', 0.7], ['n', 'Factor de idealidad', '', 'adimensional', 1.8]] },
     led: { nombre: 'LED', en: 'LED', ico: 'o-led', pref: 'LED', params: [['Vd', 'Voltaje directo (20 mA)', 'V', 'potencial', 2], ['n', 'Factor de idealidad', '', 'adimensional', 2]] },
     'fuente-corriente': { nombre: 'Fuente de corriente', en: 'Current source', ico: 'o-fuente-corriente', pref: 'J', params: [['I', 'Corriente', 'A', 'corriente', 0.01]] },
@@ -124,6 +126,48 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       },
       graficas: [{ m: 'V', series: [{ id: 'V' }, { id: 'C' }] }, { m: 'I', series: [{ id: 'R' }] }, { m: 'bode', id: 'R', mag: 'i', parte: 'amp' }],
       sel: 'R',
+    },
+    {
+      clave: 'zener', titulo: 'Regulador con diodo Zener', tipo: 'Ejemplo', duracion: 1, dt: 0.01,
+      nota: 'El Zener, en inversa, deja pasar la corriente que haga falta para mantener unos 5.1 V en la carga. Mueve E: mientras pase de unos 7 V, la salida casi no cambia (la curva del barrido se aplana); por debajo, el Zener deja de conducir y la salida sigue a E. La resistencia R limita la corriente.',
+      elementos: [
+        { id: 'E', tipo: 'bateria', p: [0, 4], rot: 270, E: 12, r: 0, etq: 'izq' },
+        { id: 'R', tipo: 'resistencia', p: [3, 8], rot: 0, R: 470, etq: 'arr' },
+        { id: 'Z', tipo: 'zener', p: [6, 4], rot: 90, Vz: 5.1, Vd: 0.7, etq: 'izq' },
+        { id: 'RL', tipo: 'resistencia', p: [9, 4], rot: 270, R: 2000, etq: 'izq' },
+        { id: 'Vm', tipo: 'voltimetro', p: [12, 4], rot: 270, etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [3, 0], rot: 0 },
+      ],
+      cables: [[[0, 5], [0, 8], [2, 8]], [[4, 8], [6, 8], [6, 5]], [[6, 8], [9, 8], [9, 5]], [[9, 8], [12, 8], [12, 5]], [[6, 3], [6, 0]], [[12, 3], [12, 0], [0, 0], [0, 3]], [[9, 3], [9, 0]]],
+      nodos: {},
+      acciones: [],
+      variables: {
+        E: { sim: 'E', val: 12, min: 0, max: 20, paso: 0.5, u: 'V', factor: 1, liga: [['E', 'E']] },
+        RL: { sim: 'R', sub: 'L', val: 2, min: 0.2, max: 10, paso: 0.1, u: 'kΩ', factor: 1e3, liga: [['RL', 'R']] },
+      },
+      graficas: [{ m: 'barrido', id: 'Vm', variable: 'E' }, { m: 'I', series: [{ id: 'R' }, { id: 'RL' }] }, { m: 'V', series: [{ id: 'E' }, { id: 'RL' }] }],
+      sel: 'Z',
+    },
+    {
+      clave: 'amplificador', titulo: 'Amplificador inversor', tipo: 'Ejemplo', duracion: 0.005, dt: 0.000005,
+      nota: 'Con realimentación negativa, el amplificador operacional ajusta su salida para que V₋ = V₊ = 0 (tierra virtual): la corriente de R₁ pasa entera por R_f y V_sal = −(R_f/R₁)·V_ent. Sube R_f o la amplitud: cuando la salida pediría más de 12 V, satura y la onda se recorta.',
+      elementos: [
+        { id: 'V', tipo: 'fuente-ca', p: [0, 4], rot: 270, V0: 0.5, f: 1000, fase: 0, r: 0, etq: 'izq' },
+        { id: 'R1', tipo: 'resistencia', p: [3, 8], rot: 0, R: 1000, etq: 'aba' },
+        { id: 'Rf', tipo: 'resistencia', p: [7, 10], rot: 0, R: 10000, etq: 'arr' },
+        { id: 'U', tipo: 'opamp', p: [6, 6], rot: 0, A: 1e5, Vsat: 12, etq: 'aba' },
+        { id: 'RL', tipo: 'resistencia', p: [11, 4], rot: 270, R: 10000, etq: 'der' },
+        { id: 'T', tipo: 'tierra', p: [3, 0], rot: 0 },
+      ],
+      cables: [[[0, 5], [0, 8], [2, 8]], [[4, 8], [5, 8], [5, 7]], [[5, 8], [5, 10], [6, 10]], [[8, 10], [9, 10], [9, 6], [8, 6]], [[9, 6], [11, 6], [11, 5]], [[5, 5], [5, 0]], [[11, 3], [11, 0], [0, 0], [0, 3]]],
+      nodos: {},
+      acciones: [],
+      variables: {
+        Rf: { sim: 'R', sub: 'f', val: 10, min: 1, max: 50, paso: 1, u: 'kΩ', factor: 1e3, liga: [['Rf', 'R']] },
+        V0: { sim: 'V', sub: '0', val: 0.5, min: 0.1, max: 3, paso: 0.1, u: 'V', factor: 1, liga: [['V', 'V0']] },
+      },
+      graficas: [{ m: 'V', series: [{ id: 'V' }, { id: 'RL' }] }, { m: 'V', series: [{ id: 'U' }] }, { m: 'I', series: [{ id: 'R1' }, { id: 'Rf' }] }],
+      sel: 'U',
     },
     {
       clave: 'transformador', titulo: 'Transformador reductor', tipo: 'Ejemplo', duracion: 0.2, dt: 0.0002,
@@ -661,11 +705,13 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     'interruptor-3': [[-1, 0], [1, 1], [1, 0], [1, -1]],
     // Transformador: [p+, p−, s+, s−]
     transformador: [[-1, 1], [-1, -1], [1, 1], [1, -1]],
+    // Amplificador operacional: [+, −, salida]; − arriba, + abajo
+    opamp: [[-1, -1], [-1, 1], [2, 0]],
   };
   const bornes = el => (LOCALES[el.tipo] || [[-1, 0], [1, 0]]).map(l => { const [x, y] = rotar(l, el.rot || 0); return [el.p[0] + x, el.p[1] + y]; });
   // Tramo de patilla de cada borne (del borne al cuerpo), en coordenadas locales
-  const PATILLAS = { 'interruptor-3': [[[-1, 0], [-0.5, 0]], [[1, 1], [0.5, 1]], [[1, 0], [0.91, 0]], [[1, -1], [0.5, -1]]], transformador: [[[-1, 1], [-0.32, 1]], [[-1, -1], [-0.32, -1]], [[1, 1], [0.32, 1]], [[1, -1], [0.32, -1]]], tierra: [] };
-  const CUERPO = { resistencia: 0.56, reostato: 0.56, bateria: 0.13, 'fuente-ca': 0.42, diodo: 0.3, led: 0.3, capacitor: 0.13, inductor: 0.56, bombilla: 0.3, voltimetro: 0.3, amperimetro: 0.3, 'fuente-corriente': 0.3, interruptor: 0.5 };
+  const PATILLAS = { 'interruptor-3': [[[-1, 0], [-0.5, 0]], [[1, 1], [0.5, 1]], [[1, 0], [0.91, 0]], [[1, -1], [0.5, -1]]], transformador: [[[-1, 1], [-0.32, 1]], [[-1, -1], [-0.32, -1]], [[1, 1], [0.32, 1]], [[1, -1], [0.32, -1]]], opamp: [[[-1, -1], [-0.4, -1]], [[-1, 1], [-0.4, 1]], [[2, 0], [1.6, 0]]], tierra: [] };
+  const CUERPO = { resistencia: 0.56, reostato: 0.56, bateria: 0.13, 'fuente-ca': 0.42, diodo: 0.3, led: 0.3, zener: 0.3, capacitor: 0.13, inductor: 0.56, bombilla: 0.3, voltimetro: 0.3, amperimetro: 0.3, 'fuente-corriente': 0.3, interruptor: 0.5 };
   function patillas(el) {
     const loc = PATILLAS[el.tipo] || [[[-1, 0], [-CUERPO[el.tipo], 0]], [[1, 0], [CUERPO[el.tipo], 0]]];
     return loc.map(([a, b]) => [a, b].map(l => { const [x, y] = rotar(l, el.rot || 0); return [el.p[0] + x, el.p[1] + y]; }));
@@ -913,6 +959,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       case 'bateria': valor = valorCon(el.E, 'V'); break;
       case 'fuente-ca': valor = `${valorCon(el.V0, 'V')} · ${valorCon(el.f, 'Hz')}`; break;
       case 'diodo': case 'led': valor = k >= 0 ? `I = ${valorCon(s.I[k], 'A')}` : valorCon(el.Vd, 'V'); break;
+      case 'zener': valor = k >= 0 ? `V = ${valorCon(-s.v[k], 'V')}` : `V_Z = ${valorCon(el.Vz, 'V')}`; break;
+      case 'opamp': valor = `±${valorCon(el.Vsat, 'V')}`; break;
       case 'transformador': valor = `N₂/N₁ = ${fmt(el.n, 3)}`; break;
       case 'fuente-corriente': valor = valorCon(el.I, 'A'); break;
       case 'resistencia': case 'reostato': valor = valorCon(el.R, 'Ω'); break;
@@ -1143,6 +1191,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       case 'bateria': return valorCon(el.E, 'V', 3);
       case 'fuente-ca': return `${valorCon(el.V0, 'V', 3)} ~`;
       case 'diodo': case 'led': return valorCon(el.Vd, 'V', 3);
+      case 'zener': return valorCon(el.Vz, 'V', 3);
+      case 'opamp': return `±${valorCon(el.Vsat, 'V', 3)}`;
       case 'transformador': return `n = ${fmt(el.n, 3)}`;
       case 'resistencia': case 'reostato': return valorCon(el.R, 'Ω', 3);
       case 'capacitor': return valorCon(el.C, 'F', 3);
@@ -1181,6 +1231,14 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
           filas = [L('V', '1', vv, 'V'), L('I', '1', I, 'A'), L('V', '2', limpio(s.v[ks], X.Vmax), 'V'), L('I', '2', limpio(s.I[ks], X.Imax), 'A'), L('U', 'B', s.U[k] + s.U[ks], 'J')];
           break;
         }
+        case 'opamp': {
+          const bs = RED.geo.get(el.id).bornes, Vs = s.V[X.nodo(clave(bs[2]))];
+          filas = [L('V', '₊ − ₋', vv, 'V'), L('V', 'sal', Vs, 'V'), L('I', 'sal', I, 'A'), L('W', '', s.W[k], 'J'), ['estado', '', Math.abs(Vs) > 0.98 * el.Vsat ? 'saturado' : 'lineal', '']];
+          break;
+        }
+        case 'zener':
+          filas = [L('V', '', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('Q', '', s.Q[k], 'J'), ['estado', '', I > 1e-4 ? 'conduce' : I < -1e-3 ? 'en ruptura' : 'no conduce', '']];
+          break;
         case 'diodo': case 'led':
           filas = [L('V', '', vv, 'V'), L('I', '', I, 'A'), L('P', '', P, 'W'), L('Q', '', s.Q[k], 'J'), ['estado', '', I > 1e-4 ? 'conduce' : 'no conduce', '']];
           if (el.tipo === 'led') filas.push(['brillo', '', fmt(100 * Math.min(1, Math.max(0, I) / 0.02), 3), '%']);
@@ -1213,7 +1271,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
           filas.push(L('I', 'amp', Ia[0], 'A'));
           const dif = ((phV - Ia[1]) % 360 + 540) % 360 - 180;
           filas.push(['φ', 'V−I', fmt(dif, 4), '°']);
-          if (Ia[0] > 1e-15 && el.tipo !== 'fuente-ca') filas.push(L('|Z|', '', Va / Ia[0], 'Ω'), L('P', 'media', 0.5 * Va * Ia[0] * Math.cos(dif * Math.PI / 180), 'W'));
+          if (Ia[0] > 1e-15 && el.tipo !== 'fuente-ca' && el.tipo !== 'opamp') filas.push(L('|Z|', '', Va / Ia[0], 'Ω'), L('P', 'media', 0.5 * Va * Ia[0] * Math.cos(dif * Math.PI / 180), 'W'));
           if (el.tipo === 'fuente-ca') filas.push(L('P', 'media', -0.5 * Va * Ia[0] * Math.cos(dif * Math.PI / 180), 'W'));
         }
       }
@@ -1460,7 +1518,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
     let Qcables = 0;
     for (const el of ESC.elementos) {
       const k = iDe(el.id), n = nombreHTML(el.id);
-      if (el.tipo === 'bateria' || el.tipo === 'fuente-ca' || el.tipo === 'fuente-corriente') {
+      if (el.tipo === 'bateria' || el.tipo === 'fuente-ca' || el.tipo === 'fuente-corriente' || el.tipo === 'opamp') {
         filas.push([`Trabajo de ${n}`, 'trabajo', s.W[k], 'Energía que entrega la fuente|Work done by the source']);
         if (el.r > 0) filas.push([`Calor en ${n} (interna)`, 'termico', s.Q[k], 'Calor en la resistencia interna|Internal Joule heat']);
       } else if (el.tipo === 'capacitor') {
@@ -1469,7 +1527,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       }
       else if (el.tipo === 'inductor') filas.push([`Energía en ${n}`, 'magnetico', s.U[k], 'Energía magnética almacenada, ½LI²|Stored magnetic energy']);
       else if (el.tipo === 'transformador') filas.push([`Energía en ${n}`, 'magnetico', s.U[k] + s.U[iDe(el.id + '·s')], 'Energía magnética de las dos bobinas, ½L₁I₁² + ½L₂I₂² + M·I₁I₂|Stored magnetic energy']);
-      else if (el.tipo === 'resistencia' || el.tipo === 'reostato' || el.tipo === 'bombilla' || el.tipo === 'diodo' || el.tipo === 'led') filas.push([el.tipo === 'led' ? `Luz y calor en ${n}` : `Calor en ${n}`, 'termico', s.Q[k], 'Calor de Joule acumulado|Joule heat']);
+      else if (el.tipo === 'resistencia' || el.tipo === 'reostato' || el.tipo === 'bombilla' || el.tipo === 'diodo' || el.tipo === 'led' || el.tipo === 'zener') filas.push([el.tipo === 'led' ? `Luz y calor en ${n}` : `Calor en ${n}`, 'termico', s.Q[k], 'Calor de Joule acumulado|Joule heat']);
       else if (ES_INTERRUPTOR(el.tipo) || el.tipo === 'amperimetro' || el.tipo === 'voltimetro') Qcables += s.Q[k];
     }
     for (const sg of RED.tramos) Qcables += s.Q[iDe(sg.id)];
@@ -1724,7 +1782,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       for (const [k, , , , def] of CAT[e.tipo].params) el[k] = numero(e[k], def, k === 'x' ? 0 : k === 'frio' ? 1 : -1e9, k === 'x' ? 1 : 1e12);
       if (el.tipo === 'led') el.color = COLORES_LED[e.color] ? e.color : 'rojo';
       if (el.tipo === 'transformador') el.k = Math.min(0.9999, Math.max(0, el.k));
-      for (const k of ['R', 'C', 'L', 'Vn', 'Pn', 'f', 'Vd', 'n']) if (k in el && !(el[k] > 0)) el[k] = CAT[e.tipo].params.find(p => p[0] === k)[4];
+      for (const k of ['R', 'C', 'L', 'Vn', 'Pn', 'f', 'Vd', 'n', 'Vz', 'A', 'Vsat']) if (k in el && !(el[k] > 0)) el[k] = CAT[e.tipo].params.find(p => p[0] === k)[4];
       if (el.tipo === 'interruptor') el.cerrado = !!e.cerrado;
       if (el.tipo === 'interruptor-3') el.posicion = ['a', 'b', 'c'].includes(e.posicion) ? e.posicion : null;
       if (el.tipo === 'capacitor') { const pl = placaSegura(e.placa); if (pl) el.placa = pl; }
@@ -1825,7 +1883,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
       cols.push(`I_${e.id} (A)`, `v_${e.id} (V)`);
       if (e.tipo === 'capacitor') cols.push(`q_${e.id} (C)`, `U_${e.id} (J)`);
       if (e.tipo === 'inductor') cols.push(`U_${e.id} (J)`);
-      if (e.tipo === 'bateria' || e.tipo === 'fuente-ca' || e.tipo === 'fuente-corriente') cols.push(`W_${e.id} (J)`);
+      if (e.tipo === 'bateria' || e.tipo === 'fuente-ca' || e.tipo === 'fuente-corriente' || e.tipo === 'opamp') cols.push(`W_${e.id} (J)`);
       if (['resistencia', 'reostato', 'bombilla'].includes(e.tipo)) cols.push(`Q_${e.id} (J)`);
     }
     cols.push('W total (J)', 'U total (J)', 'Q total (J)', 'perdidas (J)', 'residuo (J)');
@@ -1835,7 +1893,7 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
         const k = iDe(e.id); f.push(m.I[k], m.v[k]);
         if (e.tipo === 'capacitor') f.push(m.q[k], m.U[k]);
         if (e.tipo === 'inductor') f.push(m.U[k]);
-        if (e.tipo === 'bateria' || e.tipo === 'fuente-ca' || e.tipo === 'fuente-corriente') f.push(m.W[k]);
+        if (e.tipo === 'bateria' || e.tipo === 'fuente-ca' || e.tipo === 'fuente-corriente' || e.tipo === 'opamp') f.push(m.W[k]);
         if (['resistencia', 'reostato', 'bombilla'].includes(e.tipo)) f.push(m.Q[k]);
       }
       const b = balance(SIM, m); f.push(b.W, b.U, b.Q, m.perdidas, b.residuo);

@@ -56,8 +56,8 @@ describe('iconos', () => {
   const sprite = leer(join(raiz, 'sistema', 'iconos', 'sprite.svg'));
   const ids = new Set([...sprite.matchAll(/<symbol id="([^"]+)"/g)].map(m => m[1]));
 
-  it('el sprite tiene los 246 iconos del inventario', () => {
-    expect(ids.size).toBe(246);
+  it('el sprite tiene los 248 iconos del inventario', () => {
+    expect(ids.size).toBe(248);
   });
 
   for (const pagina of paginas) {

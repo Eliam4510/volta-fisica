@@ -7,6 +7,23 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.24.0] - 2026-11-20
+
+Diodo Zener y amplificador operacional en Circuitos.
+
+### Añadido
+
+- Diodo Zener: conduce en directa como un diodo y, en inversa, entra en
+  ruptura al llegar a Vz y mantiene ese voltaje.
+- Amplificador operacional (entradas − y +, salida respecto de tierra):
+  ganancia en lazo abierto A y saturación ±Vsat. Funciona en el tiempo
+  (con su trabajo en el registro de energía) y en alterna (ganancia A en
+  los fasores y el Bode). El inspector dice si trabaja en lineal o
+  saturado.
+- Ejemplos «Regulador con diodo Zener» (con el barrido de la salida
+  contra E) y «Amplificador inversor» (tierra virtual, ganancia
+  −R_f/R₁ y recorte al saturar).
+
 ## [0.23.0] - 2026-11-20
 
 Transformador en Circuitos.

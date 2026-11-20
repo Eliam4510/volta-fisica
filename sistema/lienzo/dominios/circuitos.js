@@ -214,7 +214,17 @@
         for (const sx of [-1, 1]) { const [px, py] = S(sx * (xb + 0.24), hb - 0.05); c.fillStyle = t.tinta; c.beginPath(); c.arc(px, py, 2.25, 0, 2 * Math.PI); c.fill(); }
         break;
       }
-      case 'diodo': case 'led': {
+      case 'opamp': {
+        // Triángulo con las entradas − (arriba) y + (abajo) y la salida en la punta
+        linea([-1, 1], [-0.4, 1]); linea([-1, -1], [-0.4, -1]); linea([1.6, 0], [2, 0]);
+        trazar(c, [S(-0.4, 1.4), S(-0.4, -1.4), S(1.6, 0)]); c.closePath(); c.fillStyle = t.lienzo; c.fill(); c.stroke();
+        c.save(); c.lineWidth = 1.5;
+        linea([-0.28, 1], [-0.06, 1]);
+        linea([-0.28, -1], [-0.06, -1]); linea([-0.17, -0.89], [-0.17, -1.11]);
+        c.restore();
+        break;
+      }
+      case 'zener': case 'diodo': case 'led': {
         // Triángulo hacia el cátodo (borne b) y la barra; el LED, con dos
         // flechas de luz que se encienden con su color según la corriente
         const [m, h] = GC.diodo;
@@ -224,6 +234,8 @@
         const colorLuz = el.tipo === 'led' && this.opticaColor ? this.opticaColor(o.lambda ?? null) : t.tinta;
         trazar(c, tri); c.closePath(); c.fillStyle = luz > 0.02 ? colorLuz : t.lienzo; c.globalAlpha = luz > 0.02 ? 0.35 + 0.65 * luz : 1; c.fill(); c.globalAlpha = 1; c.stroke();
         linea([m, -h], [m, h]);
+        // Zener: la barra con las puntas dobladas
+        if (el.tipo === 'zener') { linea([m, h], [m - 0.1, h + 0.04]); linea([m, -h], [m + 0.1, -h - 0.04]); }
         if (el.tipo === 'led') {
           c.save(); c.strokeStyle = luz > 0.02 ? colorLuz : t['texto-3']; c.lineWidth = 1.5;
           for (const dx of [-0.08, 0.14]) {
