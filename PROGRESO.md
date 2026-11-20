@@ -68,7 +68,7 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Discos que giran: rodadura, deslizamiento con giro, par de la fricción (v0.12.0, DECISIONES 18).
 - [x] Bloques que vuelcan: rectángulo con giro y contactos por vértice (v0.13.0).
 - [x] Fuerza aplicada en un punto del cuerpo (`Fpunto`; Laboratorio «Aplicada en», ejemplo «Empujar un bloque»).
-- [ ] Contactos con las aristas de un bloque (autocrítica 7). Diseño recomendado: superficies que GIRAN con su portador. Cada bloque B aporta 4 segmentos virtuales `sobre` B (sus caras, en el marco de B); así los vértices de otro bloque y los discos chocan con él con la maquinaria de apoyos que ya existe. Hace falta: (1) puntoApoyo relativo al portador en SU marco (R_Bᵀ·(P − c_B)) para C, margen y tangente; (2) en restriccionApoyo y deslizamiento, con portador que gira, para la dirección d (n̂ o t̂, ya en el mundo) y r = P − c_B: valor d·(Ṗ − v_B − ω_B ẑ×r); gradiente = entradas del punto·d, [B, −d], [giro de B, d_x·r_y − d_y·r_x]; J̇v = ω_B(ẑ×d)·(Ṗ − v_B − ω_B ẑ×r) + d·P̈_sin_acel − ω_B·d·(ẑ×(Ṗ − v_B)) (comprobado: con d = n̂ da 2ω_B(ẑ×n̂)·(Ṗ − v_B) − ω_B²·n̂·r); (3) un disco usa P = centro para la normal (C − r) y el punto de contacto c − r·n̂ para la fricción; (4) el Laboratorio no conoce las superficies virtuales: `fuerzasEn` debería pedir las reacciones al motor (exportar λ por clave desde `dinamica`) en vez de reconstruirlas. Falta también la esquina fija de un escalón contra la cara de un bloque.
+- [x] Caras y esquinas de los bloques (superficies que giran con su portador; DECISIONES 19): apilar cajas, discos contra bloques. Falta: la esquina fija de un escalón contra la cara de un bloque; vértice contra vértice no cuenta.
 - [ ] Fricción entre discos: deslizamiento del par t̂·(v_i − v_j) − r_i·ω_i − r_j·ω_j; modo.pares pasa de booleano a {pegado, sentido}; μ de la escena (`muParticulas`).
 
 ### Otros módulos
@@ -257,3 +257,4 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Discos que giran en el motor y el Laboratorio (rodadura, bola de bolos, cuenco; ejemplos con fotopuertas); sentido de la fricción cinética fijo por tramo; v0.12.0 (1003 pruebas). Siguiente: bloques que vuelcan.
 - 2026-11-19 — Bloques rígidos que vuelcan (motor y Laboratorio); adherencia conjunta de los apoyos; v0.13.0 (1013 pruebas). Autocrítica 7. Siguiente: fuerza aplicada en un punto del cuerpo.
 - 2026-11-19 — Fuerza aplicada en un punto del cuerpo (vuelca o desliza al empujar); 1019 pruebas. Siguiente: contactos con las aristas de los bloques (diseño arriba).
+- 2026-11-19 — Caras y esquinas de los bloques (apilar, discos contra bloques); ejemplo de cajas apiladas; 1024 pruebas. Sin publicar.

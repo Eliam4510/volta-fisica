@@ -106,3 +106,14 @@ vieja.
     (impulso normal, que no cambia ω) y el contacto entre discos sigue sin
     fricción; los bloques que vuelcan (polígonos con vértices) quedan para
     después: encajan en el mismo esquema, con filas por vértice.
+19. **Contactos entre cuerpos con superficies que giran (2026-11-19).** Un
+    bloque aporta sus cuatro caras (segmentos) y sus cuatro esquinas (arcos
+    de radio 0) como superficies llevadas por él que giran con él. Los
+    vértices de otro bloque y los discos se apoyan y chocan en ellas con la
+    misma maquinaria de apoyos (LCP, adherencia, eventos); cada fila mide la
+    velocidad relativa al punto material del portador y lleva las entradas
+    de su traslación y su giro, con J̇v = ω(ẑ×d)·rel + d·A0 − ω·d·(ẑ×(Ṗ − v)).
+    Un punto que está detrás de una cara no vigila el borde de la cara (con
+    el ruido de un bloque apoyado sobre otro se cruzaba sin fin): espera a
+    pasar al lado libre (evento «frente»). Vértice contra vértice y la
+    esquina fija de un escalón contra una cara quedan fuera.

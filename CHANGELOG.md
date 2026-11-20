@@ -7,6 +7,18 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Mecánica: fuerza aplicada en un punto de un cuerpo que gira: hace par y
+  su energía entra en el balance. Ejemplo «Empujar un bloque: ¿vuelca o
+  desliza?», con la altura del empuje como variable.
+- Mecánica: los bloques tienen caras y esquinas: se apilan, otro bloque se
+  apoya o choca en ellas y los discos chocan con sus caras y esquinas (con
+  giro, Coriolis y centrípeta en cada fila). Fricción entre cuerpos en la
+  escena. Ejemplo «Cajas apiladas y una bola que las golpea».
+- Laboratorio: las normales y fricciones de un bloque salen de sus vértices
+  y la fuerza aplicada, de su punto.
+
 ## [0.13.0] - 2026-11-19
 
 Bloques rígidos en Mecánica: rectángulos que giran, se apoyan por sus
