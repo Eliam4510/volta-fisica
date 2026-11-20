@@ -254,7 +254,9 @@
     document.addEventListener('scroll', () => { if (campo) mostrar(campo); }, true);
   }
 
-  // Ayudas emergentes: data-ayuda="Texto|Término en inglés|Atajo"
+  // Ayudas emergentes: data-ayuda="Texto|Término en inglés|Atajo". En inglés
+  // sale la traducción del texto, o el término si aún no está en el diccionario
+  const textoAyuda = cadena => (global.Volta && global.Volta.ayuda ? global.Volta.ayuda(cadena) : String(cadena).split('|'));
   function iniciarAyudas() {
     const burbuja = document.createElement('div');
     burbuja.className = 'ayuda'; burbuja.hidden = true;
@@ -266,7 +268,7 @@
       clearTimeout(reloj); burbuja.hidden = true;
       if (!el) return;
       reloj = setTimeout(() => {
-        const [txt, en, atajo] = el.dataset.ayuda.split('|');
+        const [txt, en, atajo] = textoAyuda(el.dataset.ayuda);
         burbuja.innerHTML = `<span>${txt}${atajo ? ` <kbd>${atajo}</kbd>` : ''}</span>${en ? `<span class="en">${en}</span>` : ''}`;
         burbuja.hidden = false;
         const r = el.getBoundingClientRect(), b = burbuja.getBoundingClientRect();
@@ -281,7 +283,7 @@
       const el = ev.target.closest && ev.target.closest('[data-ayuda]');
       clearTimeout(reloj); burbuja.hidden = true;
       if (!el || !el.matches(':focus-visible')) return;
-      const [txt, en, atajo] = el.dataset.ayuda.split('|');
+      const [txt, en, atajo] = textoAyuda(el.dataset.ayuda);
       burbuja.innerHTML = `<span>${txt}${atajo ? ` <kbd>${atajo}</kbd>` : ''}</span>${en ? `<span class="en">${en}</span>` : ''}`;
       burbuja.hidden = false;
       const r = el.getBoundingClientRect(), b = burbuja.getBoundingClientRect();
@@ -305,7 +307,7 @@
     const lista = raizNodo.matches && raizNodo.matches('[data-ayuda]') ? [raizNodo] : [];
     for (const el of [...lista, ...raizNodo.querySelectorAll('[data-ayuda]')]) {
       if (el.hasAttribute('aria-label') || el.textContent.trim()) continue;
-      el.setAttribute('aria-label', el.dataset.ayuda.split('|')[0]);
+      el.setAttribute('aria-label', textoAyuda(el.dataset.ayuda)[0]);
     }
     for (const c of raizNodo.querySelectorAll ? raizNodo.querySelectorAll('canvas:not([role])') : []) {
       c.setAttribute('role', 'img');

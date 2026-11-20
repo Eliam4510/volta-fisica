@@ -12,6 +12,9 @@
 import { serializar, leerEscena, EXTENSION } from '../nucleo/escena.js';
 import { preguntar } from './dialogo.js';
 
+/** Texto en el idioma de la interfaz (idioma.js); fuera de la página, en español. */
+const tr = (/** @type {string} */ s) => (/** @type {any} */ (globalThis).Volta?.t ? /** @type {any} */ (globalThis).Volta.t(s) : s);
+
 // ---------------------------------------------------------------------------
 // Pantallas: módulo y espacio de una escena → página
 // ---------------------------------------------------------------------------
@@ -68,7 +71,7 @@ export function nombreDeRuta(ruta) {
 /** Título de la ventana: «Mi rampa • — Mecánica — Volta». @param {{nombre: string, modificado: boolean, modulo?: string}} d */
 export function tituloVentana(d) {
   const mod = /** @type {any} */ (NOMBRES_MODULO)[d.modulo || ''];
-  return `${d.nombre || 'Sin título'}${d.modificado ? ' •' : ''}${mod ? ` — ${mod}` : ''} — Volta`;
+  return `${d.nombre || tr('Sin título')}${d.modificado ? ' •' : ''}${mod ? ` — ${tr(mod)}` : ''} — Volta`;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +118,7 @@ export async function leerRuta(ruta) { return tauri().core.invoke('leer_escena',
 /** Pide una ruta con «Guardar como». @param {string} sugerido @returns {Promise<string | null>} */
 async function pedirRuta(sugerido) {
   const t = tauri();
-  const r = await t.dialog.save({ defaultPath: sugerido + EXTENSION, filters: [{ name: 'Escena de Volta', extensions: ['volta'] }] });
+  const r = await t.dialog.save({ defaultPath: sugerido + EXTENSION, filters: [{ name: tr('Escena de Volta'), extensions: ['volta'] }] });
   if (!r) return null;
   return /\.volta$/i.test(r) ? r : r + EXTENSION;
 }
@@ -332,7 +335,7 @@ export async function escenaDeRuta(ruta) {
 export async function elegirArchivo() {
   const t = tauri();
   if (t?.dialog && t?.core) {
-    const ruta = await t.dialog.open({ multiple: false, directory: false, filters: [{ name: 'Escena de Volta', extensions: ['volta', 'json'] }] });
+    const ruta = await t.dialog.open({ multiple: false, directory: false, filters: [{ name: tr('Escena de Volta'), extensions: ['volta', 'json'] }] });
     if (!ruta) return null;
     return escenaDeRuta(String(ruta));
   }

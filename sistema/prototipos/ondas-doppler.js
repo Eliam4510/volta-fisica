@@ -468,6 +468,8 @@ import { registrarDocumento, confirmarCambios, documentoNuevo, hayCambios } from
   // ---------------------------------------------------------------------
   const PATRON = ['continuo', 'discontinuo', 'punteado'];
   function graficas() {
+    // Un cambio de tamaño puede llegar antes de la primera simulación
+    if (!SERIES) return;
     if (!$('#p-graficas').hidden) {
       const ev = EVENTOS.map(e => ({ x: e.t })), cs = componentes(ESC.obs, t), on = ESC.observadores[ESC.obs].nombre;
       // 1 · Frecuencia recibida

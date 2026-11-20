@@ -6,10 +6,12 @@
    ========================================================================== */
 
 /** Filtros de archivo para los diálogos nativos. */
+/** Texto en el idioma de la interfaz (idioma.js va en el head de cada pantalla). */
+const tr = (/** @type {string} */ s) => (/** @type {any} */ (globalThis).Volta?.t ? /** @type {any} */ (globalThis).Volta.t(s) : s);
 export const FILTROS = {
-  csv: [{ name: 'Datos CSV', extensions: ['csv'] }],
-  png: [{ name: 'Imagen PNG', extensions: ['png'] }],
-  volta: [{ name: 'Escena de Volta', extensions: ['volta'] }],
+  csv: [{ name: tr('Datos CSV'), extensions: ['csv'] }],
+  png: [{ name: tr('Imagen PNG'), extensions: ['png'] }],
+  volta: [{ name: tr('Escena de Volta'), extensions: ['volta'] }],
 };
 
 /** API nativa de Tauri si la página corre dentro de la aplicación de Windows. */

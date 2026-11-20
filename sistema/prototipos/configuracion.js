@@ -33,6 +33,7 @@ import { preguntar } from '../componentes/dialogo.js';
       const COLORES = { tinta: 'var(--tinta)', azul: '#1D5FD6', verde: '#0F7B4C', violeta: '#6A3FC9', ambar: '#A86200', rojo: '#C2261C' };
       const NOMBRES = { tinta: 'Tinta (blanco y negro)', azul: 'Azul', verde: 'Verde', violeta: 'Violeta', ambar: 'Ámbar', rojo: 'Rojo' };
       return `<section><h2>Apariencia</h2><p class="intro">Cómo se ve Volta en este equipo. Los colores de la física (velocidad, fuerzas, campos) no cambian: son parte del lenguaje de las escenas.</p>
+        ${opcion('Idioma', 'Idioma de los menús, los paneles, los avisos y las ayudas. Al cambiarlo, la pantalla se vuelve a abrir.', `<div class="segmentado texto" data-pref="idioma" translate="no">${[['es', 'Español'], ['en', 'English'], ['sistema', V().t('Como Windows')]].map(([v, t]) => `<button data-v="${v}" aria-pressed="${v === V().preferenciaIdioma()}">${t}</button>`).join('')}</div>`)}
         ${opcion('Tema', 'Claro, oscuro o el que tenga Windows en cada momento.', seg('tema', [['claro', 'Claro'], ['oscuro', 'Oscuro'], ['sistema', 'Como Windows']], V().preferenciaTema()))}
         ${opcion('Color de acento', `Botón principal, foco, casillas, interruptores y deslizadores. Ahora: ${NOMBRES[acento]}.`,
           `<div class="muestras" data-pref="acento">${V().ACENTOS.map(a => `<button class="muestra" data-v="${a}" aria-pressed="${a === acento}" aria-label="${NOMBRES[a]}" title="${NOMBRES[a]}"><span style="background:${COLORES[a]}"></span></button>`).join('')}</div>`)}
@@ -78,7 +79,7 @@ import { preguntar } from '../componentes/dialogo.js';
     },
     acerca: () => `<section><h2>Acerca de Volta</h2>
       <dl class="fila-datos"><dt>Versión</dt><dd class="num">${esc(version)}</dd><dt>Instalación</dt><dd>${instalada === false ? 'Portátil' : instalada ? 'Instalada para este usuario' : 'Navegador (desarrollo)'}</dd>
-      <dt>Licencia</dt><dd>MIT</dd><dt>Autor</dt><dd>Eliam Mojardin Ibarra</dd><dt>Motores</dt><dd>Nueve módulos de física con pruebas contra soluciones analíticas y problemas del temario MEXT.</dd></dl>
+      <dt>Licencia</dt><dd>MIT</dd><dt>Autor</dt><dd translate="no">Eliam Mojardin Ibarra</dd><dt>Motores</dt><dd>Nueve módulos de física con pruebas contra soluciones analíticas y problemas del temario MEXT.</dd></dl>
       ${opcion('Código y versiones', 'Proyecto abierto en GitHub.', `<button class="btn btn-secundario" id="b-github">Abrir en GitHub</button>`)}
       </section>`,
   };
@@ -106,6 +107,13 @@ import { preguntar } from '../componentes/dialogo.js';
         case 'decimal': guardar('volta.decimal', v); ponerDecimalComa(v === 'coma'); mostrar('numeros'); break;
         case 'teclado': guardar('volta.teclado', v); break;
         case 'actualizar': guardar('volta.actualizacion.auto', v); break;
+        case 'idioma': {
+          // El idioma se aplica al abrir cada pantalla: si cambia el efectivo, se vuelve a abrir esta
+          const antes = V().idioma();
+          guardar('volta.idioma', v);
+          if (V().idiomaEfectivo(v) !== antes) location.reload();
+          break;
+        }
       }
       return;
     }
@@ -152,10 +160,12 @@ import { preguntar } from '../componentes/dialogo.js';
   $('#b-volver').addEventListener('click', volver);
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !document.querySelector('.dialogo-fondo')) volver(); });
   $('#b-restablecer').addEventListener('click', async () => {
-    const r = await preguntar({ titulo: '¿Restablecer toda la configuración?', texto: 'Tema, acento, matiz, tamaño, separador decimal, teclado y actualizaciones vuelven a sus valores de fábrica. Tus escenas no se tocan.', botones: [{ id: 'cancelar', texto: 'Cancelar' }, { id: 'si', texto: 'Restablecer', principal: true }] });
+    const r = await preguntar({ titulo: '¿Restablecer toda la configuración?', texto: 'Idioma, tema, acento, matiz, tamaño, separador decimal, teclado y actualizaciones vuelven a sus valores de fábrica. Tus escenas no se tocan.', botones: [{ id: 'cancelar', texto: 'Cancelar' }, { id: 'si', texto: 'Restablecer', principal: true }] });
     if (r !== 'si') return;
-    for (const k of ['volta.decimal', 'volta.teclado', 'volta.actualizacion.auto']) guardar(k, null);
+    const idiomaAntes = V().idioma();
+    for (const k of ['volta.decimal', 'volta.teclado', 'volta.actualizacion.auto', 'volta.idioma']) guardar(k, null);
     V().ponerTema('sistema'); V().ponerAcento('tinta'); V().ponerMatiz('neutro'); V().ponerZoom(1); ponerDecimalComa(null);
+    if (V().idiomaEfectivo('sistema') !== idiomaAntes) { location.reload(); return; }
     mostrar(actual);
   });
 
