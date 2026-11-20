@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.12.0 (publicada el 2026-11-19 con instalador de 2 994 883 B y portátil de 5 397 504 B; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.13.0 (publicada el 2026-11-19; ejecutables compilándose; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -66,7 +66,8 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Laboratorio: duplicar (Ctrl+D).
 - [x] Laboratorio: panel de variables, instrumentos (regla, fotopuerta).
 - [x] Discos que giran: rodadura, deslizamiento con giro, par de la fricción (v0.12.0, DECISIONES 18).
-- [ ] Bloques que vuelcan: rectángulo con giro y contactos por vértice (filas [i, n̂] y [n + q, n̂·(ẑ×R·v_k)], jdv = −ω²·n̂·R·v_k); claves de contacto con el vértice. Fricción entre discos (pares) con el mismo deslizamiento del punto de contacto.
+- [x] Bloques que vuelcan: rectángulo con giro y contactos por vértice (v0.13.0).
+- [ ] Ver autocrítica 7: fuerza aplicada en un punto del cuerpo, contactos bloque-bloque y bloque-disco, esquinas de las superficies contra las caras, fricción entre discos.
 
 ### Otros módulos
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
@@ -183,6 +184,21 @@ completa) y con PhET, Universe Sandbox y Algodoo:
 | Contenido | 155 escenas MEXT; lo que falta no tiene enunciado en el banco o pide modelos fuera de alcance | — |
 | Pulido | Títulos largos cortados a 1280 px en varias barras superiores | Revisar a 1280×800 todas las pantallas |
 
+## Autocrítica 7 (2026-11-19, tras discos que giran y bloques que vuelcan)
+
+Comparado con Box2D v3 y PhysX (polígonos con contactos por recorte de
+aristas, fricción en todos los pares, fuerzas en cualquier punto) y con lo
+que pide la estática del temario (M9: volcar o deslizar al empujar):
+
+| Prioridad | Hallazgo | Tarea |
+|---|---|---|
+| Hecho (v0.12.0, v0.13.0) | No había rotación | Discos que ruedan y bloques que vuelcan, validados contra soluciones exactas |
+| Función | La fuerza aplicada actúa siempre en el centro: no se puede empujar un bloque a una altura h y ver si vuelca o desliza (problema clásico de M9) | Punto de aplicación en el marco del cuerpo; par F × r en el giro y su energía (W de una fuerza que gira con el cuerpo no es conservativa: va a W) |
+| Función | Los bloques no chocan entre sí ni con discos; no se pueden apilar cajas | Vértice contra arista de otro bloque (fila con entradas de los dos cuerpos y sus giros), disco contra aristas |
+| Exactitud | Solo los vértices del bloque tocan las superficies: la esquina de un escalón atraviesa la cara de un bloque; un bloque de plano sobre un arco solo toca por vértices | Extremos de los segmentos contra las aristas de los bloques |
+| Función | Los pares de discos siguen sin fricción (no hay engranajes de fricción ni un disco que rueda sobre otro) | Deslizamiento del punto de contacto del par con los dos giros |
+| Pulido | Las normales y fricciones de un bloque se dibujan en el centro, no en sus vértices; no hay asa para girar un bloque con el ratón | Origen de cada vector en su punto de contacto; asa de giro |
+
 ## Problemas conocidos
 
 - Pendientes del lenguaje de diseño: `docs/04_lenguaje_de_diseno.md`, sección 11.
@@ -237,3 +253,4 @@ completa) y con PhET, Universe Sandbox y Algodoo:
 - 2026-11-19 — Circuitos (10 MEXT) y cubeta de ondas 2D (Ondas 21 MEXT) integrados; v0.10.0 (934 pruebas). Pendientes por módulo: ver las notas de cada uno arriba y las autocríticas.
 - 2026-11-19 — Termodinámica como caja de arena (paletas e instrumentos) y Gravitación con «Sistema solar» y «Maniobras» (motor de N cuerpos); v0.11.0 (992 pruebas).
 - 2026-11-19 — Discos que giran en el motor y el Laboratorio (rodadura, bola de bolos, cuenco; ejemplos con fotopuertas); sentido de la fricción cinética fijo por tramo; v0.12.0 (1003 pruebas). Siguiente: bloques que vuelcan.
+- 2026-11-19 — Bloques rígidos que vuelcan (motor y Laboratorio); adherencia conjunta de los apoyos; v0.13.0 (1013 pruebas). Autocrítica 7. Siguiente: fuerza aplicada en un punto del cuerpo.

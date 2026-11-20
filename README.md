@@ -46,7 +46,7 @@ Principios del proyecto:
 
 | Módulo | Estado | Qué simula |
 |---|---|---|
-| Mecánica | Utilizable | Proyectiles y Laboratorio (caja de arena): superficies fijas o llevadas por un cuerpo, cuerdas, poleas, resortes, varillas, clavos, prensa hidráulica, fricción, discos que giran (rodadura sin deslizar o deslizando), choques entre discos y movimiento impuesto (ascensor, gráficas v–t); contactos como problema de complementariedad y energía disipada contabilizada; 38 escenas MEXT |
+| Mecánica | Utilizable | Proyectiles y Laboratorio (caja de arena): superficies fijas o llevadas por un cuerpo, cuerdas, poleas, resortes, varillas, clavos, prensa hidráulica, fricción, discos que giran (rodadura sin deslizar o deslizando), bloques rígidos que vuelcan, choques entre discos y movimiento impuesto (ascensor, gráficas v–t); contactos como problema de complementariedad y energía disipada contabilizada; 38 escenas MEXT |
 | Electrostática | Utilizable | Cargas, hilos, anillos, láminas y esferas; campo, potencial, Gauss y cargas en movimiento; capacitores con dieléctricos, conductores y batería conectada o no; 18 escenas MEXT |
 | Termodinámica | Utilizable | Laboratorio de gases (cilindros, recipientes con válvulas, globos, burbujas), ciclos en el diagrama P-V con Q, W y ΔU por tramo, gas molecular de discos con Maxwell–Boltzmann, y calor y calorimetría; 29 escenas MEXT |
 | Gravitación | Utilizable | Órbitas, escape y órbita geoestacionaria; Sistema Solar con N cuerpos y datos reales (Kepler, centro de masa, tres cuerpos); maniobras con impulsos Δv (Hohmann, circularizar, escapar); 8 escenas MEXT |

@@ -7,6 +7,37 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.13.0] - 2026-11-19
+
+Bloques rígidos en Mecánica: rectángulos que giran, se apoyan por sus
+vértices y vuelcan.
+
+### Añadido
+
+- Motor de Mecánica: bloque rígido (ancho × alto, I = m(a² + h²)/12) que se
+  apoya en las superficies por sus cuatro vértices. Cada apoyo es una fila
+  más del mismo sistema, con su entrada de giro, así que el problema de
+  complementariedad decide qué vértices empujan: el bloque se queda, desliza
+  o vuelca sobre una arista según la fricción y la geometría (tan θ > a/h).
+  Validado contra el vuelco sobre una arista (el vértice no se mueve y
+  ½I_pω² = mgΔh), el deslizamiento sin giro y caídas con el balance de
+  energía cerrado. 6 pruebas nuevas.
+- Laboratorio: herramienta Bloque con tamaño, orientación y velocidad
+  angular; se apoya de plano en un segmento, se dibuja girado (también en el
+  estroboscopio), su estado dice si está de plano o sobre una arista y los
+  vectores de normal y fricción salen de las reacciones en sus vértices.
+  Ejemplo: dos bloques en un plano de 25°, uno se queda y otro vuelca.
+
+### Corregido
+
+- La adherencia al arrancar y al dejar de deslizar se decide para todos los
+  apoyos quietos a la vez: uno a uno, el primer apoyo cargaba con toda la
+  fricción y un cuerpo con dos apoyos arrancaba deslizando.
+- Al invertirse el deslizamiento se elige el sentido coherente con la
+  fricción cinética (antes el evento podía repetirse sin fin).
+- Un choque repetido en el mismo instante (impulsos secuenciales entre dos
+  apoyos de un mismo cuerpo) se anota una sola vez.
+
 ## [0.12.0] - 2026-11-19
 
 Los discos de Mecánica giran: ruedan sin deslizar, deslizan girando y la
