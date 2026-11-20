@@ -7,11 +7,31 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.19.0] - 2026-11-20
+
+Volta en inglés, y ejemplos clásicos nuevos en el Laboratorio.
+
 ### Añadido
 
+- Idioma de la interfaz en Configuración → Apariencia: Español, English o
+  como Windows. En inglés se traducen los menús, los paneles, los
+  diálogos, los avisos, las ayudas y los textos de los lienzos.
+- Traducidos por completo: la barra y los menús comunes, Inicio,
+  Configuración, los diálogos de guardar y abrir, las actualizaciones, el
+  estado inicial de las 25 pantallas y el Laboratorio de Mecánica
+  (inspector, herramientas, avisos y escenarios). Lo que aún falta en los
+  demás espacios (inspectores al seleccionar, notas de los escenarios,
+  descripción de los eventos) sigue en español y se irá completando.
 - Laboratorio de Mecánica: ejemplos «Osciladores acoplados» (pulsaciones
   con el acoplamiento kc en un deslizador) y «Escalera que resbala» (deja
   la pared cuando su centro baja a 2/3 de su altura inicial).
+
+### Corregido
+
+- El nombre del módulo y del espacio ya no se monta encima del nombre de
+  la escena cuando la ventana es estrecha.
+- Ondas · Doppler fallaba si la ventana cambiaba de tamaño antes de la
+  primera simulación.
 
 ## [0.18.0] - 2026-11-20
 

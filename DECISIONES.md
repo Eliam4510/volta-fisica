@@ -160,3 +160,19 @@ vieja.
     recordadas. El aviso es un diálogo propio (`componentes/dialogo.js`),
     no `confirm()`, para tener tres botones y el lenguaje de diseño.
 
+23. **Idioma: diccionario con el español como clave y traducción de la
+    página (2026-11-20).** La interfaz se escribió en español dentro del
+    código (unas 400 ayudas, cientos de avisos, inspectores generados con
+    plantillas). Pasar todo a claves (`t('inspector.masa')`) obligaba a
+    reescribir las 23 pantallas a la vez. En su lugar, `componentes/idioma.js`
+    va en el `<head>` y, en inglés, traduce cada texto que entra en la página
+    con un observador de cambios, más los atributos de accesibilidad, las
+    ayudas y lo que se escribe en los lienzos (`fillText`/`measureText`). El
+    diccionario (`idioma-en.js`) usa el texto español exacto como clave y
+    admite patrones con huecos para textos con valores («Lecturas en t =
+    {0}»); lo que llena un hueco se traduce si es una entrada. Lo que no está
+    se queda en español y se apunta en `Volta.idiomaFaltantes()`, así que la
+    traducción avanza por pantallas sin romper nada, y una prueba exige que
+    todo texto escrito en el HTML tenga entrada. Inconveniente aceptado: un
+    cambio de redacción en español obliga a cambiar la clave del
+    diccionario (la prueba de cobertura lo detecta en el HTML, no en el JS).
