@@ -52,13 +52,13 @@
 
 /** Tipos de componente que entiende el motor. */
 export const TIPOS_COMPONENTE = Object.freeze([
-  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'diodo', 'led', 'zener', 'capacitor', 'inductor', 'transformador', 'opamp',
+  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'diodo', 'led', 'zener', 'capacitor', 'inductor', 'transformador', 'opamp', 'transistor',
   'interruptor', 'interruptor-3', 'amperimetro', 'voltimetro', 'cable', 'tierra',
 ]);
 
 /** Número de bornes admitido por cada tipo. */
 const BORNES = {
-  bateria: [2], 'fuente-ca': [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], diodo: [2], led: [2], zener: [2], opamp: [3], capacitor: [2],
+  bateria: [2], 'fuente-ca': [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], diodo: [2], led: [2], zener: [2], opamp: [3], transistor: [3], capacitor: [2],
   inductor: [2], transformador: [4], interruptor: [2], 'interruptor-3': [2, 3, 4], amperimetro: [2], voltimetro: [2], cable: [2], tierra: [1],
 };
 
@@ -104,6 +104,9 @@ const BORNES = {
  * @property {number} [Vz]  Zener: voltaje de ruptura en inversa (V), con 5 mA
  * @property {number} [A]   Amplificador operacional: ganancia en lazo abierto; nodos [+, −, salida]
  * @property {number} [Vsat] Amplificador operacional: voltaje de saturación de la salida (±Vsat, respecto de tierra)
+ * @property {'npn'|'pnp'} [polaridad] Transistor bipolar: nodos [colector, base, emisor]
+ * @property {number} [beta] Transistor: ganancia de corriente β = I_C/I_B en la zona activa
+ * @property {number} [Vbe] Transistor: voltaje base-emisor con I_C = 1 mA (fija Is)
  * @property {Array<[number, number]>} [curva] Bombilla: curva I-V como tabla [[V, I], …] (V > 0 creciente)
  */
 
@@ -311,6 +314,20 @@ export function curvaDiodo(p) {
   return { I, dI, Vn: p.Vd, Pn: p.Vd * p.Iref, R0: 1 / dI(p.Vd), b: 0, Is, nVt, limitar, diodo: true };
 }
 
+/**
+ * Transistor bipolar (Ebers–Moll de transporte) con las uniones jbe = s·V_BE
+ * y jbc = s·V_BC (s = +1 NPN, −1 PNP): corrientes que entran por el colector
+ * y por la base, en el sentido del dispositivo, y sus derivadas.
+ * @param {any} r rama Q @param {number} jbe @param {number} jbc
+ */
+function ebersMoll(r, jbe, jbc) {
+  const ex = (/** @type {number} */ v) => Math.exp(Math.min(v / VT, 80)), eF = ex(jbe), eR = ex(jbc), gmin = 1e-12;
+  const Ic = r.Is * (eF - eR) - r.Is / r.bR * (eR - 1) + gmin * (jbe - jbc);
+  const Ib = r.Is / r.bF * (eF - 1) + r.Is / r.bR * (eR - 1) + gmin * jbc;
+  const gF = r.Is / VT * eF, gR = r.Is / VT * eR;
+  return { Ic, Ib, dIc_be: gF + gmin, dIc_bc: -gR - gR / r.bR - gmin, dIb_be: gF / r.bF, dIb_bc: gR / r.bR + gmin };
+}
+
 /** Interpolación cúbica de Hermite monótona (Fritsch–Carlson). */
 function monotona(xs, ys) {
   const n = xs.length, d = [], m = new Array(n).fill(0);
@@ -372,6 +389,10 @@ function normalizarComponente(c, i) {
       const Vd = positivo(id, 'el voltaje directo Vd', c.Vd ?? 0.7), n = positivo(id, 'el factor de idealidad n', c.n ?? 1.8), Vz = positivo(id, 'el voltaje Zener Vz', c.Vz ?? 5.1);
       return { ...base, Vd, n, Vz, curvaIV: curvaDiodo({ Vd, n, Iref: 0.01, Vz }) };
     }
+    case 'transistor': {
+      const beta = positivo(id, 'la ganancia β', c.beta ?? 100), Vbe = positivo(id, 'el voltaje V_BE', c.Vbe ?? 0.65);
+      return { ...base, polaridad: c.polaridad === 'pnp' ? 'pnp' : 'npn', beta, Vbe };
+    }
     case 'opamp': {
       const A = positivo(id, 'la ganancia A', c.A ?? 1e5), Vsat = positivo(id, 'el voltaje de saturación', c.Vsat ?? 12);
       return { ...base, A, Vsat };
@@ -416,6 +437,8 @@ export function prepararCircuito(circuito) {
   // Un transformador son dos bobinas acopladas: el primario conserva el nombre
   // y el secundario se llama «nombre·s» (así se leen las dos corrientes)
   const comps = circuito.componentes.map(normalizarComponente).flatMap(c => {
+    // Transistor: el componente lleva la corriente de colector y V_CE; «id·b», la de base y V_BE
+    if (c.tipo === 'transistor') return [c, { id: `${c.id}·b`, tipo: 'base', nodos: [c.nodos[1], c.nodos[2]], de: c.id }];
     if (c.tipo !== 'transformador') return [c];
     const L2 = c.n * c.n * c.L1, M = c.k * Math.sqrt(c.L1 * L2), sec = `${c.id}·s`;
     return [
@@ -496,6 +519,13 @@ function topologia(P, estados, o) {
         break;
       }
       case 'bombilla': case 'diodo': case 'led': case 'zener': add('N', a, b, 0, ci); ramas[ramas.length - 1].curva = c.curvaIV; break;
+      case 'transistor': {
+        // Rama Q entre colector y emisor; la base va aparte (Ebers–Moll de transporte)
+        add('Q', c.n[0], c.n[2], 0, ci);
+        const Is = 1e-3 / Math.expm1(c.Vbe / VT);
+        Object.assign(ramas[ramas.length - 1], { q: c.n[1], s: c.polaridad === 'pnp' ? -1 : 1, Is, bF: c.beta, bR: 1, vcrit: VT * Math.log(VT / (Math.SQRT2 * Is)) });
+        break;
+      }
       case 'opamp': {
         // Fuente de voltaje controlada: salida respecto de tierra = Vsat·tanh(A·(V₊ − V₋)/Vsat)
         if (!P.tierras.length) throw new ErrorCircuito(`«${c.id}»: el amplificador operacional necesita una tierra (su salida se mide respecto de ella).`);
@@ -545,6 +575,7 @@ function topologia(P, estados, o) {
   for (const r of ramas) {
     r.ma = mDe[r.a]; r.mb = mDe[r.b];
     if (r.tipo === 'E') { r.mp = mDe[r.p]; r.mm = mDe[r.m]; r.jv = nV++; nN++; continue; }
+    if (r.tipo === 'Q') { r.mq = mDe[r.q]; nN++; continue; }
     if (r.tipo === 'V') {
       if (r.ma === r.mb) throw new ErrorCircuito(`Cortocircuito: los bornes de «${P.comps[r.ci].id}» quedan unidos por conductores sin resistencia. Abre un interruptor o añade una resistencia.`);
       r.jv = nV++;
@@ -561,6 +592,7 @@ function topologia(P, estados, o) {
     if (r.tipo === 'K' || r.tipo === 'J') continue;
     unir(ufTodo, gm(r.ma), gm(r.mb));
     if (r.tipo !== 'C') unir(ufCC, gm(r.ma), gm(r.mb));
+    if (r.tipo === 'Q') { unir(ufTodo, gm(r.ma), gm(r.mq)); unir(ufCC, gm(r.ma), gm(r.mq)); }
   }
   const raizTodo = buscar(ufTodo, M), refs = [], vistos = new Set();
   for (let m = 0; m < M; m++) {
@@ -681,6 +713,9 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
   // Amplificador operacional: la guía es su voltaje diferencial de entrada (del estado anterior)
   const xDe = (/** @type {any} */ V, /** @type {any} */ r) => (r.mp >= 0 ? V[r.mp] : 0) - (r.mm >= 0 ? V[r.mm] : 0);
   T.ramas.forEach((r, k) => { if (r.tipo === 'E') guia[k] = st.V && st.V.length ? xDe(st.V, r) : 0; });
+  // Transistor: guía de V_BE en guia[k] y de V_BC en guiaBC[k] (del estado anterior)
+  const guiaBC = new Float64Array(nr);
+  T.ramas.forEach((r, k) => { if (r.tipo === 'Q') { guia[k] = st.jbe ? st.jbe[k] : 0; guiaBC[k] = st.jbc ? st.jbc[k] : 0; } });
   for (let it = 0; ; it++) {
     T.ramas.forEach((r, k) => {
       if (r.tipo !== 'N') return;
@@ -701,6 +736,23 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
           } else { const [g, ieq] = companeroL(r, st, k, h, tr); conductancia(S, r.ma, r.mb, g); corrienteFija(S, r.ma, r.mb, ieq); }
           break;
         case 'N': conductancia(S, r.ma, r.mb, gN[k]); corrienteFija(S, r.ma, r.mb, iN[k]); break;
+        case 'Q': {
+          // Corrientes que entran por colector y base, linealizadas en las guías:
+          // I = I₀ + g₁·(dBE − dBE₀) + g₂·(dBC − dBC₀), con dBE = V_B − V_E y dBC = V_B − V_C
+          const e = ebersMoll(r, guia[k], guiaBC[k]), sg = r.s, dBE0 = sg * guia[k], dBC0 = sg * guiaBC[k];
+          const C = r.ma, B = r.mq, E = r.mb;
+          const fila = (/** @type {number} */ n, /** @type {number} */ I0, /** @type {number} */ g1, /** @type {number} */ g2, /** @type {number} */ signo) => {
+            const ieq = sg * I0 - g1 * dBE0 - g2 * dBC0;
+            sumar(S, n, B, signo * (g1 + g2)); sumar(S, n, E, -signo * g1); sumar(S, n, C, -signo * g2);
+            if (n >= 0) S.b[n] -= signo * ieq;
+          };
+          fila(C, e.Ic, e.dIc_be, e.dIc_bc, 1);
+          fila(B, e.Ib, e.dIb_be, e.dIb_bc, 1);
+          // El emisor devuelve las dos
+          fila(E, e.Ic, e.dIc_be, e.dIc_bc, -1);
+          fila(E, e.Ib, e.dIb_be, e.dIb_bc, -1);
+          break;
+        }
         case 'E': {
           // V_sal − g·(V₊ − V₋) = f(x₀) − g·x₀, linealizada en la guía x₀
           const x0 = guia[k], th = Math.tanh(r.A * x0 / r.Vsat), f = r.Vsat * th, g = r.A * (1 - th * th), c = T.M + r.jv;
@@ -718,6 +770,20 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
     // Newton: convergencia en el voltaje de cada bombilla (con paso limitado)
     let listo = true;
     T.ramas.forEach((r, k) => {
+      if (r.tipo === 'Q') {
+        const nv = m => (m >= 0 ? x[m] : 0), jbe = r.s * (nv(r.mq) - nv(r.mb)), jbc = r.s * (nv(r.mq) - nv(r.ma));
+        const lim = (/** @type {number} */ vn, /** @type {number} */ vo) => {
+          if (vn > r.vcrit && Math.abs(vn - vo) > 2 * VT) {
+            if (vo > 0) { const arg = 1 + (vn - vo) / VT; return arg > 0 ? vo + VT * Math.log(arg) : r.vcrit; }
+            return VT * Math.log(Math.max(vn / VT, 1e-300));
+          }
+          return vn;
+        };
+        const nbe = lim(jbe, guia[k]), nbc = lim(jbc, guiaBC[k]);
+        if (Math.abs(nbe - guia[k]) > 1e-9 * VT + 1e-12 * Math.abs(nbe) || Math.abs(nbc - guiaBC[k]) > 1e-9 * VT + 1e-12 * Math.abs(nbc)) listo = false;
+        guia[k] = nbe; guiaBC[k] = nbc;
+        return;
+      }
       if (r.tipo === 'E') {
         // Paso acotado a unas veces el ancho de la zona lineal (Vsat/A) cuando satura
         const xn = xDe(x, r), w = r.Vsat / r.A;
@@ -793,6 +859,7 @@ function mutua(S, r, rj, G) { sumar(S, r.ma, rj.ma, G); sumar(S, r.ma, rj.mb, -G
 function extraer(T, x, st, h, metodo, iL) {
   const dc = metodo === 'dc', tr = metodo === 'tr', nr = T.ramas.length;
   const V = Float64Array.from(x.subarray(0, T.M)), v = new Float64Array(nr), i = new Float64Array(nr);
+  const jbe = new Float64Array(nr), jbc = new Float64Array(nr), ib = new Float64Array(nr), vbe = new Float64Array(nr);
   T.ramas.forEach((r, k) => {
     const Va = r.ma >= 0 ? x[r.ma] : 0, Vb = r.mb >= 0 ? x[r.mb] : 0, d = Va - Vb;
     v[k] = d;
@@ -825,10 +892,17 @@ function extraer(T, x, st, h, metodo, iL) {
         } else { const [g, ieq] = companeroL(r, st, k, h, tr); i[k] = g * d + ieq; }
         break;
       case 'N': i[k] = r.curva.I(d); break;
+      case 'Q': {
+        const VB = r.mq >= 0 ? x[r.mq] : 0;
+        jbe[k] = r.s * (VB - Vb); jbc[k] = r.s * (VB - Va); vbe[k] = VB - Vb;
+        const e = ebersMoll(r, jbe[k], jbc[k]);
+        i[k] = r.s * e.Ic; ib[k] = r.s * e.Ib;
+        break;
+      }
       default: break;
     }
   });
-  return { V, v, i, conK: false, t: dc ? st.t : st.t + h };
+  return { V, v, i, jbe, jbc, ib, vbe, conK: false, t: dc ? st.t : st.t + h };
 }
 
 // Corriente de los conductores ideales: Kirchhoff sobre un árbol generador de
@@ -968,7 +1042,7 @@ function estadoRamas(T, q, iL, t = 0) {
     if (r.tipo === 'C') v[k] = q[r.ci] / capRama(r, t);
     else if (r.tipo === 'L') i[k] = iL[r.ci];
   });
-  return { V: new Float64Array(T.M), v, i, conK: true, t };
+  return { V: new Float64Array(T.M), v, i, jbe: new Float64Array(nr), jbc: new Float64Array(nr), ib: new Float64Array(nr), vbe: new Float64Array(nr), conK: true, t };
 }
 
 function construirMuestra(T, P, st, t, ctx) {
@@ -983,7 +1057,8 @@ function construirMuestra(T, P, st, t, ctx) {
     if (c.tipo === 'interruptor-3') {
       const p = T.estados[ci], k = p ? 'abc'.indexOf(p) + 1 : -1;
       v[ci] = k > 0 && k < c.n.length && c.n[k] >= 0 ? V[c.n[0]] - V[c.n[k]] : 0;
-    } else v[ci] = V[c.n[0]] - V[c.n[1]];
+    } else if (c.tipo === 'transistor') v[ci] = V[c.n[0]] - V[c.n[2]];   // V_CE
+    else v[ci] = V[c.n[0]] - V[c.n[1]];
     if (!rs.length) return;
     const k0 = rs[0];
     I[ci] = (c.tipo === 'bateria' || c.tipo === 'fuente-ca' || c.tipo === 'opamp' ? -st.i[k0] : st.i[k0]) + 0;   // + 0: nunca −0
@@ -993,6 +1068,11 @@ function construirMuestra(T, P, st, t, ctx) {
       // La energía mutua M·i₁·i₂ va con el primario
       if (c.acople && !c.secundario) { const kj = T.ramas[k0].par; if (kj != null) U[ci] += c.acople.M * st.i[k0] * st.i[kj]; }
     }
+  });
+  P.comps.forEach((c, ci) => {
+    if (c.tipo !== 'base') return;
+    const k = T.ramasDe[P.porId.get(c.de)][0];
+    I[ci] = st.ib && k != null ? st.ib[k] + 0 : 0;
   });
   return { t, V, I, v, q, U, W: Float64Array.from(ctx.W), Q: Float64Array.from(ctx.Qj), perdidas: ctx.perdidas, numerico: ctx.numerico };
 }
@@ -1012,6 +1092,7 @@ function contabilizar(T, st0, st1, h, metodo, ctx) {
     switch (r.tipo) {
       case 'V': case 'J': case 'E': ctx.W[r.ci] -= p; break;
       case 'G': case 'N': ctx.Qj[r.ci] += p; break;
+      case 'Q': ctx.Qj[r.ci] += p + (tr ? 0.25 * h * (st0.vbe[k] + st1.vbe[k]) * (st0.ib[k] + st1.ib[k]) : h * st1.vbe[k] * st1.ib[k]); break;
       case 'C':
         if (r.perfil) {
           const C0 = capRama(r, st0.t), C1 = capRama(r, st1.t), v0 = st0.v[k], v1 = st1.v[k];
@@ -1205,6 +1286,7 @@ export function simularCircuito(circuito, opciones = {}) {
     if (c.tipo === 'resistencia' || c.tipo === 'reostato') Gmax = Math.max(Gmax, 1 / c.R);
     if (c.tipo === 'bombilla' || c.tipo === 'diodo' || c.tipo === 'led' || c.tipo === 'zener') Gmax = Math.max(Gmax, 1 / c.curvaIV.R0);
     if (c.tipo === 'opamp') Vref += c.Vsat;
+    if (c.tipo === 'transistor') Gmax = Math.max(Gmax, 1e-3 / VT);
   }
   Iref += Vref * Gmax;
   P.comps.forEach((c, ci) => { if (c.tipo === 'capacitor') Vref = Math.max(Vref, Math.abs(c.q0 / c.C)); if (c.tipo === 'inductor') Iref = Math.max(Iref, Math.abs(iL[ci])); });
@@ -1350,6 +1432,7 @@ export function respuestaFrecuencia(circuito, f, opciones = {}) {
   if (!(f > 0) || !Number.isFinite(f)) throw new ErrorCircuito('La frecuencia tiene que ser positiva.');
   const P = prepararCircuito(circuito), o = { ...OPCIONES_CIRCUITO, ...opciones };
   if (P.comps.some(c => c.tipo === 'diodo' || c.tipo === 'led' || c.tipo === 'zener')) throw new ErrorCircuito('Con diodos el circuito no es lineal: los fasores no valen; mira la simulación en el tiempo.');
+  if (P.comps.some(c => c.tipo === 'transistor')) throw new ErrorCircuito('Con transistores el circuito no es lineal: los fasores no valen; mira la simulación en el tiempo.');
   const T = topologia(P, estadoInterruptores(P), o);
   const w = 2 * Math.PI * f, n = T.M + T.nV;
   const Ar = new Float64Array(n * n), Ai = new Float64Array(n * n), br = new Float64Array(n), bi = new Float64Array(n);
