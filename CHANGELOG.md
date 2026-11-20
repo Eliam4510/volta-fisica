@@ -7,6 +7,29 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.18.0] - 2026-11-20
+
+Geocentrismo, heliocentrismo y Ptolomeo en el Sistema solar; fuerzas que
+cambian con el tiempo en el Laboratorio de Mecánica.
+
+### Añadido
+
+- Sistema solar: «Centro» de la vista elegible (inercial, Sol, Tierra o el
+  cuerpo seleccionado, tecla G). Con la Tierra quieta, las trazas muestran
+  los bucles retrógrados de Marte y Venus; con el Sol, las órbitas de
+  Copérnico.
+- Capa «Ptolomeo» (tecla E): deferente y epiciclo de cada planeta, la misma
+  geometría que el modelo heliocéntrico sumada en otro orden.
+- Ejemplo «Cielo geocéntrico: bucles de Marte y Ptolomeo».
+- Laboratorio de Mecánica: la fuerza aplicada puede ser constante,
+  senoidal (F·sen(2πft + φ)) o un pulso entre t₀ y t₁; su trabajo aparece
+  como trabajo de la fuerza aplicada en Energía. La frecuencia, la fase y
+  los instantes del pulso pueden ser variables.
+- Ejemplo «Resonancia forzada» con la frecuencia en un deslizador y la
+  gráfica x(t).
+- Selector de gravedad en la escena: Tierra, Luna, Marte, Júpiter o sin
+  gravedad.
+
 ## [0.17.0] - 2026-11-20
 
 Configuración como pantalla propia, más colores, gráficas que se exploran

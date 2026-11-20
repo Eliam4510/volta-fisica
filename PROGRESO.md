@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.17.0 (publicada el 2026-11-20 con instalador de 3.6 MB, portable de 7.0 MB y latest.json firmado; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.18.0 (publicada el 2026-11-20; ejecutables compilándose. La 0.17.0 salió con instalador de 3.6 MB, portable de 7.0 MB y latest.json firmado; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -272,3 +272,4 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Auditoría con cuatro agentes (producto, simulador, referencias, nombre): docs/05_auditoria_producto.md. Pendiente de decidir el nombre definitivo (Volta era nombre en clave).
 - 2026-11-19 — Auditoría A1 (bloqueantes) resuelta: documento por pantalla con aviso de cambios, Guardar/Guardar como, .volta asociada en Windows con instancia única y arrastrar y soltar, Inicio con buscador, Nueva escena, Ajustes y archivos recientes, sin herramientas de desarrollo ni controles muertos; ventana que recuerda su estado. 1051 pruebas. Siguiente: A2 (idioma inglés, preferencias de unidades y formato numérico, accesibilidad) y B (gráficas, análisis).
 - 2026-11-20 — Comentarios del autor usándola: Configuración como pantalla con actualizaciones dentro, acentos y matices, teclado de símbolos, arreglo de los campos con unidad, gráficas interactivas, separador decimal, accesibilidad; v0.17.0 (1062 pruebas). Siguiente: Sistema solar geocéntrico/heliocéntrico/Ptolomeo, más opciones en los laboratorios, inglés.
+- 2026-11-20 — Sistema solar con centro de la vista (inercial, Sol, Tierra, seleccionado), capa Ptolomeo (epiciclo() en el motor) y ejemplo geocéntrico; Laboratorio con fuerza senoidal o en pulso (S.tAhora fijado en cada etapa y evento, pulsos cortan tramos, trabajo en W), ejemplo de resonancia y selector de gravedad; v0.18.0 (1070 pruebas). Siguiente: más opciones de laboratorio (motor y par aplicado, fuerza F(x), polígonos), ejemplos clásicos que faltan (rizo, osciladores acoplados, escalera), inglés.
