@@ -32,6 +32,23 @@
   function ponerTema(t) { guardarTema(t); aplicarTema(t === 'sistema' ? temaEfectivo() : t); }
   if (global.matchMedia) global.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (!param && preferenciaTema() === 'sistema') aplicarTema(temaEfectivo()); });
 
+  // Acento de los controles y matiz de las superficies (Configuración)
+  const ACENTOS = ['tinta', 'azul', 'verde', 'violeta', 'ambar', 'rojo'], MATICES = ['neutro', 'calido', 'frio'];
+  const leerPref = (k, lista, def) => { try { const v = localStorage.getItem(k); return lista.includes(v) ? v : def; } catch { return def; } };
+  function ponerAcento(a) {
+    if (!ACENTOS.includes(a)) return;
+    try { localStorage.setItem('volta.acento', a); } catch { /* sin almacenamiento */ }
+    if (a === 'tinta') delete raiz.dataset.acento; else raiz.dataset.acento = a;
+    oyentesTema.forEach(f => f(raiz.dataset.tema));
+  }
+  function ponerMatiz(m) {
+    if (!MATICES.includes(m)) return;
+    try { localStorage.setItem('volta.matiz', m); } catch { /* sin almacenamiento */ }
+    if (m === 'neutro') delete raiz.dataset.matiz; else raiz.dataset.matiz = m;
+    oyentesTema.forEach(f => f(raiz.dataset.tema));      // los lienzos vuelven a leer sus colores
+  }
+  { const a = leerPref('volta.acento', ACENTOS, 'tinta'), m = leerPref('volta.matiz', MATICES, 'neutro'); if (a !== 'tinta') raiz.dataset.acento = a; if (m !== 'neutro') raiz.dataset.matiz = m; }
+
   // Tamaño de la interfaz (preferencia): zoom de la vista de la aplicación
   const ZOOMS = [0.9, 1, 1.1, 1.25, 1.5];
   function leerZoom() { try { const z = parseFloat(localStorage.getItem('volta.zoom') || '1'); return ZOOMS.includes(z) ? z : 1; } catch { return 1; } }
@@ -109,6 +126,9 @@
       if (ev.key === 'F5' || ((ev.ctrlKey || ev.metaKey) && (k === 'r' || k === 'p')) || (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) || ev.key === 'BrowserBack') ev.preventDefault();
     }, true);
     global.addEventListener('wheel', ev => { if (ev.ctrlKey) ev.preventDefault(); }, { passive: false });
+    document.addEventListener('keydown', ev => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === ',' && !location.pathname.endsWith('configuracion.html')) { ev.preventDefault(); location.href = 'configuracion.html'; }
+    });
     global.addEventListener('mouseup', ev => { if (ev.button === 3 || ev.button === 4) ev.preventDefault(); });
   }
 
@@ -296,5 +316,5 @@
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
-  global.Volta = Object.assign(global.Volta || {}, { ponerTema, alCambiarTema, pintarDeslizador, preferenciaTema, ponerZoom, leerZoom, ZOOMS, MODULOS });
+  global.Volta = Object.assign(global.Volta || {}, { ponerTema, alCambiarTema, pintarDeslizador, preferenciaTema, ponerZoom, leerZoom, ZOOMS, MODULOS, ponerAcento, ponerMatiz, ACENTOS, MATICES, acento: () => leerPref('volta.acento', ACENTOS, 'tinta'), matiz: () => leerPref('volta.matiz', MATICES, 'neutro') });
 })(window);

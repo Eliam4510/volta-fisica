@@ -67,7 +67,24 @@ ${bloqueColor('oscuro').replace(/^/gm, '  ')}
   }
 }
 `;
-writeFileSync(join(dir, 'tokens.css'), css);
+// Acentos y matices (Configuración): atributos data-acento y data-matiz en <html>
+function bloquesPreferencias() {
+  const nl = '\n';
+  const bloque = (sel, pares) => `${sel} {${nl}${pares.map(([k, v]) => `  --${k}: ${v};`).join(nl)}${nl}}`;
+  const b = [bloque(':root', [['acento', 'var(--tinta)'], ['sobre-acento', 'var(--sobre-tinta)']])];
+  for (const [nombre, c] of Object.entries(t.acentos.colores)) {
+    b.push(bloque(`:root[data-acento="${nombre}"]`, [['acento', c.claro], ['sobre-acento', t.acentos.sobre.claro]]));
+    b.push(bloque(`:root[data-tema="oscuro"][data-acento="${nombre}"]`, [['acento', c.oscuro], ['sobre-acento', t.acentos.sobre.oscuro]]));
+  }
+  for (const [nombre, m] of Object.entries(t.matices)) {
+    if (nombre.startsWith('$')) continue;
+    b.push(bloque(`:root[data-matiz="${nombre}"]`, Object.entries(m.claro)));
+    b.push(bloque(`:root[data-tema="oscuro"][data-matiz="${nombre}"]`, Object.entries(m.oscuro)));
+  }
+  return b.join(nl + nl) + nl;
+}
+
+writeFileSync(join(dir, 'tokens.css'), css + '\n' + bloquesPreferencias());
 
 // Versión para TypeScript y para el lienzo (que necesita valores numéricos).
 const ts = `// ARCHIVO GENERADO desde tokens.json. No editar a mano.

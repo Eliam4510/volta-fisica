@@ -22,7 +22,7 @@ function espacioDePantalla(js) {
 }
 
 describe('cada escena va a su pantalla', () => {
-  const pantallas = readdirSync(proto).filter(f => f.endsWith('.html') && !['inicio.html', 'guia.html'].includes(f));
+  const pantallas = readdirSync(proto).filter(f => f.endsWith('.html') && !['inicio.html', 'guia.html', 'configuracion.html'].includes(f));
   it('las 23 pantallas guardan un módulo y un espacio que vuelven a abrirlas', () => {
     expect(pantallas).toHaveLength(23);
     for (const html of pantallas) {
@@ -74,6 +74,14 @@ describe('la aplicación como producto', () => {
     expect(inicio).not.toContain('Mi rampa');
     expect(inicio).toContain('id="buscar"');
   });
+  it('Configuración es una pantalla, se llega desde todas las barras y las actualizaciones viven ahí', () => {
+    const conf = leer('sistema/prototipos/configuracion.js');
+    for (const t of ['apariencia', 'numeros', 'escritura', 'actualizaciones', 'archivos', 'acerca', 'buscarActualizacion']) expect(conf).toContain(t);
+    for (const f of readdirSync(proto).filter(x => x.endsWith('.html') && !['guia.html', 'configuracion.html'].includes(x))) {
+      expect(readFileSync(join(proto, f), 'utf8'), f).toContain('href="configuracion.html"');
+    }
+    expect(leer('sistema/prototipos/inicio.html')).not.toContain('b-actualizar');
+  });
   it('ninguna pantalla deja botones que solo avisan de algo futuro', () => {
     for (const f of readdirSync(proto).filter(x => x.endsWith('.html') && x !== 'guia.html')) {
       expect(readFileSync(join(proto, f), 'utf8'), f).not.toContain('data-pendiente');
@@ -87,7 +95,7 @@ describe('la aplicación como producto', () => {
     for (const p of ['core:window:allow-set-title', 'core:window:allow-destroy', 'core:window:allow-set-theme', 'core:webview:allow-set-webview-zoom']) expect(cap).toContain(p);
   });
   it('todas las pantallas registran su documento y tienen Abrir y Guardar a la vista', () => {
-    for (const f of readdirSync(proto).filter(x => x.endsWith('.html') && !['inicio.html', 'guia.html'].includes(x))) {
+    for (const f of readdirSync(proto).filter(x => x.endsWith('.html') && !['inicio.html', 'guia.html', 'configuracion.html'].includes(x))) {
       const html = readFileSync(join(proto, f), 'utf8'), js = readFileSync(join(proto, f.replace('.html', '.js')), 'utf8');
       expect(/data-accion="abrir"|id="b-abrir"/.test(html), f).toBe(true);
       expect(/data-accion="guardar"|id="b-guardar"/.test(html), f).toBe(true);

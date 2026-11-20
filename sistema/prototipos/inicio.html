@@ -68,7 +68,7 @@
       <div class="menu resultados" id="resultados" role="listbox" hidden></div></div>
     <span class="sp"></span>
     <button class="btn btn-icono" data-accion="tema" data-ayuda="Cambiar tema|Theme"><svg class="ico"><use href="#i-tema-oscuro"/></svg></button>
-    <button class="btn btn-icono" id="b-ajustes" data-ayuda="Ajustes|Settings|Ctrl ,"><svg class="ico"><use href="#i-ajustes"/></svg></button>
+    <a class="btn btn-icono" id="b-ajustes" href="configuracion.html" data-ayuda="Configuración|Settings|Ctrl ,"><svg class="ico"><use href="#i-ajustes"/></svg></a>
   </header>
 
   <main>
@@ -111,7 +111,6 @@
     </section>
     <footer class="pie">
       <span>Volta <span class="num" id="version">0.1.0</span></span>
-      <button class="btn btn-compacto" id="b-actualizar" data-ayuda="Buscar una versión nueva en GitHub|Check for updates">Buscar actualizaciones</button>
       <span>·</span><span>Licencia MIT</span>
       <span>·</span><a href="https://github.com/Eliam4510/volta-fisica" target="_blank" rel="noopener">github.com/Eliam4510/volta-fisica</a>
       <span class="sp"></span><span>Las cantidades se escriben según ISO 80000</span>
@@ -127,7 +126,6 @@ import { texto } from '../nucleo/escena.js';
 import { avisar } from '../componentes/exportar.js';
 import { anunciarActualizacion } from '../componentes/actualizacion.js';
 import { elegirArchivo, llevarAEscena, confirmarCambiosDe, claveDe, archivosRecientes, escenaDeRuta, vigilarCierre, recibirArchivos, nombreDeRuta, NOMBRES_MODULO } from '../componentes/documento.js';
-import { abrirPreferencias } from '../componentes/preferencias.js';
 (function () {
   'use strict';
   // [id, nombre, descripción, espacios de trabajo, escenas MEXT que existen, pantalla].
@@ -334,7 +332,6 @@ import { abrirPreferencias } from '../componentes/preferencias.js';
     fondo.querySelector('.menu-item')?.focus();
   }
   document.getElementById('b-nueva').addEventListener('click', nuevaEscena);
-  document.getElementById('b-ajustes').addEventListener('click', () => abrirPreferencias());
 
   // Archivos recientes: rutas reales (solo en la aplicación)
   function pintarArchivos() {
@@ -368,9 +365,9 @@ import { abrirPreferencias } from '../componentes/preferencias.js';
     for (const f of archivosRecientes()) r.push({ t: nombreDeRuta(f.ruta) || f.titulo, extra: f.ruta, tipo: 'Archivo', icono: 'i-carpeta', ir: () => escenaDeRuta(f.ruta).then(e => llevarAEscena(e, 'inicio.html')).catch(err => avisar(document.body, err.message)) });
     r.push({ t: 'Abrir archivo…', extra: 'abrir escena volta', tipo: 'Acción', icono: 'i-carpeta', ir: abrir });
     r.push({ t: 'Nueva escena…', extra: 'crear vacia proyecto', tipo: 'Acción', icono: 'i-mas', ir: nuevaEscena });
-    r.push({ t: 'Ajustes', extra: 'preferencias opciones tema tamaño letra zoom actualizaciones', tipo: 'Acción', icono: 'i-ajustes', ir: () => abrirPreferencias() });
+    r.push({ t: 'Configuración', extra: 'ajustes preferencias opciones tema acento color matiz tamaño letra zoom decimal teclado', tipo: 'Acción', icono: 'i-ajustes', ir: () => { location.href = 'configuracion.html'; } });
     r.push({ t: 'Cambiar tema claro u oscuro', extra: 'tema oscuro claro', tipo: 'Acción', icono: 'i-tema-oscuro', ir: () => document.querySelector('[data-accion="tema"]')?.click() });
-    if (window.__TAURI__) r.push({ t: 'Buscar actualizaciones', extra: 'version nueva actualizar', tipo: 'Acción', icono: 'i-reiniciar', ir: () => document.getElementById('b-actualizar').click() });
+    r.push({ t: 'Buscar actualizaciones', extra: 'version nueva actualizar instalar', tipo: 'Acción', icono: 'i-reiniciar', ir: () => { location.href = 'configuracion.html?seccion=actualizaciones'; } });
     return r;
   }
   const entrada = document.getElementById('buscar'), lista = document.getElementById('resultados');
@@ -406,7 +403,6 @@ import { abrirPreferencias } from '../componentes/preferencias.js';
     if (ctrl && k === 'o') { ev.preventDefault(); abrir(); }
     else if (ctrl && k === 'k') { ev.preventDefault(); entrada.focus(); entrada.select(); }
     else if (ctrl && k === 'n') { ev.preventDefault(); nuevaEscena(); }
-    else if (ctrl && k === ',') { ev.preventDefault(); abrirPreferencias(); }
   });
 
   // Aplicación: cerrar con cambios sin guardar en alguna pantalla; archivos
@@ -419,13 +415,10 @@ import { abrirPreferencias } from '../componentes/preferencias.js';
   if (tauri?.core?.invoke) tauri.core.invoke('version').then(v => { document.getElementById('version').textContent = v; }).catch(() => {});
 
   // ---------- Actualizaciones desde GitHub (solo en la aplicación) ----------
-  // Al abrir Inicio se busca sola cada 6 h; el botón del pie busca siempre
+  // Al abrir Inicio se busca sola cada 6 h (se cambia en Configuración); si
+  // hay una versión nueva, se anuncia arriba. Buscar a mano: Configuración
   const mainEl = document.querySelector('main');
-  if (!tauri) document.getElementById('b-actualizar').hidden = true;
   anunciarActualizacion(mainEl).catch(() => {});
-  document.getElementById('b-actualizar').addEventListener('click', () => {
-    anunciarActualizacion(mainEl, { manual: true, avisar: t => avisar(document.body, t) }).catch(() => {});
-  });
   Volta.alCambiarTema(dibujarMinis);
   window.addEventListener('resize', dibujarMinis);
 })();

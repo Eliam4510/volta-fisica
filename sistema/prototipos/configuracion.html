@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volta · Configuración</title>
+<link rel="stylesheet" href="../fuentes/fuentes.css">
+<link rel="icon" href="../marca/icono-app.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="../componentes/componentes.css">
+<script src="../iconos/sprite.js"></script>
+<style>
+  body { overflow: hidden; }
+  .pagina { height: 100vh; display: grid; grid-template-rows: var(--est-barra) 1fr; }
+  .config { display: grid; grid-template-columns: 240px 1fr; min-height: 0; }
+  .config-nav { display: flex; flex-direction: column; gap: 2px; padding: var(--e-4) var(--e-3); border-right: 1px solid var(--linea-suave); background: var(--panel); }
+  .config-nav h1 { margin: 0 0 var(--e-3) var(--e-2); font-size: var(--t-titulo); font-weight: var(--peso-fuerte); }
+  .config-nav button { display: flex; align-items: center; gap: var(--e-2); height: 34px; padding: 0 var(--e-2); border: 0; border-radius: var(--r-control); background: transparent; color: var(--texto-2); font: inherit; text-align: left; cursor: pointer; }
+  .config-nav button:hover { background: var(--campo-hover); color: var(--texto); }
+  .config-nav button[aria-selected="true"] { background: var(--campo-activo); color: var(--texto); font-weight: var(--peso-medio); }
+  .config-nav .sp { flex: 1; }
+  .config-cuerpo { overflow: auto; padding: var(--e-8) var(--e-8) var(--e-12); }
+  .config-cuerpo section { max-width: 760px; display: flex; flex-direction: column; gap: var(--e-5); }
+  .config-cuerpo h2 { margin: 0; font-size: var(--t-titulo); font-weight: var(--peso-fuerte); }
+  .config-cuerpo .intro { margin: -8px 0 0; color: var(--texto-3); }
+  .opcion { display: grid; grid-template-columns: 1fr auto; gap: var(--e-2) var(--e-6); align-items: center; padding: var(--e-4) 0; border-top: 1px solid var(--linea-suave); }
+  .opcion .nombre { font-weight: var(--peso-medio); }
+  .opcion .desc { grid-column: 1; color: var(--texto-3); font-size: var(--t-pequeno); }
+  .opcion .control { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: var(--e-2); align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .muestras { display: flex; gap: var(--e-2); }
+  .muestra { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--linea); cursor: pointer; padding: 0; display: grid; place-items: center; }
+  .muestra[aria-pressed="true"] { border-color: var(--texto); box-shadow: 0 0 0 2px var(--lienzo) inset; }
+  .muestra span { width: 18px; height: 18px; border-radius: 50%; }
+  .vista-previa { display: flex; gap: var(--e-3); align-items: center; padding: var(--e-4); border: 1px solid var(--linea); border-radius: var(--r-tarjeta); background: var(--lienzo); }
+  .vista-previa .panel-muestra { padding: var(--e-3); border-radius: var(--r-control); background: var(--panel); border: 1px solid var(--linea-suave); display: flex; gap: var(--e-2); align-items: center; }
+  .caja-info { padding: var(--e-4); border: 1px solid var(--linea); border-radius: var(--r-tarjeta); background: var(--panel); display: flex; flex-direction: column; gap: var(--e-2); }
+  .caja-info pre { margin: 0; white-space: pre-wrap; font-family: var(--fuente-interfaz); color: var(--texto-2); max-height: 260px; overflow: auto; }
+  .fila-datos { display: grid; grid-template-columns: 200px 1fr; gap: var(--e-2) var(--e-4); }
+  .fila-datos dt { color: var(--texto-3); }
+  .fila-datos dd { margin: 0; }
+  .sintaxis { margin: 0; padding-left: 1.2em; color: var(--texto-2); line-height: 1.7; }
+  .sintaxis code { font-family: var(--fuente-numeros); background: var(--campo); padding: 1px 6px; border-radius: var(--r-casilla); }
+</style>
+</head>
+<body>
+<div class="pagina">
+  <header class="barra">
+    <a class="marca" href="inicio.html">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6.5 L16 23 L26 6.5" stroke-width="2.4"/><path d="M4 23 H28" stroke-width="2.4"/><path d="M8.5 23 L5.5 26 M13.5 23 L10.5 26 M18.5 23 L15.5 26 M23.5 23 L20.5 26" stroke-width="1.4"/><circle cx="26" cy="6.5" r="2.6" fill="currentColor" stroke="none"/></svg>
+      <b>Volta</b>
+    </a>
+    <button class="btn btn-compacto" id="b-volver" data-ayuda="Volver a donde estabas|Back|Esc"><svg class="ico"><use href="#i-chevron-izquierda"/></svg>Volver</button>
+    <span class="sp"></span>
+  </header>
+  <div class="config">
+    <nav class="config-nav" role="tablist" aria-orientation="vertical" aria-label="Secciones de la configuración">
+      <h1>Configuración</h1>
+      <button role="tab" data-sec="apariencia"><svg class="ico"><use href="#i-tema-claro"/></svg>Apariencia</button>
+      <button role="tab" data-sec="numeros"><svg class="ico"><use href="#i-precision"/></svg>Números</button>
+      <button role="tab" data-sec="escritura"><svg class="ico"><use href="#i-expresion"/></svg>Escritura de valores</button>
+      <button role="tab" data-sec="actualizaciones"><svg class="ico"><use href="#i-reiniciar"/></svg>Actualizaciones</button>
+      <button role="tab" data-sec="archivos"><svg class="ico"><use href="#i-carpeta"/></svg>Archivos</button>
+      <button role="tab" data-sec="acerca"><svg class="ico"><use href="#i-info"/></svg>Acerca de Volta</button>
+      <span class="sp"></span>
+      <button id="b-restablecer"><svg class="ico"><use href="#i-historial"/></svg>Restablecer todo</button>
+    </nav>
+    <main class="config-cuerpo" id="cuerpo" role="tabpanel"></main>
+  </div>
+</div>
+<script type="module" src="../lienzo/trazo.js"></script>
+<script type="module" src="../componentes/espacio.js"></script>
+<script type="module" src="configuracion.js"></script>
+</body>
+</html>
