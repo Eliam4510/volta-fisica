@@ -4,6 +4,7 @@
    variables de la escena y expresiones ("sqrt(2*g*h)"). Todo se convierte a
    SI y se comprueba la dimensión. Puro: sin DOM. Nunca usa eval.
    ========================================================================== */
+import { decimalComa } from './numeros.js';
 
 /** Dimensión: exponentes de [longitud, masa, tiempo, corriente, temperatura, cantidad]. */
 const D = (L = 0, M = 0, T = 0, I = 0, Th = 0, N = 0) => [L, M, T, I, Th, N];
@@ -85,11 +86,13 @@ export function nombreDimension(dim) {
 const SUPER = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '-' };
 
 function normalizar(texto) {
-  return texto
+  const t = texto
     .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+/g, m => '^' + [...m].map(c => SUPER[c]).join(''))
-    .replace(/[−–]/g, '-').replace(/[·×]/g, '*').replace(/÷/g, '/')
-    .replace(/(\d),(\d{3}(?!\d))/g, '$1$2')   // separador de miles con coma
-    .trim();
+    .replace(/[−–]/g, '-').replace(/[·×]/g, '*').replace(/÷/g, '/');
+  // Coma decimal (Ajustes): «2,5» es 2.5. Con punto decimal, una coma entre
+  // cifras de tres en tres es el separador de miles («2,500» = 2500).
+  if (decimalComa()) return t.replace(/(\d),(\d)/g, '$1.$2').trim();
+  return t.replace(/(\d),(\d{3}(?!\d))/g, '$1$2').trim();
 }
 
 function lexer(texto) {

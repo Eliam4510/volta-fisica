@@ -6,6 +6,8 @@
    aplican en todas las pantallas (componentes/espacio.js).
    ========================================================================== */
 
+import { decimalComa, ponerDecimalComa } from '../nucleo/numeros.js';
+
 const V = () => /** @type {any} */ (window).Volta;
 const enApp = () => !!(/** @type {any} */ (window).__TAURI__?.webview);
 
@@ -34,6 +36,10 @@ export function abrirPreferencias(o = {}) {
         ${enApp() ? '' : '<p class="pref-nota">En el navegador, el tamaño se cambia con Ctrl + y Ctrl −.</p>'}
       </div>
       <div class="pref-grupo">
+        <div class="pref-fila"><span>Separador decimal</span>${seg('decimal', [['punto', 'Punto (1.5)'], ['coma', 'Coma (1,5)']], decimalComa() ? 'coma' : 'punto')}</div>
+        <p class="pref-nota">Para escribir los valores y leerlos en pantalla y en las tablas. Con coma, el CSV separa las columnas con punto y coma, como lo abre Excel en español de España.</p>
+      </div>
+      <div class="pref-grupo">
         <div class="pref-fila"><span>Buscar actualizaciones al abrir Inicio</span>${seg('actualizar', [['si', 'Sí'], ['no', 'No']], actualizarSolo() ? 'si' : 'no')}</div>
       </div>
       <div class="dialogo-acciones">
@@ -53,7 +59,8 @@ export function abrirPreferencias(o = {}) {
     if (acc) {
       if (/** @type {HTMLElement} */ (acc).dataset.prefAccion === 'restablecer') {
         V()?.ponerTema?.('sistema'); V()?.ponerZoom?.(1);
-        try { localStorage.removeItem('volta.actualizacion.auto'); } catch { /* sin almacenamiento */ }
+        try { localStorage.removeItem('volta.actualizacion.auto'); localStorage.removeItem('volta.decimal'); } catch { /* sin almacenamiento */ }
+        ponerDecimalComa(null);
         cerrar(); abrirPreferencias(o); o.alCambiar?.(); return;
       }
       cerrar(); return;
@@ -65,6 +72,7 @@ export function abrirPreferencias(o = {}) {
     if (grupo.dataset.pref === 'tema') V()?.ponerTema?.(v);
     else if (grupo.dataset.pref === 'zoom') V()?.ponerZoom?.(parseFloat(v));
     else if (grupo.dataset.pref === 'actualizar') { try { localStorage.setItem('volta.actualizacion.auto', v); } catch { /* sin almacenamiento */ } }
+    else if (grupo.dataset.pref === 'decimal') { try { localStorage.setItem('volta.decimal', v); } catch { /* sin almacenamiento */ } ponerDecimalComa(v === 'coma'); }
     o.alCambiar?.();
   });
   /** @type {HTMLElement | null} */ (fondo.querySelector('[data-pref-accion="cerrar"]'))?.focus();

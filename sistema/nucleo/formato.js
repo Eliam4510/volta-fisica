@@ -3,6 +3,8 @@
    Puro: sin DOM. Lo usan el lienzo, las gráficas, los paneles y las pruebas.
    ========================================================================== */
 
+import { decimalComa } from './numeros.js';
+
 /** Espacio fino que no se corta (U+202F), entre número y unidad. */
 export const ESP = ' ';
 
@@ -25,7 +27,7 @@ export function fmt(v, cifras = 4) {
     // El redondeo puede llevar la mantisa a 10.0: se renormaliza
     if (Math.abs(Number(m.toFixed(Math.max(0, cifras - 1)))) >= 10) { e += 1; m /= 10; }
     const sup = String(e).replace('-', '⁻').replace(/\d/g, d => SUPERINDICES[Number(d)]);
-    return `${m.toFixed(Math.max(0, cifras - 1)).replace('-', '−')} × 10${sup}`;
+    return conSeparador(`${m.toFixed(Math.max(0, cifras - 1)).replace('-', '−')} × 10${sup}`);
   }
   const orden = Math.floor(Math.log10(a));
   const dec = Math.max(0, cifras - 1 - orden);
@@ -36,8 +38,11 @@ export function fmt(v, cifras = 4) {
     if (Math.abs(Number(s)) >= 1e5) return fmt(Math.sign(v) * 1e5, cifras);
     s = v.toFixed(Math.min(Math.max(0, dec - 1), 6));
   }
-  return s.replace('-', '−');
+  return conSeparador(s.replace('-', '−'));
 }
+
+/** Cambia el punto decimal por coma si es la preferencia (Ajustes). @param {string} s */
+function conSeparador(s) { return decimalComa() ? s.replace('.', ',') : s; }
 
 /**
  * Cantidad con unidad separada por espacio fino: "4.000 m/s".
@@ -82,7 +87,7 @@ export function fmtMarca(v, paso) {
   const dec = Math.max(0, Math.ceil(-Math.log10(paso) - 1e-9));
   let s = (Math.abs(v) < paso * 1e-6 ? 0 : v).toFixed(Math.min(dec + (String(paso).includes('25') ? 1 : 0), 6));
   if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
-  return s.replace('-', '−');
+  return conSeparador(s.replace('-', '−'));
 }
 
 /**
@@ -91,5 +96,5 @@ export function fmtMarca(v, paso) {
  */
 export function fmtPaso(valor, paso) {
   const dec = !(paso > 0) || paso >= 1 ? 0 : Math.min(6, Math.ceil(-Math.log10(paso) - 1e-9));
-  return valor.toFixed(dec).replace('-', '−');
+  return conSeparador(valor.toFixed(dec).replace('-', '−'));
 }

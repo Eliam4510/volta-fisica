@@ -171,7 +171,7 @@ a.btn { text-decoration: none; }
 }
 .chip-var .sim { font-size: 14px; }
 .campo .valor-var { flex: 1; text-align: right; font-family: var(--fuente-numeros); font-variant-numeric: tabular-nums; color: var(--texto-3); white-space: nowrap; overflow: hidden; }
-.var .constante-etq { font-size: var(--t-pequeno); color: var(--texto-4); }
+.var .constante-etq { font-size: var(--t-pequeno); color: var(--texto-3); }
 .mensaje-error { color: var(--error); font-size: var(--t-pequeno); margin: 4px 0 0; }
 
 /* ---------- Deslizador ---------- */

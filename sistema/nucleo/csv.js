@@ -1,9 +1,12 @@
 /* ==========================================================================
    Volta — núcleo: datos tabulares a CSV
    Puro: sin DOM. RFC 4180: separador coma, punto decimal, fin de línea CRLF,
-   comillas dobles cuando hace falta. Los números se escriben con toda su
-   precisión (no con el formato de pantalla) para que sirvan para análisis.
+   comillas dobles cuando hace falta. Con coma decimal (Ajustes), como lo lee
+   Excel en español de España: punto y coma entre columnas y coma decimal.
+   Los números se escriben con toda su precisión (no con el formato de
+   pantalla) para que sirvan para análisis.
    ========================================================================== */
+import { decimalComa } from './numeros.js';
 
 /** Marca de orden de bytes UTF-8: Excel la usa para leer bien los acentos. */
 export const BOM = '﻿';
@@ -15,9 +18,9 @@ export const BOM = '﻿';
  */
 export function celda(v) {
   if (v == null) return '';
-  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
+  if (typeof v === 'number') return Number.isFinite(v) ? (decimalComa() ? String(v).replace('.', ',') : String(v)) : '';
   const s = String(v);
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /[",;\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 /**
@@ -28,8 +31,9 @@ export function celda(v) {
  * @returns {string}
  */
 export function aCSV(columnas, filas, o = {}) {
-  const lineas = [columnas.map(celda).join(',')];
-  for (const f of filas) lineas.push(f.map(celda).join(','));
+  const sep = decimalComa() ? ';' : ',';
+  const lineas = [columnas.map(celda).join(sep)];
+  for (const f of filas) lineas.push(f.map(celda).join(sep));
   return (o.bom === false ? '' : BOM) + lineas.join('\r\n') + '\r\n';
 }
 

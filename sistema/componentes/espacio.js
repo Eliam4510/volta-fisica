@@ -192,6 +192,43 @@
       }, 450);
     });
     document.addEventListener('pointerdown', () => { clearTimeout(reloj); burbuja.hidden = true; });
+    // Con el teclado (Tab), la ayuda sale al llegar al control
+    document.addEventListener('focusin', ev => {
+      const el = ev.target.closest && ev.target.closest('[data-ayuda]');
+      clearTimeout(reloj); burbuja.hidden = true;
+      if (!el || !el.matches(':focus-visible')) return;
+      const [txt, en, atajo] = el.dataset.ayuda.split('|');
+      burbuja.innerHTML = `<span>${txt}${atajo ? ` <kbd>${atajo}</kbd>` : ''}</span>${en ? `<span class="en">${en}</span>` : ''}`;
+      burbuja.hidden = false;
+      const r = el.getBoundingClientRect(), b = burbuja.getBoundingClientRect();
+      let x = r.left + r.width / 2 - b.width / 2; x = Math.max(8, Math.min(innerWidth - b.width - 8, x));
+      let y = r.bottom + 8; if (y + b.height > innerHeight - 8) y = r.top - b.height - 8;
+      burbuja.style.left = x + 'px'; burbuja.style.top = y + 'px';
+    });
+    document.addEventListener('focusout', () => { clearTimeout(reloj); burbuja.hidden = true; });
+    nombrarControles(document);
+    // Los paneles se rehacen al cambiar de selección: los controles nuevos también
+    new MutationObserver(cambios => { for (const c of cambios) for (const n of c.addedNodes) if (n.nodeType === 1) nombrarControles(n); })
+      .observe(document.body, { childList: true, subtree: true });
+  }
+
+  /**
+   * Accesibilidad: un botón que solo tiene icono toma su nombre de la ayuda
+   * («Deshacer|Undo|Ctrl Z» → «Deshacer»); los lienzos dicen qué son y los
+   * avisos flotantes se anuncian al lector de pantalla.
+   */
+  function nombrarControles(raizNodo) {
+    const lista = raizNodo.matches && raizNodo.matches('[data-ayuda]') ? [raizNodo] : [];
+    for (const el of [...lista, ...raizNodo.querySelectorAll('[data-ayuda]')]) {
+      if (el.hasAttribute('aria-label') || el.textContent.trim()) continue;
+      el.setAttribute('aria-label', el.dataset.ayuda.split('|')[0]);
+    }
+    for (const c of raizNodo.querySelectorAll ? raizNodo.querySelectorAll('canvas:not([role])') : []) {
+      c.setAttribute('role', 'img');
+      if (!c.hasAttribute('aria-label')) c.setAttribute('aria-label', c.closest('.lienzo-area') ? 'Lienzo de la simulación' : 'Gráfica');
+    }
+    const avisos = raizNodo.matches && raizNodo.matches('.aviso-flotante') ? [raizNodo] : [...(raizNodo.querySelectorAll ? raizNodo.querySelectorAll('.aviso-flotante') : [])];
+    for (const a of avisos) { a.setAttribute('role', 'status'); a.setAttribute('aria-live', 'polite'); }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
