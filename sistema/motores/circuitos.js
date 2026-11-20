@@ -52,13 +52,13 @@
 
 /** Tipos de componente que entiende el motor. */
 export const TIPOS_COMPONENTE = Object.freeze([
-  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'diodo', 'led', 'capacitor', 'inductor', 'transformador',
+  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'diodo', 'led', 'zener', 'capacitor', 'inductor', 'transformador', 'opamp',
   'interruptor', 'interruptor-3', 'amperimetro', 'voltimetro', 'cable', 'tierra',
 ]);
 
 /** Número de bornes admitido por cada tipo. */
 const BORNES = {
-  bateria: [2], 'fuente-ca': [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], diodo: [2], led: [2], capacitor: [2],
+  bateria: [2], 'fuente-ca': [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], diodo: [2], led: [2], zener: [2], opamp: [3], capacitor: [2],
   inductor: [2], transformador: [4], interruptor: [2], 'interruptor-3': [2, 3, 4], amperimetro: [2], voltimetro: [2], cable: [2], tierra: [1],
 };
 
@@ -101,6 +101,9 @@ const BORNES = {
  * @property {number} [frio] Bombilla: cociente entre la resistencia en caliente (nominal) y en frío
  * @property {number} [Vd]  Diodo y LED: voltaje directo con la corriente de referencia (10 mA el diodo, 20 mA el LED)
  * @property {number} [n]   Diodo y LED: factor de idealidad de la ecuación de Shockley
+ * @property {number} [Vz]  Zener: voltaje de ruptura en inversa (V), con 5 mA
+ * @property {number} [A]   Amplificador operacional: ganancia en lazo abierto; nodos [+, −, salida]
+ * @property {number} [Vsat] Amplificador operacional: voltaje de saturación de la salida (±Vsat, respecto de tierra)
  * @property {Array<[number, number]>} [curva] Bombilla: curva I-V como tabla [[V, I], …] (V > 0 creciente)
  */
 
@@ -286,15 +289,24 @@ const VT = 0.025852;
 export function curvaDiodo(p) {
   const nVt = p.n * VT, Is = p.Iref / Math.expm1(p.Vd / nVt), gmin = 1e-12;
   const vmax = nVt * Math.log(100 / Is + 1), Imax = Is * Math.expm1(vmax / nVt), gmax = Is / nVt * Math.exp(vmax / nVt);
-  const I = (/** @type {number} */ v) => (v > vmax ? Imax + gmax * (v - vmax) : Is * Math.expm1(v / nVt)) + gmin * v;
-  const dI = (/** @type {number} */ v) => (v > vmax ? gmax : Is / nVt * Math.exp(v / nVt)) + gmin;
-  const vcrit = nVt * Math.log(nVt / (Math.SQRT2 * Is));
-  const limitar = (/** @type {number} */ vn, /** @type {number} */ vo) => {
-    if (vn > vcrit && Math.abs(vn - vo) > 2 * nVt) {
-      if (vo > 0) { const arg = 1 + (vn - vo) / nVt; return arg > 0 ? vo + nVt * Math.log(arg) : vcrit; }
-      return nVt * Math.log(Math.max(vn / nVt, 1e-300));
+  // Ruptura Zener: en inversa, −Iz·e^(−(v + Vz)/V_T) (5 mA justo en −Vz), recta pasados 100 A
+  const Vz = p.Vz, Iz = 0.005, zVt = VT, umax = zVt * Math.log(100 / Iz), gz = Iz / zVt * Math.exp(umax / zVt);
+  const ruptura = (/** @type {number} */ v) => { if (!Vz) return 0; const u = -(v + Vz); return u > umax ? -(100 + gz * (u - umax)) : -Iz * Math.exp(u / zVt); };
+  const dRuptura = (/** @type {number} */ v) => { if (!Vz) return 0; const u = -(v + Vz); return u > umax ? gz : Iz / zVt * Math.exp(u / zVt); };
+  const I = (/** @type {number} */ v) => (v > vmax ? Imax + gmax * (v - vmax) : Is * Math.expm1(v / nVt)) + gmin * v + ruptura(v);
+  const dI = (/** @type {number} */ v) => (v > vmax ? gmax : Is / nVt * Math.exp(v / nVt)) + gmin + dRuptura(v);
+  // Limitación de SPICE (pnjlim) en la unión directa y, con Zener, en la ruptura
+  const pnjlim = (/** @type {number} */ vn, /** @type {number} */ vo, /** @type {number} */ vt, /** @type {number} */ vc) => {
+    if (vn > vc && Math.abs(vn - vo) > 2 * vt) {
+      if (vo > 0) { const arg = 1 + (vn - vo) / vt; return arg > 0 ? vo + vt * Math.log(arg) : vc; }
+      return vt * Math.log(Math.max(vn / vt, 1e-300));
     }
     return vn;
+  };
+  const vcrit = nVt * Math.log(nVt / (Math.SQRT2 * Is)), ucrit = zVt * Math.log(zVt / (Math.SQRT2 * Iz * Math.exp(-0)));
+  const limitar = (/** @type {number} */ vn, /** @type {number} */ vo) => {
+    if (Vz && vn < -Vz / 2) return -pnjlim(-(vn + Vz), -(vo + Vz), zVt, Math.min(ucrit, 0)) - Vz;
+    return pnjlim(vn, vo, nVt, vcrit);
   };
   return { I, dI, Vn: p.Vd, Pn: p.Vd * p.Iref, R0: 1 / dI(p.Vd), b: 0, Is, nVt, limitar, diodo: true };
 }
@@ -355,6 +367,14 @@ function normalizarComponente(c, i) {
       const x = c.x ?? 0.5;
       if (!esNumero(x) || x < 0 || x > 1) throw new ErrorCircuito(`«${id}»: la posición del cursor va de 0 a 1 (recibió ${x}).`);
       return { ...base, R: positivo(id, 'la resistencia total R', c.R), x };
+    }
+    case 'zener': {
+      const Vd = positivo(id, 'el voltaje directo Vd', c.Vd ?? 0.7), n = positivo(id, 'el factor de idealidad n', c.n ?? 1.8), Vz = positivo(id, 'el voltaje Zener Vz', c.Vz ?? 5.1);
+      return { ...base, Vd, n, Vz, curvaIV: curvaDiodo({ Vd, n, Iref: 0.01, Vz }) };
+    }
+    case 'opamp': {
+      const A = positivo(id, 'la ganancia A', c.A ?? 1e5), Vsat = positivo(id, 'el voltaje de saturación', c.Vsat ?? 12);
+      return { ...base, A, Vsat };
     }
     case 'diodo': case 'led': {
       const led = c.tipo === 'led', Vd = positivo(id, 'el voltaje directo Vd', c.Vd ?? (led ? 2 : 0.7)), n = positivo(id, 'el factor de idealidad n', c.n ?? (led ? 2 : 1.8));
@@ -475,7 +495,14 @@ function topologia(P, estados, o) {
         if (Rb > 0) add('G', c.nc, b, 1 / Rb, ci, 'b'); else add('K', c.nc, b, 0, ci, 'b');
         break;
       }
-      case 'bombilla': case 'diodo': case 'led': add('N', a, b, 0, ci); ramas[ramas.length - 1].curva = c.curvaIV; break;
+      case 'bombilla': case 'diodo': case 'led': case 'zener': add('N', a, b, 0, ci); ramas[ramas.length - 1].curva = c.curvaIV; break;
+      case 'opamp': {
+        // Fuente de voltaje controlada: salida respecto de tierra = Vsat·tanh(A·(V₊ − V₋)/Vsat)
+        if (!P.tierras.length) throw new ErrorCircuito(`«${c.id}»: el amplificador operacional necesita una tierra (su salida se mide respecto de ella).`);
+        add('E', c.n[2], P.tierras[0], 0, ci);
+        Object.assign(ramas[ramas.length - 1], { p: c.n[0], m: c.n[1], A: c.A, Vsat: c.Vsat });
+        break;
+      }
       case 'capacitor': add('C', a, b, c.C, ci); ramas[ramas.length - 1].perfil = c.perfil || null; break;
       case 'inductor': add('L', a, b, c.L, ci); break;
       case 'interruptor': if (estados[ci]) conductor(a, b, ci, 'contacto'); break;
@@ -517,6 +544,7 @@ function topologia(P, estados, o) {
   let nV = 0, nLdc = 0, nN = 0;
   for (const r of ramas) {
     r.ma = mDe[r.a]; r.mb = mDe[r.b];
+    if (r.tipo === 'E') { r.mp = mDe[r.p]; r.mm = mDe[r.m]; r.jv = nV++; nN++; continue; }
     if (r.tipo === 'V') {
       if (r.ma === r.mb) throw new ErrorCircuito(`Cortocircuito: los bornes de «${P.comps[r.ci].id}» quedan unidos por conductores sin resistencia. Abre un interruptor o añade una resistencia.`);
       r.jv = nV++;
@@ -650,6 +678,9 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
   const t1 = dc ? st.t : st.t + h;
   const nr = T.ramas.length, n = T.M + T.nV + (dc ? T.nLdc : 0);
   const gN = new Float64Array(nr), iN = new Float64Array(nr), guia = Float64Array.from(st.v);
+  // Amplificador operacional: la guía es su voltaje diferencial de entrada (del estado anterior)
+  const xDe = (/** @type {any} */ V, /** @type {any} */ r) => (r.mp >= 0 ? V[r.mp] : 0) - (r.mm >= 0 ? V[r.mm] : 0);
+  T.ramas.forEach((r, k) => { if (r.tipo === 'E') guia[k] = st.V && st.V.length ? xDe(st.V, r) : 0; });
   for (let it = 0; ; it++) {
     T.ramas.forEach((r, k) => {
       if (r.tipo !== 'N') return;
@@ -670,6 +701,14 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
           } else { const [g, ieq] = companeroL(r, st, k, h, tr); conductancia(S, r.ma, r.mb, g); corrienteFija(S, r.ma, r.mb, ieq); }
           break;
         case 'N': conductancia(S, r.ma, r.mb, gN[k]); corrienteFija(S, r.ma, r.mb, iN[k]); break;
+        case 'E': {
+          // V_sal − g·(V₊ − V₋) = f(x₀) − g·x₀, linealizada en la guía x₀
+          const x0 = guia[k], th = Math.tanh(r.A * x0 / r.Vsat), f = r.Vsat * th, g = r.A * (1 - th * th), c = T.M + r.jv;
+          sumar(S, r.ma, c, 1); sumar(S, r.mb, c, -1);
+          sumar(S, c, r.ma, 1); sumar(S, c, r.mb, -1); sumar(S, c, r.mp, -g); sumar(S, c, r.mm, g);
+          S.b[c] = f - g * x0;
+          break;
+        }
         default: break;
       }
     });
@@ -679,6 +718,18 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
     // Newton: convergencia en el voltaje de cada bombilla (con paso limitado)
     let listo = true;
     T.ramas.forEach((r, k) => {
+      if (r.tipo === 'E') {
+        // Paso acotado a unas veces el ancho de la zona lineal (Vsat/A) cuando satura
+        const xn = xDe(x, r), w = r.Vsat / r.A;
+        let d = xn - guia[k];
+        const lim = Math.max(8 * w, 2 * Math.abs(guia[k]));
+        if (Math.abs(d) > lim) d = Math.sign(d) * lim;
+        // Convergido si la entrada apenas cambia o si la salida ya no cambia (saturado)
+        const f0 = r.Vsat * Math.tanh(r.A * guia[k] / r.Vsat), f1 = r.Vsat * Math.tanh(r.A * (guia[k] + d) / r.Vsat);
+        if (Math.abs(d) > 1e-9 * w + 1e-12 * Math.abs(xn) && Math.abs(f1 - f0) > 1e-12 * r.Vsat) listo = false;
+        guia[k] += d;
+        return;
+      }
       if (r.tipo !== 'N') return;
       const v = (r.ma >= 0 ? x[r.ma] : 0) - (r.mb >= 0 ? x[r.mb] : 0);
       let d = v - guia[k];
@@ -689,7 +740,7 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
       guia[k] += d;
     });
     if (listo) return extraer(T, x, st, h, metodo, iL);
-    if (it > 200) throw new ErrorCircuito('Newton–Raphson no converge en las bombillas o los diodos: revisa sus valores.');
+    if (it > 400) throw new ErrorCircuito('Newton–Raphson no converge en las bombillas, los diodos o los amplificadores: revisa sus valores.');
   }
 }
 
@@ -747,7 +798,7 @@ function extraer(T, x, st, h, metodo, iL) {
     v[k] = d;
     switch (r.tipo) {
       case 'G': i[k] = r.valor * d; break;
-      case 'V': i[k] = x[T.M + r.jv]; break;
+      case 'V': case 'E': i[k] = x[T.M + r.jv]; break;
       case 'J': i[k] = r.valor; break;
       case 'C':
         if (!dc) {
@@ -935,7 +986,7 @@ function construirMuestra(T, P, st, t, ctx) {
     } else v[ci] = V[c.n[0]] - V[c.n[1]];
     if (!rs.length) return;
     const k0 = rs[0];
-    I[ci] = (c.tipo === 'bateria' || c.tipo === 'fuente-ca' ? -st.i[k0] : st.i[k0]) + 0;   // + 0: nunca −0
+    I[ci] = (c.tipo === 'bateria' || c.tipo === 'fuente-ca' || c.tipo === 'opamp' ? -st.i[k0] : st.i[k0]) + 0;   // + 0: nunca −0
     if (c.tipo === 'capacitor') { const C = capacidadEn(c, st.t); q[ci] = C * st.v[k0]; U[ci] = q[ci] * q[ci] / (2 * C); }
     else if (c.tipo === 'inductor') {
       U[ci] = 0.5 * c.L * st.i[k0] * st.i[k0];
@@ -959,7 +1010,7 @@ function contabilizar(T, st0, st1, h, metodo, ctx) {
     if (r.tipo === 'K') return;
     const p = tr ? 0.25 * h * (st0.v[k] + st1.v[k]) * (st0.i[k] + st1.i[k]) : h * st1.v[k] * st1.i[k];
     switch (r.tipo) {
-      case 'V': case 'J': ctx.W[r.ci] -= p; break;
+      case 'V': case 'J': case 'E': ctx.W[r.ci] -= p; break;
       case 'G': case 'N': ctx.Qj[r.ci] += p; break;
       case 'C':
         if (r.perfil) {
@@ -1152,7 +1203,8 @@ export function simularCircuito(circuito, opciones = {}) {
     if (c.tipo === 'fuente-ca') { Vref += Math.abs(c.V0); if (c.r > 0) Gmax = Math.max(Gmax, 1 / c.r); }
     if (c.tipo === 'fuente-corriente') Iref += Math.abs(c.I);
     if (c.tipo === 'resistencia' || c.tipo === 'reostato') Gmax = Math.max(Gmax, 1 / c.R);
-    if (c.tipo === 'bombilla' || c.tipo === 'diodo' || c.tipo === 'led') Gmax = Math.max(Gmax, 1 / c.curvaIV.R0);
+    if (c.tipo === 'bombilla' || c.tipo === 'diodo' || c.tipo === 'led' || c.tipo === 'zener') Gmax = Math.max(Gmax, 1 / c.curvaIV.R0);
+    if (c.tipo === 'opamp') Vref += c.Vsat;
   }
   Iref += Vref * Gmax;
   P.comps.forEach((c, ci) => { if (c.tipo === 'capacitor') Vref = Math.max(Vref, Math.abs(c.q0 / c.C)); if (c.tipo === 'inductor') Iref = Math.max(Iref, Math.abs(iL[ci])); });
@@ -1297,7 +1349,7 @@ function resolverComplejo(n, Ar, Ai, br, bi) {
 export function respuestaFrecuencia(circuito, f, opciones = {}) {
   if (!(f > 0) || !Number.isFinite(f)) throw new ErrorCircuito('La frecuencia tiene que ser positiva.');
   const P = prepararCircuito(circuito), o = { ...OPCIONES_CIRCUITO, ...opciones };
-  if (P.comps.some(c => c.tipo === 'diodo' || c.tipo === 'led')) throw new ErrorCircuito('Con diodos el circuito no es lineal: los fasores no valen; mira la simulación en el tiempo.');
+  if (P.comps.some(c => c.tipo === 'diodo' || c.tipo === 'led' || c.tipo === 'zener')) throw new ErrorCircuito('Con diodos el circuito no es lineal: los fasores no valen; mira la simulación en el tiempo.');
   const T = topologia(P, estadoInterruptores(P), o);
   const w = 2 * Math.PI * f, n = T.M + T.nV;
   const Ar = new Float64Array(n * n), Ai = new Float64Array(n * n), br = new Float64Array(n), bi = new Float64Array(n);
@@ -1328,6 +1380,12 @@ export function respuestaFrecuencia(circuito, f, opciones = {}) {
     }
     const y = admitancia(r);
     if (y) { adm(r.ma, r.mb, y[0], y[1]); return; }
+    if (r.tipo === 'E') {
+      // Amplificador operacional en su zona lineal: V_sal = A·(V₊ − V₋)
+      const fila = T.M + r.jv, s = (i, j, v) => { if (i >= 0 && j >= 0) Ar[i * n + j] += v; };
+      s(r.ma, fila, 1); s(r.mb, fila, -1); s(fila, r.ma, 1); s(fila, r.mb, -1); s(fila, r.mp, -r.A); s(fila, r.mm, r.A);
+      return;
+    }
     if (r.tipo === 'V') {
       const c = P.comps[r.ci], fila = T.M + r.jv;
       const s = (i, j, v) => { if (i >= 0 && j >= 0) Ar[i * n + j] += v; };
@@ -1357,7 +1415,7 @@ export function respuestaFrecuencia(circuito, f, opciones = {}) {
         const [ykk, ykj] = yAcoplada(r), vj = [a[0] - b[0], a[1] - b[1]];
         i = [-(ykk * vr[1] + ykj * vj[1]), ykk * vr[0] + ykj * vj[0]];
       } else if (y) i = mul(y, vr);
-      else if (r.tipo === 'V') i = [-xr[T.M + r.jv], -xi[T.M + r.jv]];
+      else if (r.tipo === 'V' || r.tipo === 'E') i = [-xr[T.M + r.jv], -xi[T.M + r.jv]];
     } else if (c.tipo === 'voltimetro' || c.tipo === 'interruptor' || c.tipo === 'interruptor-3') i = [0, 0];
     comp.set(c.id, { v, i });
   });
