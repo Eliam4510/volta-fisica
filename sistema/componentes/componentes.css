@@ -528,3 +528,17 @@ a.menu-item { color: inherit; text-decoration: none; }
 /* Nota en un panel que lleva a donde sí se puede hacer algo */
 .nota-panel { margin: 0; padding: var(--e-2) var(--e-3) var(--e-3); color: var(--texto-3); font-size: var(--t-pequeno); line-height: 1.45; }
 .nota-panel a { color: var(--texto); }
+
+/* Teclado de símbolos y unidades de los campos de valor (espacio.js) */
+.teclado {
+  position: fixed; z-index: 150; display: flex; align-items: center; gap: 2px; flex-wrap: wrap; max-width: 560px;
+  padding: 4px; background: var(--panel); border: 1px solid var(--linea); border-radius: var(--r-control); box-shadow: var(--sombra-menu);
+}
+.teclado .tecla {
+  min-width: 28px; height: 26px; padding: 0 6px; border: 1px solid transparent; border-radius: var(--r-casilla);
+  background: var(--campo); color: var(--texto); font: inherit; font-family: var(--fuente-simbolos); font-size: 14px; cursor: pointer;
+}
+.teclado .tecla:hover { background: var(--campo-hover); }
+.teclado .tecla.unidad { font-family: var(--fuente-numeros); font-size: 12px; }
+.teclado .tecla-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--linea); }
+.teclado .tecla-nota { flex-basis: 100%; padding: 2px 4px 0; color: var(--texto-3); font-size: var(--t-micro, 11px); }

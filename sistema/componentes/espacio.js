@@ -87,6 +87,7 @@
     if (new URLSearchParams(location.search).has('captura')) document.body.classList.add('captura');
     iniciarAyudas();
     iniciarNavegacion();
+    iniciarTeclado();
   }
 
   /**
@@ -168,6 +169,69 @@
     });
     document.addEventListener('pointerdown', ev => { if (!ev.target.closest('#menu-navegacion, .migas')) { menu.hidden = true; abiertoDesde = null; } });
     document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { menu.hidden = true; abiertoDesde = null; } });
+  }
+
+  /**
+   * Teclado de símbolos para los campos de valor (preferencia en
+   * Configuración): al escribir en un campo con unidad aparece debajo una
+   * fila con lo que no está en el teclado (×10ⁿ, potencias, √, π) y las
+   * unidades de la misma magnitud. Los botones no le quitan el foco al campo.
+   */
+  const UNIDADES_DE = {
+    masa: ['mg', 'g', 'kg'], longitud: ['mm', 'cm', 'm', 'km'], tiempo: ['ms', 's', 'min', 'h'],
+    velocidad: ['cm/s', 'm/s', 'km/h', 'km/s'], aceleracion: ['m/s²'], fuerza: ['mN', 'N', 'kN'],
+    energia: ['J', 'kJ', 'eV'], potencia: ['W', 'kW'], presion: ['Pa', 'kPa', 'bar', 'atm'], frecuencia: ['Hz', 'kHz', 'MHz'],
+    carga: ['nC', 'µC', 'C'], potencial: ['mV', 'V', 'kV'], capacitancia: ['pF', 'nF', 'µF', 'F'], resistencia: ['Ω', 'kΩ', 'MΩ'],
+    inductancia: ['mH', 'H'], campoMagnetico: ['µT', 'mT', 'T'], corriente: ['mA', 'A'], temperatura: ['K'], angulo: ['°', 'rad'],
+  };
+  const SIMBOLOS = [['×10ⁿ', '×10^', 'Potencia de diez: 2×10^30 (también 2e30)'], ['^', '^', 'Elevado a: m^2, 10^-3'], ['²', '²', 'Al cuadrado'], ['³', '³', 'Al cubo'],
+    ['√', 'sqrt(', 'Raíz cuadrada: sqrt(2*9.8*5)'], ['π', 'π', 'Pi'], ['·', '·', 'Por'], ['/', '/', 'Entre'], ['(', '(', 'Abre paréntesis'], [')', ')', 'Cierra paréntesis'], ['−', '-', 'Menos']];
+  function tecladoActivo() { try { return localStorage.getItem('volta.teclado') !== 'no'; } catch { return true; } }
+  function iniciarTeclado() {
+    const barra = document.createElement('div');
+    barra.className = 'teclado'; barra.hidden = true; barra.setAttribute('role', 'toolbar'); barra.setAttribute('aria-label', 'Símbolos y unidades');
+    document.body.appendChild(barra);
+    let campo = null;
+    const esCampo = el => el && el.matches && el.matches('.campo:not(.texto) input:not([type="checkbox"]):not([type="range"]):not([type="color"]):not([readonly])');
+    const insertar = txt => {
+      if (!campo) return;
+      const a = campo.selectionStart ?? campo.value.length, b = campo.selectionEnd ?? a;
+      campo.setRangeText(txt, a, b, 'end');
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    const ponerUnidad = u => {
+      if (!campo) return;
+      // Cambia la unidad escrita al final (si la hay) o la añade
+      const v = campo.value.replace(/\s+$/, '');
+      const m = v.match(/^(.*?[\d)²³])\s*([A-Za-zµΩ°%][A-Za-zµΩ°%/²³·]*)?$/);
+      campo.value = m ? `${m[1]} ${u}` : `${v}${v ? ' ' : ''}${u}`;
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    const mostrar = el => {
+      campo = el;
+      const dim = el.dataset.dim && !el.dataset.dim.includes(',') ? el.dataset.dim : null;
+      const unidades = (dim && UNIDADES_DE[dim]) || (el.dataset.u && ['°', 'rad'].includes(el.dataset.u) ? UNIDADES_DE.angulo : []);
+      barra.innerHTML = SIMBOLOS.map(([t, ins, ayuda], k) => `<button type="button" class="tecla" data-k="${k}" title="${ayuda}">${t}</button>`).join('') +
+        (unidades.length ? '<span class="tecla-sep"></span>' + unidades.map(u => `<button type="button" class="tecla unidad" data-u="${u}" title="Escribir en ${u}">${u}</button>`).join('') : '') +
+        '<span class="tecla-nota">2e30 · 2×10^30 · 9.8 m/s² · sqrt(2*9.8*5) — Intro aplica</span>';
+      barra.hidden = false;
+      const r = (el.closest('.campo') || el).getBoundingClientRect();
+      const ancho = barra.getBoundingClientRect().width;
+      let x = Math.max(8, Math.min(innerWidth - ancho - 8, r.right - ancho));
+      let y = r.bottom + 4; if (y + 40 > innerHeight) y = r.top - 40;
+      barra.style.left = x + 'px'; barra.style.top = y + 'px';
+    };
+    // Los botones no le quitan el foco al campo
+    barra.addEventListener('pointerdown', ev => ev.preventDefault());
+    barra.addEventListener('click', ev => {
+      const b = ev.target.closest('button'); if (!b || !campo) return;
+      if (b.dataset.u) ponerUnidad(b.dataset.u); else insertar(SIMBOLOS[+b.dataset.k][1]);
+      campo.focus();
+    });
+    document.addEventListener('focusin', ev => { if (tecladoActivo() && esCampo(ev.target)) mostrar(ev.target); else if (!barra.contains(ev.target)) { barra.hidden = true; campo = null; } });
+    document.addEventListener('focusout', ev => { if (ev.target === campo) setTimeout(() => { if (document.activeElement !== campo) { barra.hidden = true; campo = null; } }, 0); });
+    global.addEventListener('resize', () => { barra.hidden = true; });
+    document.addEventListener('scroll', () => { if (campo) mostrar(campo); }, true);
   }
 
   // Ayudas emergentes: data-ayuda="Texto|Término en inglés|Atajo"
