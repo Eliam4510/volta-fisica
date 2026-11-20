@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.11.0 (publicada el 2026-11-19 con instalador de 2 990 720 B y portátil de 5 393 920 B; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.12.0 (publicada el 2026-11-19; ejecutables compilándose; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -64,7 +64,9 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Laboratorio de Mecánica (`mecanica-laboratorio.html`): caja de arena sobre el motor general, 14 escenarios, 19 pruebas.
 - [x] Laboratorio: fuerza aplicada constante (con U_F en el balance).
 - [x] Laboratorio: duplicar (Ctrl+D).
-- [ ] Laboratorio: panel de variables, instrumentos (regla, fotopuerta), cuerpos rígidos.
+- [x] Laboratorio: panel de variables, instrumentos (regla, fotopuerta).
+- [x] Discos que giran: rodadura, deslizamiento con giro, par de la fricción (v0.12.0, DECISIONES 18).
+- [ ] Bloques que vuelcan: rectángulo con giro y contactos por vértice (filas [i, n̂] y [n + q, n̂·(ẑ×R·v_k)], jdv = −ω²·n̂·R·v_k); claves de contacto con el vértice. Fricción entre discos (pares) con el mismo deslizamiento del punto de contacto.
 
 ### Otros módulos
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
@@ -176,7 +178,7 @@ completa) y con PhET, Universe Sandbox y Algodoo:
 | Prioridad | Hallazgo | Tarea |
 |---|---|---|
 | Hecho (v0.11.0) | Varias pantallas dependían de sus escenas: en Gravitación no se pueden añadir cuerpos ni impulsos (el espacio «Sistema solar» y «Maniobras» de la especificación no existen); en Termodinámica las paletas de objetos siguen como `data-pendiente` | Gravitación: espacios «Sistema solar» (N cuerpos, Kepler, datos reales) y «Maniobras» (impulsos Δv, Hohmann); Termodinámica: paletas para montar escenas propias |
-| Función | Mecánica sigue sin rotación (sin rodadura, sin vuelco) | Cuerpo rígido 2D con orientación y ω |
+| Hecho en parte (v0.12.0) | Mecánica sigue sin rotación (sin rodadura, sin vuelco) | Discos que giran y ruedan, hechos; faltan bloques que vuelcan (polígonos) y la fricción entre discos |
 | Función | Instrumentos desiguales: el Laboratorio y Magnetismo los tienen; Gravitación y Termodinámica no | Instrumentos de cada espacio según su especificación |
 | Contenido | 155 escenas MEXT; lo que falta no tiene enunciado en el banco o pide modelos fuera de alcance | — |
 | Pulido | Títulos largos cortados a 1280 px en varias barras superiores | Revisar a 1280×800 todas las pantallas |
@@ -234,3 +236,4 @@ completa) y con PhET, Universe Sandbox y Algodoo:
 - 2026-11-19 — Ejecutables de la v0.9.0 comprobados. Agentes en curso: Ondas (cubeta 2D: ondas2d.js, ondas-cubeta*, 2012 P5 en ondas-doppler) y Circuitos (7 escenas MEXT). Al integrar la cubeta: espacio `cubeta` en MODULOS de espacio.js y ESPACIOS de Inicio; conteos de Ondas y Circuitos.
 - 2026-11-19 — Circuitos (10 MEXT) y cubeta de ondas 2D (Ondas 21 MEXT) integrados; v0.10.0 (934 pruebas). Pendientes por módulo: ver las notas de cada uno arriba y las autocríticas.
 - 2026-11-19 — Termodinámica como caja de arena (paletas e instrumentos) y Gravitación con «Sistema solar» y «Maniobras» (motor de N cuerpos); v0.11.0 (992 pruebas).
+- 2026-11-19 — Discos que giran en el motor y el Laboratorio (rodadura, bola de bolos, cuenco; ejemplos con fotopuertas); sentido de la fricción cinética fijo por tramo; v0.12.0 (1003 pruebas). Siguiente: bloques que vuelcan.
