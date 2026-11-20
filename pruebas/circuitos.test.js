@@ -658,7 +658,7 @@ describe('errores que dicen qué pasa', () => {
     falla(() => simularCircuito({ componentes: [...base(), { id: 'X', tipo: 'interruptor', nodos: ['p', '0'], cerrado: true }] }), /Cortocircuito/);
   });
   it('tipo desconocido, valores imposibles y nombres repetidos', () => {
-    falla(() => simularCircuito({ componentes: [{ id: 'Z', tipo: 'diodo', nodos: ['a', 'b'] }] }), /no conozco/);
+    falla(() => simularCircuito({ componentes: [{ id: 'Z', tipo: 'triodo', nodos: ['a', 'b'] }] }), /no conozco/);
     falla(() => simularCircuito({ componentes: [{ id: 'R', tipo: 'resistencia', nodos: ['a', 'b'], R: -5 }] }), /positivo/);
     falla(() => simularCircuito({ componentes: [...base(), { id: 'R', tipo: 'resistencia', nodos: ['a', 'b'], R: 1 }] }), /dos componentes/);
   });

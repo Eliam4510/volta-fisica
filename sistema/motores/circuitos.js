@@ -52,13 +52,13 @@
 
 /** Tipos de componente que entiende el motor. */
 export const TIPOS_COMPONENTE = Object.freeze([
-  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'capacitor', 'inductor',
+  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'diodo', 'led', 'capacitor', 'inductor',
   'interruptor', 'interruptor-3', 'amperimetro', 'voltimetro', 'cable', 'tierra',
 ]);
 
 /** Número de bornes admitido por cada tipo. */
 const BORNES = {
-  bateria: [2], 'fuente-ca': [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], capacitor: [2],
+  bateria: [2], 'fuente-ca': [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], diodo: [2], led: [2], capacitor: [2],
   inductor: [2], interruptor: [2], 'interruptor-3': [2, 3, 4], amperimetro: [2], voltimetro: [2], cable: [2], tierra: [1],
 };
 
@@ -96,6 +96,8 @@ const BORNES = {
  * @property {number} [Vn]  Bombilla: voltaje nominal (V)
  * @property {number} [Pn]  Bombilla: potencia nominal (W)
  * @property {number} [frio] Bombilla: cociente entre la resistencia en caliente (nominal) y en frío
+ * @property {number} [Vd]  Diodo y LED: voltaje directo con la corriente de referencia (10 mA el diodo, 20 mA el LED)
+ * @property {number} [n]   Diodo y LED: factor de idealidad de la ecuación de Shockley
  * @property {Array<[number, number]>} [curva] Bombilla: curva I-V como tabla [[V, I], …] (V > 0 creciente)
  */
 
@@ -268,6 +270,32 @@ export function curvaBombilla(p) {
   };
 }
 
+/** Voltaje térmico kT/q a 300 K (V). */
+const VT = 0.025852;
+/**
+ * Curva I-V de un diodo (ecuación de Shockley): I = Is·(e^(v/(n·V_T)) − 1),
+ * con Is tal que pasa Iref con el voltaje directo Vd. Para que Newton no
+ * desborde, por encima de 100 A sigue en línea recta, y limitar() es la
+ * limitación de paso de SPICE (pnjlim): el voltaje de una iteración a otra
+ * no sube más de lo que la exponencial admite.
+ * @param {{Vd: number, n: number, Iref: number}} p
+ */
+export function curvaDiodo(p) {
+  const nVt = p.n * VT, Is = p.Iref / Math.expm1(p.Vd / nVt), gmin = 1e-12;
+  const vmax = nVt * Math.log(100 / Is + 1), Imax = Is * Math.expm1(vmax / nVt), gmax = Is / nVt * Math.exp(vmax / nVt);
+  const I = (/** @type {number} */ v) => (v > vmax ? Imax + gmax * (v - vmax) : Is * Math.expm1(v / nVt)) + gmin * v;
+  const dI = (/** @type {number} */ v) => (v > vmax ? gmax : Is / nVt * Math.exp(v / nVt)) + gmin;
+  const vcrit = nVt * Math.log(nVt / (Math.SQRT2 * Is));
+  const limitar = (/** @type {number} */ vn, /** @type {number} */ vo) => {
+    if (vn > vcrit && Math.abs(vn - vo) > 2 * nVt) {
+      if (vo > 0) { const arg = 1 + (vn - vo) / nVt; return arg > 0 ? vo + nVt * Math.log(arg) : vcrit; }
+      return nVt * Math.log(Math.max(vn / nVt, 1e-300));
+    }
+    return vn;
+  };
+  return { I, dI, Vn: p.Vd, Pn: p.Vd * p.Iref, R0: 1 / dI(p.Vd), b: 0, Is, nVt, limitar, diodo: true };
+}
+
 /** Interpolación cúbica de Hermite monótona (Fritsch–Carlson). */
 function monotona(xs, ys) {
   const n = xs.length, d = [], m = new Array(n).fill(0);
@@ -324,6 +352,11 @@ function normalizarComponente(c, i) {
       const x = c.x ?? 0.5;
       if (!esNumero(x) || x < 0 || x > 1) throw new ErrorCircuito(`«${id}»: la posición del cursor va de 0 a 1 (recibió ${x}).`);
       return { ...base, R: positivo(id, 'la resistencia total R', c.R), x };
+    }
+    case 'diodo': case 'led': {
+      const led = c.tipo === 'led', Vd = positivo(id, 'el voltaje directo Vd', c.Vd ?? (led ? 2 : 0.7)), n = positivo(id, 'el factor de idealidad n', c.n ?? (led ? 2 : 1.8));
+      const color = led && ['rojo', 'verde', 'azul', 'blanco', 'amarillo'].includes(c.color) ? c.color : 'rojo';
+      return { ...base, Vd, n, ...(led ? { color } : {}), curvaIV: curvaDiodo({ Vd, n, Iref: led ? 0.02 : 0.01 }) };
     }
     case 'bombilla': {
       const p = { Vn: c.Vn, Pn: c.Pn, frio: c.frio, curva: c.curva };
@@ -425,7 +458,7 @@ function topologia(P, estados, o) {
         if (Rb > 0) add('G', c.nc, b, 1 / Rb, ci, 'b'); else add('K', c.nc, b, 0, ci, 'b');
         break;
       }
-      case 'bombilla': add('N', a, b, 0, ci); ramas[ramas.length - 1].curva = c.curvaIV; break;
+      case 'bombilla': case 'diodo': case 'led': add('N', a, b, 0, ci); ramas[ramas.length - 1].curva = c.curvaIV; break;
       case 'capacitor': add('C', a, b, c.C, ci); ramas[ramas.length - 1].perfil = c.perfil || null; break;
       case 'inductor': add('L', a, b, c.L, ci); break;
       case 'interruptor': if (estados[ci]) conductor(a, b, ci, 'contacto'); break;
@@ -619,13 +652,14 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
       if (r.tipo !== 'N') return;
       const v = (r.ma >= 0 ? x[r.ma] : 0) - (r.mb >= 0 ? x[r.mb] : 0);
       let d = v - guia[k];
-      const lim = 2 * r.curva.Vn;
-      if (Math.abs(d) > lim) d = Math.sign(d) * lim;
+      // Diodo: limitación de SPICE; bombilla: paso acotado por su voltaje nominal
+      if (r.curva.limitar) d = r.curva.limitar(v, guia[k]) - guia[k];
+      else { const lim = 2 * r.curva.Vn; if (Math.abs(d) > lim) d = Math.sign(d) * lim; }
       if (Math.abs(d) > 1e-13 * r.curva.Vn + 1e-12 * Math.abs(v)) listo = false;
       guia[k] += d;
     });
     if (listo) return extraer(T, x, st, h, metodo, iL);
-    if (it > 80) throw new ErrorCircuito('Newton–Raphson no converge en las bombillas: revisa sus curvas I-V.');
+    if (it > 200) throw new ErrorCircuito('Newton–Raphson no converge en las bombillas o los diodos: revisa sus valores.');
   }
 }
 
@@ -1055,7 +1089,7 @@ export function simularCircuito(circuito, opciones = {}) {
     if (c.tipo === 'fuente-ca') { Vref += Math.abs(c.V0); if (c.r > 0) Gmax = Math.max(Gmax, 1 / c.r); }
     if (c.tipo === 'fuente-corriente') Iref += Math.abs(c.I);
     if (c.tipo === 'resistencia' || c.tipo === 'reostato') Gmax = Math.max(Gmax, 1 / c.R);
-    if (c.tipo === 'bombilla') Gmax = Math.max(Gmax, 1 / c.curvaIV.R0);
+    if (c.tipo === 'bombilla' || c.tipo === 'diodo' || c.tipo === 'led') Gmax = Math.max(Gmax, 1 / c.curvaIV.R0);
   }
   Iref += Vref * Gmax;
   P.comps.forEach((c, ci) => { if (c.tipo === 'capacitor') Vref = Math.max(Vref, Math.abs(c.q0 / c.C)); if (c.tipo === 'inductor') Iref = Math.max(Iref, Math.abs(iL[ci])); });
@@ -1200,6 +1234,7 @@ function resolverComplejo(n, Ar, Ai, br, bi) {
 export function respuestaFrecuencia(circuito, f, opciones = {}) {
   if (!(f > 0) || !Number.isFinite(f)) throw new ErrorCircuito('La frecuencia tiene que ser positiva.');
   const P = prepararCircuito(circuito), o = { ...OPCIONES_CIRCUITO, ...opciones };
+  if (P.comps.some(c => c.tipo === 'diodo' || c.tipo === 'led')) throw new ErrorCircuito('Con diodos el circuito no es lineal: los fasores no valen; mira la simulación en el tiempo.');
   const T = topologia(P, estadoInterruptores(P), o);
   const w = 2 * Math.PI * f, n = T.M + T.nV;
   const Ar = new Float64Array(n * n), Ai = new Float64Array(n * n), br = new Float64Array(n), bi = new Float64Array(n);
