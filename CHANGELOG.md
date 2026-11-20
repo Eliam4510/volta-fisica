@@ -7,6 +7,34 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.17.0] - 2026-11-20
+
+Configuración como pantalla propia, más colores, gráficas que se exploran
+con el ratón y campos que aceptan cualquier forma de escribir un número.
+
+### Añadido
+
+- Configuración es una pantalla (engranaje en todas las barras, Ctrl+,)
+  con Apariencia, Números, Escritura de valores, Actualizaciones, Archivos
+  y Acerca de. Buscar e instalar actualizaciones está ahí.
+- Seis colores de acento (tinta, azul, verde, violeta, ámbar, rojo) y tres
+  matices de las superficies (neutro, cálido, frío), en claro y oscuro.
+- Teclado de símbolos y unidades al escribir en un campo de valor: ×10ⁿ,
+  ^, ², ³, √, π, paréntesis y las unidades de la misma magnitud.
+- Gráficas interactivas en todas las pantallas: rueda para acercar o
+  alejar, arrastrar para desplazar, doble clic para verlo todo y lectura
+  de los valores de cada serie bajo el cursor.
+- Separador decimal elegible (punto o coma) para escribir, leer y
+  exportar CSV.
+- Accesibilidad: nombre de los botones de icono, ayudas con el teclado,
+  lienzos descritos y avisos anunciados al lector de pantalla.
+
+### Corregido
+
+- Un campo con unidad rechazaba una expresión sin unidad («2×10^30» en la
+  masa del Sol: «este campo espera una masa»); ahora se lee en la unidad
+  del campo en todas las pantallas.
+
 ## [0.16.0] - 2026-11-19
 
 Primera versión que se comporta como una aplicación de Windows: archivos de

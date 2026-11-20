@@ -5,7 +5,7 @@ física > funciones faltantes > rendimiento > pulido.
 
 ## Estado actual
 
-- Versión: 0.16.0 (publicada el 2026-11-19 con instalador firmado de 3 611 458 B, portátil de 6 989 312 B y latest.json: primera con actualización automática; la 0.5.0 quedó sin ejecutables)
+- Versión: 0.17.0 (publicada el 2026-11-20; ejecutables compilándose; la 0.5.0 quedó sin ejecutables)
 - Repo: https://github.com/Eliam4510/volta-fisica
 - Lenguaje de diseño, iconos, guía y pantallas de Inicio, Mecánica,
   Electrostática, Termodinámica y Gravitación: hechos (ver `docs/04_lenguaje_de_diseno.md`).
@@ -271,3 +271,4 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Actualizaciones desde GitHub (plugin updater, latest.json firmado en cada release, aviso en Inicio); clave privada fuera del proyecto y como secreto del repositorio; 1042 pruebas.
 - 2026-11-19 — Auditoría con cuatro agentes (producto, simulador, referencias, nombre): docs/05_auditoria_producto.md. Pendiente de decidir el nombre definitivo (Volta era nombre en clave).
 - 2026-11-19 — Auditoría A1 (bloqueantes) resuelta: documento por pantalla con aviso de cambios, Guardar/Guardar como, .volta asociada en Windows con instancia única y arrastrar y soltar, Inicio con buscador, Nueva escena, Ajustes y archivos recientes, sin herramientas de desarrollo ni controles muertos; ventana que recuerda su estado. 1051 pruebas. Siguiente: A2 (idioma inglés, preferencias de unidades y formato numérico, accesibilidad) y B (gráficas, análisis).
+- 2026-11-20 — Comentarios del autor usándola: Configuración como pantalla con actualizaciones dentro, acentos y matices, teclado de símbolos, arreglo de los campos con unidad, gráficas interactivas, separador decimal, accesibilidad; v0.17.0 (1062 pruebas). Siguiente: Sistema solar geocéntrico/heliocéntrico/Ptolomeo, más opciones en los laboratorios, inglés.
