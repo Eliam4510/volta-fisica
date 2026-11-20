@@ -67,7 +67,9 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Laboratorio: panel de variables, instrumentos (regla, fotopuerta).
 - [x] Discos que giran: rodadura, deslizamiento con giro, par de la fricción (v0.12.0, DECISIONES 18).
 - [x] Bloques que vuelcan: rectángulo con giro y contactos por vértice (v0.13.0).
-- [ ] Ver autocrítica 7: fuerza aplicada en un punto del cuerpo, contactos bloque-bloque y bloque-disco, esquinas de las superficies contra las caras, fricción entre discos.
+- [x] Fuerza aplicada en un punto del cuerpo (`Fpunto`; Laboratorio «Aplicada en», ejemplo «Empujar un bloque»).
+- [ ] Contactos con las aristas de un bloque (autocrítica 7). Diseño: un contacto «punto contra arista e del bloque B», con el punto fijo (extremo de un segmento: la esquina de un escalón) o el vértice k de otro bloque A (apilar cajas). C = n_B·(P − Q_B), n_B = R_B·n0_e, Q_B = c_B + R_B·e0; gradiente con las entradas de traslación y giro de A y B; extensión: la proyección de P en la arista dentro de [0, L]. Claves «a:<A>.<k>:<B>.<e>» (el «i.k» ya se reparte con apoyoDe). Tocar: restriccionesDelModo, eventosDelModo (impacto/despegue/fin), resolverSimultaneos, proyeccionInelastica, contactos iniciales, impacto genérico (ya usa el gradiente), fuerzasEn del Laboratorio.
+- [ ] Fricción entre discos: deslizamiento del par t̂·(v_i − v_j) − r_i·ω_i − r_j·ω_j; modo.pares pasa de booleano a {pegado, sentido}; μ de la escena (`muParticulas`).
 
 ### Otros módulos
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
@@ -254,3 +256,4 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Termodinámica como caja de arena (paletas e instrumentos) y Gravitación con «Sistema solar» y «Maniobras» (motor de N cuerpos); v0.11.0 (992 pruebas).
 - 2026-11-19 — Discos que giran en el motor y el Laboratorio (rodadura, bola de bolos, cuenco; ejemplos con fotopuertas); sentido de la fricción cinética fijo por tramo; v0.12.0 (1003 pruebas). Siguiente: bloques que vuelcan.
 - 2026-11-19 — Bloques rígidos que vuelcan (motor y Laboratorio); adherencia conjunta de los apoyos; v0.13.0 (1013 pruebas). Autocrítica 7. Siguiente: fuerza aplicada en un punto del cuerpo.
+- 2026-11-19 — Fuerza aplicada en un punto del cuerpo (vuelca o desliza al empujar); 1019 pruebas. Siguiente: contactos con las aristas de los bloques (diseño arriba).
