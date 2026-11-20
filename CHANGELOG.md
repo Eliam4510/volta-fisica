@@ -7,6 +7,27 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.20.0] - 2026-11-20
+
+Volta completo en inglés.
+
+### Añadido
+
+- Inglés en todos los espacios: inspectores, avisos, validaciones,
+  herramientas, comandos, gráficas, lecturas, notas y títulos de los
+  escenarios de Mecánica, Gravitación, Termodinámica, Electrostática,
+  Circuitos, Magnetismo, Ondas, Óptica y Física moderna (unas 3 700
+  entradas en el diccionario).
+- Los eventos del Laboratorio se escriben en inglés con los nombres
+  traducidos («The ball hits the floor»).
+
+### Corregido
+
+- Con la ventana estrecha, el botón de la escena derramaba su contenido
+  sobre el nombre del espacio; ahora se recorta por la derecha.
+- «Adiabáticas» en las paredes del cilindro se traducía como «Adiabats».
+
+
 ## [0.19.0] - 2026-11-20
 
 Volta en inglés, y ejemplos clásicos nuevos en el Laboratorio.
