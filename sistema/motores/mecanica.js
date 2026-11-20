@@ -95,7 +95,8 @@ import { integrar, interpolar } from '../nucleo/integradores.js';
  * @property {Conector[]} [conectores]
  * @property {number} [duracion=5]
  * @property {number} [eParticulas=1]  Restitución entre partículas (también contra las caras de un bloque)
- * @property {number} [muCuerpos=0]    Fricción en los contactos con las caras de un bloque
+ * @property {number} [muCuerpos=0]    Fricción en los contactos con las caras de un bloque y entre dos discos
+ *                                     apoyados uno en otro si alguno gira
  * @property {number} [umbral=1e-3]    Rapidez normal (m/s) bajo la cual un rebote se convierte en contacto
  * @property {number} [rtol=1e-10]
  * @property {number} [maxEventos=2000] Límite de eventos (regla post-Zeno cerca del límite)
@@ -226,7 +227,7 @@ function preparar(e) {
       caras.push([i, 4 + q]);
     }
   });
-  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2, vert, nReales, caras };
+  const S = { P, idx, g, sup, con, n: P.length, im, perfiles, aImp: P.map(() => [0, 0]), b: e.b || 0, cAire: e.cAire || 0, rot, I, nr: I.length, base: 4 * P.length + 2, vert, nReales, caras, muPares: e.muCuerpos ?? 0 };
   actualizarImpuestas(S, 0);
   return S;
 }
@@ -242,6 +243,32 @@ function sumarVelocidad(S, y, i, dx, dy) {
 /** Igual que `sumarVelocidad`, para las posiciones (θ en un giro). @param {any} S @param {number[]} y @param {number} i @param {number} dx @param {number} dy */
 function sumarPosicion(S, y, i, dx, dy) {
   if (i < S.n) { y[4 * i] += dx; y[4 * i + 1] += dy; } else y[S.base + 2 * (i - S.n)] += dx;
+}
+
+/**
+ * ¿Hay fricción en el contacto entre los discos i y j? Solo si alguno gira:
+ * entre partículas que no giran el radio solo sirve para chocar, y así las
+ * escenas de antes no cambian.
+ * @param {any} S @param {number} i @param {number} j
+ */
+const friccionPar = (S, i, j) => S.muPares > 0 && (S.rot[i] >= 0 || S.rot[j] >= 0);
+/** Estado de un par de discos apoyados: true, o {par, pegado, sentido} si hay fricción. */
+const nuevoPar = (/** @type {any} */ S, /** @type {number} */ i, /** @type {number} */ j) => (friccionPar(S, i, j) ? { par: true, pegado: false, sentido: 0 } : true);
+/**
+ * Deslizamiento en el punto de contacto de dos discos: con û = (p_i − p_j)/D
+ * y t̂ = ẑ×û, t̂·(v_i − v_j) − r_i·ω_i − r_j·ω_j. Gradiente con los dos giros;
+ * J̇v = −(û·w)(û×w)/D (el giro de la recta de los centros), w = v_i − v_j.
+ * @param {any} S @param {number[]} y @param {number} i @param {number} j
+ */
+function deslizamientoPar(S, y, i, j) {
+  const d = [y[4 * i] - y[4 * j], y[4 * i + 1] - y[4 * j + 1]], D = norm(d), u = [d[0] / D, d[1] / D], t = [-u[1], u[0]];
+  const w = [y[4 * i + 2] - y[4 * j + 2], y[4 * i + 3] - y[4 * j + 3]];
+  const ri = radio(S, i), rj = radio(S, j), qi = S.rot[i], qj = S.rot[j];
+  const wi = qi >= 0 ? y[S.base + 2 * qi + 1] : 0, wj = qj >= 0 ? y[S.base + 2 * qj + 1] : 0;
+  const grad = [[i, t[0], t[1]], [j, -t[0], -t[1]]];
+  if (qi >= 0) grad.push([S.n + qi, -ri, 0]);
+  if (qj >= 0) grad.push([S.n + qj, -rj, 0]);
+  return { t, vt: dot(t, w) - ri * wi - rj * wj, grad, jdv: -dot(u, w) * (u[0] * w[1] - u[1] * w[0]) / D };
 }
 
 /**
@@ -801,6 +828,17 @@ function fuerzas(S, modo, y, lambdasPrevias) {
       const f = -sup.mu * N * sentido;
       for (const [i, gx, gy] of grad) { F[2 * i] += f * gx; F[2 * i + 1] += f * gy; }
     }
+    // Entre discos apoyados que deslizan: −μ·N en el punto de contacto (los
+    // dos centros y los dos giros, por el gradiente del deslizamiento)
+    for (const [clave, est] of Object.entries(modo.pares)) {
+      if (typeof est !== 'object' || est.pegado) continue;
+      const [i, j] = clave.split(':').map(Number), N = Math.max(0, lambdasPrevias[`par:${clave}`] || 0);
+      const { vt, grad } = deslizamientoPar(S, y, i, j);
+      const sentido = est.sentido || Math.sign(vt);
+      if (!sentido || (!est.sentido && Math.abs(vt) < 1e-15)) continue;
+      const f = -S.muPares * N * sentido;
+      for (const [q, gx, gy] of grad) { F[2 * q] += f * gx; F[2 * q + 1] += f * gy; }
+    }
   }
   return F;
 }
@@ -824,7 +862,7 @@ function dinamica(S, modo, y, restr) {
   let fuerzaTotal = [];
   /** @type {null | {A: number[][], b: number[], claves: string[], unilateral: boolean[]}} */
   let sistema = null;
-  const iteraciones = Object.values(modo.contactos).some(s => S.sup[s.sup].mu > 0 && !s.pegado) ? 4 : 1;
+  const iteraciones = Object.values(modo.contactos).some(s => S.sup[s.sup].mu > 0 && !s.pegado) || Object.values(modo.pares).some(p => typeof p === 'object' && !p.pegado) ? 4 : 1;
   for (let it = 0; it < iteraciones; it++) {
     const F = fuerzas(S, modo, y, lambdas);
     const ev = restr.map(r => r.evaluar(y));
@@ -836,6 +874,13 @@ function dinamica(S, modo, y, restr) {
       // rodadura (el centro avanza y el disco gira a la vez)
       const { vt, grad, jdv } = deslizamiento(S, S.sup[s.sup], y, s.i, s.k ?? -1);
       pegadas.push({ clave: `pegado:${clave}`, evaluar: () => ({ C: 0, Cp: vt, grad, jdv }) });
+      ev.push(pegadas[pegadas.length - 1].evaluar());
+    }
+    // Dos discos que ruedan uno sobre otro sin deslizar
+    for (const [clave, est] of Object.entries(modo.pares)) {
+      if (typeof est !== 'object' || !est.pegado) continue;
+      const [i, j] = clave.split(':').map(Number), { vt, grad, jdv } = deslizamientoPar(S, y, i, j);
+      pegadas.push({ clave: `pegadoPar:${clave}`, evaluar: () => ({ C: 0, Cp: vt, grad, jdv }) });
       ev.push(pegadas[pegadas.length - 1].evaluar());
     }
     const k = ev.length;
@@ -1003,8 +1048,14 @@ function eventosDelModo(S, modo, restr, y0, din = yy => dinamica(S, modo, yy, re
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
     if (!parPosible(S, i, j)) continue;
     const R = radio(S, i) + radio(S, j);
-    if (modo.pares[`${i}:${j}`]) {
+    const estPar = modo.pares[`${i}:${j}`];
+    if (estPar) {
       ev.push({ nombre: `separa:${i}:${j}`, direccion: -1, terminal: true, g: (t, y) => din(y).lambdas[`par:${i}:${j}`] ?? 0 });
+      if (typeof estPar === 'object') {
+        // Fricción entre los dos: deja de deslizar (v_t → 0) o la adherencia ya no alcanza
+        if (estPar.pegado) ev.push({ nombre: `resbala:${i}:${j}`, direccion: -1, terminal: true, g: (t, y) => { const L = din(y).lambdas; return S.muPares * Math.max(0, L[`par:${i}:${j}`]) - Math.abs(L[`pegadoPar:${i}:${j}`]); } });
+        else ev.push({ nombre: `rueda:${i}:${j}`, direccion: 0, terminal: true, g: (t, y) => deslizamientoPar(S, y, i, j).vt });
+      }
     } else {
       const h0 = Math.hypot(y0[4 * i] - y0[4 * j], y0[4 * i + 1] - y0[4 * j + 1]) - R;
       const off = h0 <= TOL_HUECO && h0 > -0.5 * R ? Math.min(h0, 0) - TOL_HUECO : 0;
@@ -1043,7 +1094,7 @@ function normalizarAngulo(a) { const d = 2 * Math.PI; return ((a % d) + d) % d; 
 function copiarModo(m) {
   return {
     contactos: Object.fromEntries(Object.entries(m.contactos).map(([k, v]) => [k, { ...v }])),
-    pares: { ...m.pares },
+    pares: Object.fromEntries(Object.entries(m.pares).map(([k, v]) => [k, typeof v === 'object' ? { ...v } : v])),
     cuerdas: Object.fromEntries(Object.entries(m.cuerdas).map(([k, v]) => [k, { ...v, clavos: [...v.clavos], sentido: [...v.sentido] }])),
   };
 }
@@ -1153,7 +1204,7 @@ export function simularMecanica(escena) {
   const hayCinematicos = S.P.some(p => p.cinematica);
   const DUR = escena.duracion ?? 5, UMBRAL = escena.umbral ?? 1e-3, RTOL = escena.rtol ?? 1e-10;
   let y = estadoInicial(S), t = 0;
-  /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean, sentido?: number, k?: number}>, pares: Record<string, boolean>, cuerdas: Record<string, any>}} */
+  /** @type {{contactos: Record<string, {i: number, sup: number, pegado: boolean, sentido?: number, k?: number}>, pares: Record<string, any>, cuerdas: Record<string, any>}} */
   let modo = { contactos: {}, pares: {}, cuerdas: {} };
   for (const c of S.con) {
     if (c.tipo === 'cuerda' || c.tipo === 'polea') {
@@ -1175,7 +1226,7 @@ export function simularMecanica(escena) {
   for (let i = 0; i < S.n; i++) for (let j = i + 1; j < S.n; j++) {
     if (!parPosible(S, i, j)) continue;
     const { C, Cp } = restriccionPar(S, i, j).evaluar(y);
-    if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9) modo.pares[`${i}:${j}`] = true;
+    if (Math.abs(C) < 1e-9 && Math.abs(Cp) < 1e-9) modo.pares[`${i}:${j}`] = nuevoPar(S, i, j);
   }
 
   const tramos = [], eventos = [];
@@ -1242,14 +1293,19 @@ export function simularMecanica(escena) {
       let peor = null, exceso = 1e-12;
       for (const [clave, s] of quietos) {
         if (!s.pegado) continue;
-        const sup = S.sup[s.sup], ex = Math.abs(L[`pegado:${clave}`]) - (sup.muS ?? sup.mu) * Math.max(0, L[`contacto:${clave}`]);
+        // Un par de discos (s.par) usa sus propias claves y la fricción entre cuerpos
+        const [kp, kn, mu] = s.par ? [`pegadoPar:${clave}`, `par:${clave}`, S.muPares] : [`pegado:${clave}`, `contacto:${clave}`, S.sup[s.sup].muS ?? S.sup[s.sup].mu];
+        const ex = Math.abs(L[kp]) - mu * Math.max(0, L[kn]);
         if (ex > exceso) { exceso = ex; peor = s; }
       }
       if (!peor) break;
       peor.pegado = false;
     }
   };
-  pegarQuietos(Object.entries(modo.contactos).filter(([, s]) => S.sup[s.sup].mu > 0 && Math.abs(deslizamiento(S, S.sup[s.sup], y, s.i, s.k ?? -1).vt) <= 1e-12));
+  pegarQuietos([
+    ...Object.entries(modo.contactos).filter(([, s]) => S.sup[s.sup].mu > 0 && Math.abs(deslizamiento(S, S.sup[s.sup], y, s.i, s.k ?? -1).vt) <= 1e-12),
+    ...Object.entries(modo.pares).filter(([c, p]) => { const [a, b] = c.split(':').map(Number); return typeof p === 'object' && Math.abs(deslizamientoPar(S, y, a, b).vt) <= 1e-12; }),
+  ]);
 
   // Paso máximo según la rapidez: en un paso, nada recorre más de un cuarto de
   // la escala menor de la escena (radio, medio segmento, medio radio de arco).
@@ -1309,7 +1365,7 @@ export function simularMecanica(escena) {
     const contacto = e * -vrel < UMBRAL || zeno;
     const J = -(1 + (contacto ? 0 : e)) * vrel / (wi + wj);
     impulsoFila([[i, n[0], n[1]], [j, -n[0], -n[1]]], J);
-    if (contacto) { modo.pares[`${i}:${j}`] = true; return `Choque y contacto entre ${S.P[i].id} y ${S.P[j].id}`; }
+    if (contacto) { modo.pares[`${i}:${j}`] = nuevoPar(S, i, j); return `Choque y contacto entre ${S.P[i].id} y ${S.P[j].id}`; }
     return `Choque entre ${S.P[i].id} y ${S.P[j].id}`;
   };
   /** Registra un cambio instantáneo con la energía cinética que disipa. */
@@ -1351,7 +1407,13 @@ export function simularMecanica(escena) {
           // si un impulso los separa, dejan de estar apoyados (si vuelven a
           // juntarse, es un choque). Un resto lento de acercamiento lo quita la
           // proyección inelástica del final, de una vez y sin evento.
-          if (Cp < -UMBRAL) { delete modo.pares[clave]; if (anotar(`choque:${clave}`, () => choque(i, j, zeno))) hubo = true; }
+          if (Cp < -UMBRAL) {
+            const antes = modo.pares[clave];
+            delete modo.pares[clave];
+            if (anotar(`choque:${clave}`, () => choque(i, j, zeno))) hubo = true;
+            // Un choque que los deja apoyados no les quita la adherencia
+            if (antes && typeof antes === 'object' && antes.pegado && typeof modo.pares[clave] === 'object') modo.pares[clave].pegado = true;
+          }
           else if (Cp > UMBRAL) delete modo.pares[clave];
         } else if (!excluir.has('par:' + clave) && Cp < -1e-12 && ((C <= TOL_HUECO && Cp < -UMBRAL) || (C > TOL_HUECO && C <= tolContacto(R) && lentos(i, j)))) {
           // Se tocan y se acercan de verdad: choque (si es lento, quedan
@@ -1407,7 +1469,7 @@ export function simularMecanica(escena) {
       if (!modo.pares[clave] && excluir.has('par:' + clave)) continue;
       const e = restriccionPar(S, i, j).evaluar(y);
       if (modo.pares[clave]) cand.push({ e, alta: null });
-      else if (e.C <= TOL_HUECO) cand.push({ e, alta: () => { modo.pares[clave] = true; } });
+      else if (e.C <= TOL_HUECO) cand.push({ e, alta: () => { modo.pares[clave] = nuevoPar(S, i, j); } });
     }
     for (let i = 0; i < S.n; i++) {
       S.sup.forEach((sup, js) => {
@@ -1508,8 +1570,14 @@ export function simularMecanica(escena) {
     // soltarse), se usa el signo instantáneo como antes.
     for (const s of Object.values(modo.contactos)) {
       if (s.pegado || !(S.sup[s.sup].mu > 0)) { s.sentido = 0; continue; }
-      const vt = deslizamiento(S, S.sup[s.sup], y, s.i).vt;
+      const vt = deslizamiento(S, S.sup[s.sup], y, s.i, s.k ?? -1).vt;
       s.sentido = Math.abs(vt) > 1e-13 ? Math.sign(vt) : 0;
+    }
+    for (const [c, p] of Object.entries(modo.pares)) {
+      if (typeof p !== 'object') continue;
+      if (p.pegado) { p.sentido = 0; continue; }
+      const [a, b] = c.split(':').map(Number), vt = deslizamientoPar(S, y, a, b).vt;
+      p.sentido = Math.abs(vt) > 1e-13 ? Math.sign(vt) : 0;
     }
     const restr = restriccionesDelModo(S, modo);
     const m = modo;
@@ -1613,7 +1681,7 @@ export function simularMecanica(escena) {
       // bloque que se detiene dejan de deslizar a la vez)
       const hermanos = Object.entries(modo.contactos).filter(([c, x]) => c !== clave && !x.pegado && x.i === i && S.sup[x.sup].mu > 0 && Math.abs(deslizamiento(S, S.sup[x.sup], y, x.i, x.k ?? -1).vt) <= 1e-9);
       pegarQuietos([[clave, s], ...hermanos]);
-      descripcion = s.pegado ? (S.vert[i] ? `Deja de deslizar (${S.P[i].id})` : S.rot[i] >= 0 ? `Rueda sin deslizar (${S.P[i].id})` : `Se detiene (${S.P[i].id})`) : `Invierte el deslizamiento (${S.P[i].id})`;
+      let invierte = false;
       if (!s.pegado) {
         // Empuja un poco para que el evento no se repita en el mismo instante,
         // en un sentido coherente: con la fricción cinética opuesta a ese
@@ -1632,10 +1700,20 @@ export function simularMecanica(escena) {
         // sentido en que tiraba la adherencia que no alcanzó: desliza al revés
         const tendencia = -Math.sign(L[`pegado:${clave}`] || 0) || 1;
         const ok = [1, -1].filter(sg => Math.sign(acelDesliz(sg)) === sg);
-        const sgn = ok.length === 1 ? ok[0] : tendencia;
         s.sentido = 0;
-        y[4 * i + 2] += sgn * 1e-12 * tg[0]; y[4 * i + 3] += sgn * 1e-12 * tg[1];
+        if (ok.length === 0) {
+          // Ningún sentido es coherente y la adherencia pide un poco más que
+          // μs·N (la normal depende de la fricción: un bloque que vuelca sobre
+          // su arista). Es la paradoja de Painlevé; como los motores con
+          // conos de fricción, se queda pegado en el límite del cono
+          s.pegado = true;
+        } else {
+          const sgn = ok.length === 1 ? ok[0] : tendencia;
+          y[4 * i + 2] += sgn * 1e-12 * tg[0]; y[4 * i + 3] += sgn * 1e-12 * tg[1];
+          invierte = true;
+        }
       }
+      descripcion = !invierte ? (S.vert[i] ? `Deja de deslizar (${S.P[i].id})` : S.rot[i] >= 0 ? `Rueda sin deslizar (${S.P[i].id})` : `Se detiene (${S.P[i].id})`) : `Invierte el deslizamiento (${S.P[i].id})`;
     } else if (partes[0] === 'desliza') {
       modo.contactos[`${partes[1]}:${partes[2]}`].pegado = false;
       descripcion = `Empieza a deslizar (${S.P[apoyoDe(partes[1])[0]].id})`;
@@ -1685,6 +1763,39 @@ export function simularMecanica(escena) {
       descripcion = alarga ? `La cuerda elástica ${c.id} se tensa` : `La cuerda elástica ${c.id} queda floja`;
       // Pasa por el largo natural con g ≈ 0: se silencia una pausa para no repetirlo
       silenciar(nombre);
+    } else if (partes[0] === 'rueda') {
+      // Dos discos dejan de deslizar uno sobre otro: ¿alcanza la adherencia?
+      const i = Number(partes[1]), j = Number(partes[2]), clave = `${i}:${j}`, est = modo.pares[clave];
+      const restr2 = restriccionesDelModo(S, modo);
+      est.pegado = true;
+      const L = dinamica(S, modo, y, restr2).lambdas;
+      pegarQuietos([[clave, est]]);
+      let invierte = false;
+      if (!est.pegado) {
+        // Empujón en un sentido coherente con la fricción cinética (como en vt0)
+        const { t: tg, grad } = deslizamientoPar(S, y, i, j);
+        const acel = sentido => {
+          est.sentido = sentido;
+          const a = dinamica(S, modo, y, restr2).acc;
+          let at = 0;
+          for (const [q, gx, gy] of grad) at += gx * a[2 * q] + gy * a[2 * q + 1];
+          return at;
+        };
+        const tendencia = -Math.sign(L[`pegadoPar:${clave}`] || 0) || 1;
+        const ok = [1, -1].filter(sg => Math.sign(acel(sg)) === sg);
+        est.sentido = 0;
+        if (ok.length === 0) est.pegado = true;      // Painlevé: pegados en el límite del cono
+        else {
+          const sgn = ok.length === 1 ? ok[0] : tendencia, q = S.im[i] > 0 ? i : j, sg2 = q === i ? 1 : -1;
+          y[4 * q + 2] += sg2 * sgn * 1e-12 * tg[0]; y[4 * q + 3] += sg2 * sgn * 1e-12 * tg[1];
+          invierte = true;
+        }
+      }
+      descripcion = invierte ? `Invierten el deslizamiento ${S.P[i].id} y ${S.P[j].id}` : `Ruedan sin deslizar ${S.P[i].id} y ${S.P[j].id}`;
+    } else if (partes[0] === 'resbala') {
+      const est = modo.pares[`${partes[1]}:${partes[2]}`];
+      if (typeof est === 'object') est.pegado = false;
+      descripcion = `Empiezan a deslizar ${S.P[Number(partes[1])].id} y ${S.P[Number(partes[2])].id}`;
     } else if (partes[0] === 'separa') {
       excluir.add(`par:${partes[1]}:${partes[2]}`);
       delete modo.pares[`${partes[1]}:${partes[2]}`];

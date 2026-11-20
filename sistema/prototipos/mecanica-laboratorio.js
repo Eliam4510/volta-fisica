@@ -442,6 +442,8 @@ export function describirEvento(ev, M) {
     case 'desengancha': d = `${C()} se suelta del clavo`; break;
     case 'choque': d = `${contacto ? 'Choque y contacto' : 'Choque'} entre ${P(partes[1])} y ${P(partes[2])}`; break;
     case 'separa': d = `Se separan ${P(partes[1])} y ${P(partes[2])}`; break;
+    case 'rueda': d = /Invierten/.test(ev.nombre || '') ? `${P(partes[1])} y ${P(partes[2])} invierten el deslizamiento` : `${P(partes[1])} y ${P(partes[2])} ruedan sin deslizar`; break;
+    case 'resbala': d = `${P(partes[1])} y ${P(partes[2])} empiezan a deslizar`; break;
     default: d = ev.nombre || 'Evento';
   }
   return mayuscula(d.replace(/\bde el\b/g, 'del').replace(/\ba el\b/g, 'al'));
@@ -606,8 +608,24 @@ export function fuerzasEn(sim, M, t) {
     } });
     if (k.pegado && sup.mu > 0) cols.push({ grad: conJ(tg[0], tg[1], cr), usar: L => lista[i].push({ tipo: 'friccion', F: [L * tg[0], L * tg[1]], valor: Math.abs(L), id: sup.id, ...(b ? { rel: b } : {}) }) });
   }
-  for (const par of Object.keys(modo.pares || {})) {
+  for (const [par, est] of Object.entries(modo.pares || {})) {
     const [i, j] = par.split(':').map(Number), u = unitario(resta(pos(i), pos(j)));
+    if (est && typeof est === 'object') {
+      // Discos con fricción entre ellos (alguno gira): el deslizamiento del
+      // punto de contacto es t̂·(v_i − v_j) − r_i·ω_i − r_j·ω_j, como en el motor
+      const t = [-u[1], u[0]], ri = mot.particulas[i].radio || 0, rj = mot.particulas[j].radio || 0, muC = mot.muCuerpos ?? 0;
+      const vt = punto(t, resta(vel(i), vel(j))) - ri * omega(i) - rj * omega(j);
+      const desliza = !est.pegado && (!!est.sentido || Math.abs(vt) > 1e-15), sgn = est.sentido || Math.sign(vt);
+      const filas = (dn, dt) => [[i, dn[0] + dt * t[0], dn[1] + dt * t[1]], [j, -dn[0] - dt * t[0], -dn[1] - dt * t[1]],
+        ...(rot[i] >= 0 ? [[n + rot[i], -ri * dt, 0]] : []), ...(rot[j] >= 0 ? [[n + rot[j], -rj * dt, 0]] : [])];
+      const ambos = (tipo, F, valor) => { lista[i].push({ tipo, F, valor, id: par, rel: [-ri * u[0], -ri * u[1]] }); lista[j].push({ tipo, F: [-F[0], -F[1]], valor, id: par, rel: [rj * u[0], rj * u[1]] }); };
+      cols.push({ grad: filas(u, desliza ? -muC * sgn : 0), usar: L => {
+        ambos('normal', [L * u[0], L * u[1]], L);
+        if (desliza) ambos('friccion', [-muC * sgn * L * t[0], -muC * sgn * L * t[1]], Math.abs(muC * L));
+      } });
+      if (est.pegado) cols.push({ grad: filas([0, 0], 1), usar: L => ambos('friccion', [L * t[0], L * t[1]], Math.abs(L)) });
+      continue;
+    }
     cols.push({ grad: [[i, u[0], u[1]], [j, -u[0], -u[1]]], usar: L => {
       lista[i].push({ tipo: 'normal', F: [L * u[0], L * u[1]], valor: L, id: par });
       lista[j].push({ tipo: 'normal', F: [-L * u[0], -L * u[1]], valor: L, id: par });
@@ -2086,7 +2104,7 @@ function iniciar() {
       h += grupo('Gravedad', fila('Intensidad', campo('escena.g', esc.g, 'aceleracion', 'g')) + fila('Dirección', campo('escena.gAng', esc.gAng, 'angulo', null, 'Ángulo desde el eje x; −90° apunta hacia abajo|Direction')) + ayudaFila('Con g = 0, el plano se ve desde arriba (una mesa sin fricción).'));
       h += grupo('Medio y choques', fila('Arrastre', campo('escena.b', esc.b, 'amort', 'b', 'Arrastre lineal: F = −b·v|Linear drag')) + fila('Cuadrático', campo('escena.cAire', esc.cAire, 'arrastre2', 'c', 'Arrastre cuadrático: F = −c·|v|·v|Quadratic drag')) +
         fila('Restitución', campo('escena.eParticulas', esc.eParticulas, 'adim', 'e', 'Coeficiente de restitución entre discos y contra los bloques|Restitution between bodies')) +
-        (esc.objetos.some(esBloque) ? fila('Fricción entre cuerpos', campo('escena.muCuerpos', esc.muCuerpos ?? 0.5, 'adim', 'μ', 'Fricción en las caras de los bloques: un bloque sobre otro, un disco contra un bloque|Friction between bodies')) : ''));
+        (esc.objetos.some(o => esBloque(o) || gira(o)) ? fila('Fricción entre cuerpos', campo('escena.muCuerpos', esc.muCuerpos ?? 0.5, 'adim', 'μ', 'Fricción en las caras de los bloques: un bloque sobre otro, un disco contra un bloque|Friction between bodies')) : ''));
       h += grupoMostrar();
       h += grupo('Energía en t = 0', '<div class="lecturas" id="lecturas"></div>', 'lect-titulo');
     } else if (o.tipo === 'particula') {

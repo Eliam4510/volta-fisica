@@ -1083,3 +1083,52 @@ describe('caras de los bloques: apilar, chocar con discos', () => {
     cerca(energiaMecanica(sim, 1).E, energiaMecanica(sim, 0).E, 1e-9);
   });
 });
+
+describe('fricción entre discos que giran', () => {
+  // Dos discos sin gravedad, apretados por un resorte entre sus centros (su
+  // largo natural es menor que la suma de radios). A gira y B no: la
+  // fricción en el contacto los acopla hasta que ruedan uno sobre otro
+  const par = ({ mu = 0.4, wA = 20, inB = 0.5 } = {}) => simularMecanica({
+    g: [0, 0], duracion: 2, muCuerpos: mu, eParticulas: 0,
+    particulas: [
+      { id: 'A', m: 1, radio: 0.1, inercia: 0.5, p: [-0.1, 0], v: [0, 0], w: wA },
+      { id: 'B', m: 2, radio: 0.1, inercia: inB, p: [0.1, 0], v: [0, 0] },
+    ],
+    conectores: [{ id: 'R', tipo: 'resorte', a: 'A', b: 'B', k: 200, L0: 0.15 }],
+  });
+  const momentoAngular = (sim, t) => {
+    const e = estadoMecanica(sim, t), m = [1, 2], I = [0.5 * 1 * 0.01, 0.5 * 2 * 0.01];
+    return e.reduce((s, q, k) => s + m[k] * (q.x * q.vy - q.y * q.vx) + I[k] * q.w, 0);
+  };
+  it('se apoyan uno en otro con fricción y acaban rodando sin deslizar', () => {
+    const sim = par();
+    expect(sim.incompleta).toBeNull();
+    expect(typeof sim.tramos[0].modo.pares['0:1']).toBe('object');
+    expect(ev(sim, 'Ruedan sin deslizar')).toBeTruthy();
+  });
+  it('conservan el momento lineal y el angular, y E + Qc = E0', () => {
+    const sim = par();
+    for (const t of [0.2, 1, 2]) {
+      const e = estadoMecanica(sim, t);
+      cerca(1 * e[0].vx + 2 * e[1].vx, 0, 1e-9); cerca(1 * e[0].vy + 2 * e[1].vy, 0, 1e-9);
+      cerca(momentoAngular(sim, t), momentoAngular(sim, 0), 1e-9);
+      const en = energiaMecanica(sim, t);
+      cerca(en.E + en.Qc + en.Qi, energiaMecanica(sim, 0).E, 1e-9);
+    }
+    // Rodando, ya no se disipa nada
+    const r = ev(sim, 'Ruedan sin deslizar').t;
+    cerca(energiaMecanica(sim, 2).Qc, energiaMecanica(sim, r + 0.01).Qc, 1e-9);
+    expect(energiaMecanica(sim, 2).Qc).toBeGreaterThan(1e-3);
+  });
+  it('sin giro en ninguno de los dos, el par sigue sin fricción (como antes)', () => {
+    const sim = par({ wA: 0, inB: 0 });
+    // A tampoco gira si su inercia es 0
+    const sin = simularMecanica({
+      g: [0, 0], duracion: 0.5, muCuerpos: 0.4,
+      particulas: [{ id: 'A', m: 1, radio: 0.1, p: [-0.1, 0], v: [0, 0.5] }, { id: 'B', m: 2, radio: 0.1, p: [0.1, 0], v: [0, 0] }],
+      conectores: [{ id: 'R', tipo: 'resorte', a: 'A', b: 'B', k: 200, L0: 0.15 }],
+    });
+    expect(sin.tramos[0].modo.pares['0:1']).toBe(true);
+    expect(sim.incompleta).toBeNull();
+  });
+});

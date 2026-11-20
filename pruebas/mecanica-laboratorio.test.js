@@ -446,3 +446,24 @@ describe('cajas apiladas en el laboratorio', () => {
     cerca(en.E + en.Qc + en.Qi, energiaMecanica(sim, 0).E, 1e-7);
   });
 });
+
+describe('fricción entre discos en el laboratorio', () => {
+  it('fuerzasEn reparte normal y fricción entre los dos discos, y los eventos se nombran', () => {
+    const e = normalizarEscena({
+      ...escenaVacia(), g: 0, duracion: 1, muCuerpos: 0.4, eParticulas: 0,
+      objetos: [
+        { id: 'p1', tipo: 'particula', nombre: 'A', m: 1, x: -0.1, y: 0, radio: 0.1, inercia: 0.5, w: 20 },
+        { id: 'p2', tipo: 'particula', nombre: 'B', m: 2, x: 0.1, y: 0, radio: 0.1, inercia: 0.5 },
+        { id: 'c1', tipo: 'resorte', nombre: 'Resorte', a: 'p1', b: 'p2', k: 200, L0: 0.15, amort: 0 },
+      ],
+    });
+    const M = aMotor(e), sim = simularMecanica(M.motor);
+    const f = fuerzasEn(sim, M, 0.05).porParticula;
+    const fa = f[0].find(x => x.tipo === 'friccion'), fb = f[1].find(x => x.tipo === 'friccion');
+    const na = f[0].find(x => x.tipo === 'normal' && x.id === '0:1');
+    // Mientras deslizan: |f| = μ·N y opuestas
+    cerca(fa.valor, 0.4 * na.valor, 1e-7);
+    cerca(fa.F[0] + fb.F[0], 0, 1e-12); cerca(fa.F[1] + fb.F[1], 0, 1e-12);
+    expect(sim.eventos.map(x => describirEvento(x, M))).toContain('A y B ruedan sin deslizar');
+  });
+});

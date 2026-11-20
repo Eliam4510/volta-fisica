@@ -7,6 +7,23 @@ el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- Mecánica: fricción entre dos discos apoyados uno en otro si alguno gira
+  (con la fricción entre cuerpos de la escena): se frenan y se hacen girar
+  hasta rodar uno sobre otro, con el momento lineal y el angular
+  conservados. El Laboratorio muestra la normal y la fricción del par en el
+  punto de contacto.
+
+### Corregido
+
+- El sentido de la fricción de un vértice de bloque al empezar cada tramo
+  se calculaba con la velocidad del centro, no con la del vértice.
+- Cuando ningún sentido de deslizamiento es coherente y la adherencia pide
+  un poco más que μs·N (paradoja de Painlevé, un bloque que vuelca sobre su
+  arista), el apoyo queda pegado en el límite del cono en vez de repetir el
+  evento sin fin.
+
 ## [0.14.0] - 2026-11-19
 
 Empujar un bloque en cualquier punto y apilar cajas: los bloques chocan

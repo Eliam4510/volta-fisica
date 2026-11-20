@@ -117,3 +117,12 @@ vieja.
     el ruido de un bloque apoyado sobre otro se cruzaba sin fin): espera a
     pasar al lado libre (evento «frente»). Vértice contra vértice y la
     esquina fija de un escalón contra una cara quedan fuera.
+20. **Paradoja de Painlevé: pegado en el límite del cono (2026-11-19).**
+    Cuando un apoyo deja de deslizar, la adherencia no alcanza y ningún
+    sentido de la fricción cinética es coherente (con él, el deslizamiento
+    acelera hacia el otro lado), el apoyo queda pegado aunque pida un poco
+    más que μs·N, como en los motores que resuelven la fricción dentro del
+    cono (Box2D, PhysX). Si ambos sentidos son coherentes, se toma el
+    contrario a la adherencia que no alcanzó. La fricción entre discos solo
+    existe si alguno gira: entre partículas que no giran, el radio sigue
+    sirviendo solo para chocar y las escenas anteriores no cambian.

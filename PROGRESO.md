@@ -69,7 +69,7 @@ física > funciones faltantes > rendimiento > pulido.
 - [x] Bloques que vuelcan: rectángulo con giro y contactos por vértice (v0.13.0).
 - [x] Fuerza aplicada en un punto del cuerpo (`Fpunto`; Laboratorio «Aplicada en», ejemplo «Empujar un bloque»).
 - [x] Caras y esquinas de los bloques (superficies que giran con su portador; DECISIONES 19): apilar cajas, discos contra bloques. Falta: la esquina fija de un escalón contra la cara de un bloque; vértice contra vértice no cuenta.
-- [ ] Fricción entre discos: deslizamiento del par t̂·(v_i − v_j) − r_i·ω_i − r_j·ω_j; modo.pares pasa de booleano a {pegado, sentido}; μ de la escena (`muParticulas`).
+- [x] Fricción entre discos que giran (pares con {pegado, sentido}; eventos «rueda» y «resbala»).
 
 ### Otros módulos
 - [x] Motor de Termodinámica extraído (`motores/gas.js`, 27 pruebas; corrigió un error del balance en el evento de dejar los topes).
@@ -258,3 +258,4 @@ que pide la estática del temario (M9: volcar o deslizar al empujar):
 - 2026-11-19 — Bloques rígidos que vuelcan (motor y Laboratorio); adherencia conjunta de los apoyos; v0.13.0 (1013 pruebas). Autocrítica 7. Siguiente: fuerza aplicada en un punto del cuerpo.
 - 2026-11-19 — Fuerza aplicada en un punto del cuerpo (vuelca o desliza al empujar); 1019 pruebas. Siguiente: contactos con las aristas de los bloques (diseño arriba).
 - 2026-11-19 — Caras y esquinas de los bloques (apilar, discos contra bloques); ejemplo de cajas apiladas; 1024 pruebas; v0.14.0.
+- 2026-11-19 — Fricción entre discos; arreglo del sentido de la fricción de los vértices y caso de Painlevé; 1028 pruebas. Sin publicar.
