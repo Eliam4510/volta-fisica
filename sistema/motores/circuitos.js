@@ -52,14 +52,14 @@
 
 /** Tipos de componente que entiende el motor. */
 export const TIPOS_COMPONENTE = Object.freeze([
-  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'diodo', 'led', 'capacitor', 'inductor',
+  'bateria', 'fuente-ca', 'fuente-corriente', 'resistencia', 'reostato', 'bombilla', 'diodo', 'led', 'capacitor', 'inductor', 'transformador',
   'interruptor', 'interruptor-3', 'amperimetro', 'voltimetro', 'cable', 'tierra',
 ]);
 
 /** Número de bornes admitido por cada tipo. */
 const BORNES = {
   bateria: [2], 'fuente-ca': [2], 'fuente-corriente': [2], resistencia: [2], reostato: [2, 3], bombilla: [2], diodo: [2], led: [2], capacitor: [2],
-  inductor: [2], interruptor: [2], 'interruptor-3': [2, 3, 4], amperimetro: [2], voltimetro: [2], cable: [2], tierra: [1],
+  inductor: [2], transformador: [4], interruptor: [2], 'interruptor-3': [2, 3, 4], amperimetro: [2], voltimetro: [2], cable: [2], tierra: [1],
 };
 
 /**
@@ -91,6 +91,9 @@ const BORNES = {
  *   [[t, f], …] (t creciente, f > 0), lineal entre puntos y constante fuera: C(t) = C·f(t)
  * @property {number} [L]   Inductor (H)
  * @property {number} [i0]  Inductor: corriente inicial de a a b (A)
+ * @property {number} [L1]  Transformador: inductancia del primario (H); nodos [p+, p−, s+, s−]
+ * @property {number} [n]   Transformador: relación de vueltas N₂/N₁ (L₂ = n²·L₁)
+ * @property {number} [k]   Transformador: coeficiente de acoplamiento (0 a 0.9999; M = k·√(L₁L₂))
  * @property {boolean} [cerrado]  Interruptor
  * @property {'a'|'b'|'c'|null} [posicion]  Interruptor de tres posiciones
  * @property {number} [Vn]  Bombilla: voltaje nominal (V)
@@ -367,6 +370,11 @@ function normalizarComponente(c, i) {
       return c.perfil != null ? { ...cap, perfil: perfilValido(id, c.perfil) } : cap;
     }
     case 'inductor': return { ...base, L: positivo(id, 'la inductancia L', c.L), i0: finito(id, 'la corriente inicial', c.i0 ?? 0) };
+    case 'transformador': {
+      const L1 = positivo(id, 'la inductancia del primario L₁', c.L1 ?? 1), n = positivo(id, 'la relación de vueltas n', c.n ?? 1), k = finito(id, 'el acoplamiento k', c.k ?? 0.999);
+      if (!(k >= 0 && k <= 0.9999)) throw new ErrorCircuito(`«${id}»: el acoplamiento k va de 0 a 0.9999.`);
+      return { ...base, L1, n, k };
+    }
     case 'interruptor': return { ...base, cerrado: estadoSimple(id, c.cerrado ?? false) };
     case 'interruptor-3': return { ...base, posicion: posicionTres(id, c.posicion ?? null) };
     case 'amperimetro': return { ...base, r: noNegativo(id, 'la resistencia del amperímetro', c.r ?? 0) };
@@ -385,7 +393,16 @@ function normalizarComponente(c, i) {
  */
 export function prepararCircuito(circuito) {
   if (!circuito || !Array.isArray(circuito.componentes)) throw new ErrorCircuito('El circuito no tiene una lista de componentes.');
-  const comps = circuito.componentes.map(normalizarComponente);
+  // Un transformador son dos bobinas acopladas: el primario conserva el nombre
+  // y el secundario se llama «nombre·s» (así se leen las dos corrientes)
+  const comps = circuito.componentes.map(normalizarComponente).flatMap(c => {
+    if (c.tipo !== 'transformador') return [c];
+    const L2 = c.n * c.n * c.L1, M = c.k * Math.sqrt(c.L1 * L2), sec = `${c.id}·s`;
+    return [
+      { id: c.id, tipo: 'inductor', nodos: [c.nodos[0], c.nodos[1]], L: c.L1, i0: 0, acople: { con: sec, M }, trafo: { L1: c.L1, n: c.n, k: c.k } },
+      { id: sec, tipo: 'inductor', nodos: [c.nodos[2], c.nodos[3]], L: L2, i0: 0, acople: { con: c.id, M }, secundario: true },
+    ];
+  });
   const ids = new Set();
   for (const c of comps) {
     if (ids.has(c.id)) throw new ErrorCircuito(`Hay dos componentes con el nombre «${c.id}».`);
@@ -472,6 +489,16 @@ function topologia(P, estados, o) {
       case 'cable': conductor(a, b, ci, 'cable'); break;
       default: break;
     }
+  });
+
+  // Bobinas acopladas: cada rama L sabe cuál es su pareja y la inductancia mutua
+  const ramaL = new Map();
+  ramas.forEach((r, k) => { if (r.tipo === 'L') ramaL.set(r.ci, k); });
+  P.comps.forEach((c, ci) => {
+    if (!c.acople) return;
+    const k = ramaL.get(ci), j = ramaL.get(P.porId.get(c.acople.con));
+    if (k == null || j == null) return;
+    ramas[k].par = j; ramas[k].M = c.acople.M;
   });
 
   // Nodos unidos por conductores ideales y por la tierra
@@ -637,7 +664,10 @@ function resolverPaso(T, st, h, metodo, q, iL, Qislas = cargasIslas(T, q, metodo
         case 'C': if (!dc) { const [g, ieq] = companeroC(r, st, k, h, tr); conductancia(S, r.ma, r.mb, g); corrienteFija(S, r.ma, r.mb, ieq); } break;
         case 'L':
           if (dc) { if (r.jl >= 0) ramaFuente(S, r.ma, r.mb, T.M + T.nV + r.jl, 0); else corrienteFija(S, r.ma, r.mb, iL[r.ci]); }
-          else { const [g, ieq] = companeroL(r, st, k, h, tr); conductancia(S, r.ma, r.mb, g); corrienteFija(S, r.ma, r.mb, ieq); }
+          else if (r.par != null) {
+            const [g, gm, ieq] = companeroLM(T, st, k, h, tr);
+            conductancia(S, r.ma, r.mb, g); mutua(S, r, T.ramas[r.par], gm); corrienteFija(S, r.ma, r.mb, ieq);
+          } else { const [g, ieq] = companeroL(r, st, k, h, tr); conductancia(S, r.ma, r.mb, g); corrienteFija(S, r.ma, r.mb, ieq); }
           break;
         case 'N': conductancia(S, r.ma, r.mb, gN[k]); corrienteFija(S, r.ma, r.mb, iN[k]); break;
         default: break;
@@ -696,6 +726,18 @@ function companeroL(r, st, k, h, tr) {
   const g = (tr ? 0.5 : 1) * h / r.valor;
   return [g, tr ? st.i[k] + g * st.v[k] : st.i[k]];
 }
+/**
+ * Compañero de una bobina acoplada (pareja j, mutua M): con Γ = L⁻¹ del par,
+ * i_k = G_kk·v_k + G_kj·v_j + ieq, con G = c·Γ (c = h/2 en la trapezoidal,
+ * h en Euler implícito). Devuelve [G_kk, G_kj, ieq].
+ */
+function companeroLM(T, st, k, h, tr) {
+  const r = T.ramas[k], j = r.par, Lj = T.ramas[j].valor, det = r.valor * Lj - r.M * r.M;
+  const c = (tr ? 0.5 : 1) * h, Gkk = c * Lj / det, Gkj = -c * r.M / det;
+  return [Gkk, Gkj, tr ? st.i[k] + Gkk * st.v[k] + Gkj * st.v[j] : st.i[k]];
+}
+/** Estampa en S la dependencia de la corriente de la rama k del voltaje de la rama j. */
+function mutua(S, r, rj, G) { sumar(S, r.ma, rj.ma, G); sumar(S, r.ma, rj.mb, -G); sumar(S, r.mb, rj.ma, -G); sumar(S, r.mb, rj.mb, G); }
 
 function extraer(T, x, st, h, metodo, iL) {
   const dc = metodo === 'dc', tr = metodo === 'tr', nr = T.ramas.length;
@@ -725,7 +767,11 @@ function extraer(T, x, st, h, metodo, iL) {
         break;
       case 'L':
         if (dc) i[k] = r.jl >= 0 ? x[T.M + T.nV + r.jl] : iL[r.ci];
-        else { const [g, ieq] = companeroL(r, st, k, h, tr); i[k] = g * d + ieq; }
+        else if (r.par != null) {
+          const rj = T.ramas[r.par], dj = (rj.ma >= 0 ? x[rj.ma] : 0) - (rj.mb >= 0 ? x[rj.mb] : 0);
+          const [g, gm, ieq] = companeroLM(T, st, k, h, tr);
+          i[k] = g * d + gm * dj + ieq;
+        } else { const [g, ieq] = companeroL(r, st, k, h, tr); i[k] = g * d + ieq; }
         break;
       case 'N': i[k] = r.curva.I(d); break;
       default: break;
@@ -831,16 +877,17 @@ function impulso(T, P, q, W, t) {
  * pierde de golpe: su energía ½·L·i² se va en la chispa del contacto.
  */
 function cortarInductores(T, P, iL) {
+  const U0 = energiaAlmacenada(P, new Float64Array(P.comps.length), iL);
   let perdida = 0; const cortes = [];
   T.ramas.forEach((r, k) => {
     if (r.tipo !== 'L' || iL[r.ci] === 0) return;
     const uf = crearUF(T.M + 1), g = m => (m < 0 ? T.M : m);
     T.ramas.forEach((s, j) => { if (j !== k) unir(uf, g(s.ma), g(s.mb)); });
     if (buscar(uf, g(r.ma)) !== buscar(uf, g(r.mb))) {
-      perdida += 0.5 * r.valor * iL[r.ci] * iL[r.ci];
       iL[r.ci] = 0; cortes.push(P.comps[r.ci].id);
     }
   });
+  if (cortes.length) perdida = U0 - energiaAlmacenada(P, new Float64Array(P.comps.length), iL);
   return { perdida, cortes };
 }
 
@@ -855,7 +902,10 @@ function energiaAlmacenada(P, q, iL, t = 0) {
   let U = 0;
   P.comps.forEach((c, ci) => {
     if (c.tipo === 'capacitor') U += q[ci] * q[ci] / (2 * capacidadEn(c, t));
-    else if (c.tipo === 'inductor') U += 0.5 * c.L * iL[ci] * iL[ci];
+    else if (c.tipo === 'inductor') {
+      U += 0.5 * c.L * iL[ci] * iL[ci];
+      if (c.acople && !c.secundario) U += c.acople.M * iL[ci] * iL[P.porId.get(c.acople.con)];
+    }
   });
   return U;
 }
@@ -887,7 +937,11 @@ function construirMuestra(T, P, st, t, ctx) {
     const k0 = rs[0];
     I[ci] = (c.tipo === 'bateria' || c.tipo === 'fuente-ca' ? -st.i[k0] : st.i[k0]) + 0;   // + 0: nunca −0
     if (c.tipo === 'capacitor') { const C = capacidadEn(c, st.t); q[ci] = C * st.v[k0]; U[ci] = q[ci] * q[ci] / (2 * C); }
-    else if (c.tipo === 'inductor') U[ci] = 0.5 * c.L * st.i[k0] * st.i[k0];
+    else if (c.tipo === 'inductor') {
+      U[ci] = 0.5 * c.L * st.i[k0] * st.i[k0];
+      // La energía mutua M·i₁·i₂ va con el primario
+      if (c.acople && !c.secundario) { const kj = T.ramas[k0].par; if (kj != null) U[ci] += c.acople.M * st.i[k0] * st.i[kj]; }
+    }
   });
   return { t, V, I, v, q, U, W: Float64Array.from(ctx.W), Q: Float64Array.from(ctx.Qj), perdidas: ctx.perdidas, numerico: ctx.numerico };
 }
@@ -915,7 +969,12 @@ function contabilizar(T, st0, st1, h, metodo, ctx) {
           ctx.numerico += p + Wf - 0.5 * (C1 * v1 * v1 - C0 * v0 * v0);
         } else ctx.numerico += p - 0.5 * r.valor * (st1.v[k] * st1.v[k] - st0.v[k] * st0.v[k]);
         break;
-      case 'L': ctx.numerico += p - 0.5 * r.valor * (st1.i[k] * st1.i[k] - st0.i[k] * st0.i[k]); break;
+      case 'L': {
+        let dU = 0.5 * r.valor * (st1.i[k] * st1.i[k] - st0.i[k] * st0.i[k]);
+        if (r.par != null && k < r.par) dU += r.M * (st1.i[k] * st1.i[r.par] - st0.i[k] * st0.i[r.par]);
+        ctx.numerico += p - dU;
+        break;
+      }
       default: break;
     }
   });
@@ -945,7 +1004,11 @@ function errorLocal(T, hist, t1, st1) {
 const vectorEstado = (T, st) => T.estadosRama.map(k => (T.ramas[k].tipo === 'C' ? st.v[k] : st.i[k]));
 function energiaRamas(T, st) {
   let U = 0;
-  for (const k of T.estadosRama) { const r = T.ramas[k], x = r.tipo === 'C' ? st.v[k] : st.i[k]; U += 0.5 * (r.tipo === 'C' ? capRama(r, st.t) : r.valor) * x * x; }
+  for (const k of T.estadosRama) {
+    const r = T.ramas[k], x = r.tipo === 'C' ? st.v[k] : st.i[k];
+    U += 0.5 * (r.tipo === 'C' ? capRama(r, st.t) : r.valor) * x * x;
+    if (r.tipo === 'L' && r.par != null && k < r.par) U += r.M * st.i[k] * st.i[r.par];
+  }
   return U;
 }
 
@@ -1248,12 +1311,21 @@ export function respuestaFrecuencia(circuito, f, opciones = {}) {
     switch (r.tipo) {
       case 'G': return [r.valor, 0];
       case 'C': return [0, w * capRama(r, 0)];
-      case 'L': return [0, -1 / (w * r.valor)];
+      case 'L': if (r.par != null) return null; return [0, -1 / (w * r.valor)];
       case 'N': { const c = r.curva; return [c.I(c.Vn) / c.Vn, 0]; }
       default: return null;
     }
   };
+  // Bobina acoplada: i_k = Y_kk·v_k + Y_kj·v_j con Y = −j/ω·Γ
+  const yAcoplada = (r) => { const Lj = T.ramas[r.par].valor, det = r.valor * Lj - r.M * r.M; return [-Lj / (w * det), r.M / (w * det)]; };
   T.ramas.forEach((r) => {
+    if (r.tipo === 'L' && r.par != null) {
+      const [ykk, ykj] = yAcoplada(r), rj = T.ramas[r.par];
+      adm(r.ma, r.mb, 0, ykk);
+      const s = (i, j, u) => { if (i >= 0 && j >= 0) Ai[i * n + j] += u; };
+      s(r.ma, rj.ma, ykj); s(r.ma, rj.mb, -ykj); s(r.mb, rj.ma, -ykj); s(r.mb, rj.mb, ykj);
+      return;
+    }
     const y = admitancia(r);
     if (y) { adm(r.ma, r.mb, y[0], y[1]); return; }
     if (r.tipo === 'V') {
@@ -1280,7 +1352,11 @@ export function respuestaFrecuencia(circuito, f, opciones = {}) {
     if (r) {
       const vr = (() => { const a = r.ma < 0 ? [0, 0] : [xr[r.ma], xi[r.ma]], b = r.mb < 0 ? [0, 0] : [xr[r.mb], xi[r.mb]]; return [a[0] - b[0], a[1] - b[1]]; })();
       const y = admitancia(r);
-      if (y) i = mul(y, vr);
+      if (r.tipo === 'L' && r.par != null) {
+        const rj = T.ramas[r.par], a = rj.ma < 0 ? [0, 0] : [xr[rj.ma], xi[rj.ma]], b = rj.mb < 0 ? [0, 0] : [xr[rj.mb], xi[rj.mb]];
+        const [ykk, ykj] = yAcoplada(r), vj = [a[0] - b[0], a[1] - b[1]];
+        i = [-(ykk * vr[1] + ykj * vj[1]), ykk * vr[0] + ykj * vj[0]];
+      } else if (y) i = mul(y, vr);
       else if (r.tipo === 'V') i = [-xr[T.M + r.jv], -xi[T.M + r.jv]];
     } else if (c.tipo === 'voltimetro' || c.tipo === 'interruptor' || c.tipo === 'interruptor-3') i = [0, 0];
     comp.set(c.id, { v, i });
